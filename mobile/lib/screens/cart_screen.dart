@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart'; // Just in case they want to open the product URL
 import '../models/product.dart';
 import '../services/backend_service.dart';
 
@@ -60,34 +59,6 @@ class _CartScreenState extends State<CartScreen> {
     }
   }
 
-  Future<void> _openProductUrl(String urlString) async {
-    if (urlString.isEmpty) return;
-    final uri = Uri.parse(urlString);
-    try {
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        throw 'Could not launch $urlString';
-      }
-    } catch (e) {
-      // In case url launcher package is not configured on platform, show fallback dialog
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Product Link'),
-            content: SelectableText(urlString),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Close'),
-              ),
-            ],
-          ),
-        );
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -222,11 +193,6 @@ class _CartScreenState extends State<CartScreen> {
                                   // Actions
                                   Column(
                                     children: [
-                                      IconButton(
-                                        icon: const Icon(Icons.open_in_new, color: Colors.indigo),
-                                        onPressed: () => _openProductUrl(item.url),
-                                        tooltip: 'View Original Product',
-                                      ),
                                       IconButton(
                                         icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
                                         onPressed: () => _removeItem(item.id),
