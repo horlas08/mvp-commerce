@@ -1,6 +1,14 @@
 fastapi
-uvicorn
-pydantic
+uvicorn[standard]
+pydantic[email]
 httpx
 beautifulsoup4
+sqlalchemy[asyncio]
+aiosqlite
+python-jose[cryptography]
+passlib[bcrypt]
+python-multipart
+google-auth
+alembic
 pytest
+pytest-asyncio

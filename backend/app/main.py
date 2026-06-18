@@ -1,16 +1,50 @@
-import uuid
-from typing import List, Dict, Any
-from fastapi import FastAPI, HTTPException, Query
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
-import httpx
-from bs4 import BeautifulSoup
+from fastapi.staticfiles import StaticFiles
+import os
 
-from app.config import get_config_for_url, SITE_CONFIGS, ScraperConfig
+from app.database import init_db
+from app.routers import (
+    auth_router,
+    user_router,
+    product_router,
+    category_router,
+    cart_router,
+    order_router,
+    wishlist_router,
+    address_router,
+    coupon_router,
+    seller_router,
+    refund_router,
+    config_router,
+)
 
-app = FastAPI(title="MVP Commerce Scraper Backend")
+# Ensure all models are imported so SQLAlchemy can create their tables
+import app.models  # noqa: F401
 
-# Enable CORS for mobile development integration
+
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+    """Startup / shutdown lifecycle manager."""
+    await init_db()
+    await _seed_demo_data()
+    yield
+
+
+app = FastAPI(
+    title="Koon Commerce API",
+    description="Full e-commerce API with internal products + external store aggregation",
+    version="2.0.0",
+    lifespan=lifespan,
+)
+
+# Mount static files directory
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+os.makedirs(os.path.join(static_dir, "uploads", "avatars"), exist_ok=True)
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+# Enable CORS for mobile development
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -19,153 +53,189 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# In-memory Cart Database for MVP
-cart_db: List[Dict[str, Any]] = []
+# ── Register API routers ────────────────────────────────────────────────────
+API_PREFIX = "/api/v1"
+app.include_router(auth_router.router, prefix=API_PREFIX)
+app.include_router(user_router.router, prefix=API_PREFIX)
+app.include_router(product_router.router, prefix=API_PREFIX)
+app.include_router(category_router.router, prefix=API_PREFIX)
+app.include_router(cart_router.router, prefix=API_PREFIX)
+app.include_router(order_router.router, prefix=API_PREFIX)
+app.include_router(wishlist_router.router, prefix=API_PREFIX)
+app.include_router(address_router.router, prefix=API_PREFIX)
+app.include_router(coupon_router.router, prefix=API_PREFIX)
+app.include_router(seller_router.router, prefix=API_PREFIX)
+app.include_router(refund_router.router, prefix=API_PREFIX)
+app.include_router(config_router.router, prefix=API_PREFIX)
 
-class ProductItemInput(BaseModel):
-    title: str
-    price: str
-    image_url: str
-    url: str
-    site: str
-
-class CartItem(BaseModel):
-    id: str
-    title: str
-    price: str
-    image_url: str
-    url: str
-    site: str
 
 @app.get("/")
 def read_root():
-    return {"message": "MVP Commerce Scraper Backend API is running."}
+    return {"message": "Koon Commerce API v2.0 is running.", "docs": "/docs"}
 
-@app.get("/api/config", response_model=Dict[str, Any])
-def get_config(url: str = Query(..., description="The e-commerce site URL")):
-    """
-    Returns selectors to hide checkout buttons and extract details based on domain.
-    """
-    config = get_config_for_url(url)
-    if not config:
-        # Return a default configuration or raise error
-        raise HTTPException(
-            status_code=404,
-            detail=f"Configuration for URL '{url}' not found. Supported domains are Amazon SA and Shein."
-        )
-    return config.model_dump()
 
-@app.get("/api/configs")
-def get_all_configs():
-    """
-    Returns all configuration patterns.
-    """
-    return {k: v.model_dump() for k, v in SITE_CONFIGS.items()}
+# ── Seed demo data ──────────────────────────────────────────────────────────
 
-@app.post("/api/cart", response_model=CartItem)
-def add_to_cart(item: ProductItemInput):
-    """
-    Adds a product item to the user's cart.
-    """
-    cart_item = {
-        "id": str(uuid.uuid4()),
-        "title": item.title,
-        "price": item.price,
-        "image_url": item.image_url,
-        "url": item.url,
-        "site": item.site
-    }
-    cart_db.append(cart_item)
-    return cart_item
+async def _seed_demo_data():
+    """Populate the database with demo categories, products, and banners for development."""
+    from app.database import async_session
+    from app.models.category import Category
+    from app.models.product import Product
+    from app.models.banner import Banner
+    from app.models.coupon import Coupon
+    from sqlalchemy import select
+    from datetime import datetime, timedelta, timezone
 
-@app.get("/api/cart", response_model=List[CartItem])
-def get_cart():
-    """
-    Lists all items currently in the cart.
-    """
-    return cart_db
+    async with async_session() as db:
+        # Only seed if categories table is empty
+        result = await db.execute(select(Category).limit(1))
+        if result.scalar_one_or_none():
+            return
 
-@app.delete("/api/cart/{item_id}")
-def remove_from_cart(item_id: str):
-    """
-    Removes a product from the cart.
-    """
-    global cart_db
-    initial_length = len(cart_db)
-    cart_db = [item for item in cart_db if item["id"] != item_id]
-    if len(cart_db) == initial_length:
-        raise HTTPException(status_code=404, detail="Item not found in cart.")
-    return {"message": "Item successfully removed from cart."}
+        # Categories
+        categories = [
+            Category(id="cat-electronics", name_en="Electronics", name_ar="إلكترونيات", icon="📱", sort_order=1,
+                     image_url="https://images.unsplash.com/photo-1498049794561-7780e7231661?w=400"),
+            Category(id="cat-fashion", name_en="Fashion", name_ar="أزياء", icon="👗", sort_order=2,
+                     image_url="https://images.unsplash.com/photo-1445205170230-053b83016050?w=400"),
+            Category(id="cat-home", name_en="Home & Garden", name_ar="المنزل والحديقة", icon="🏠", sort_order=3,
+                     image_url="https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=400"),
+            Category(id="cat-beauty", name_en="Beauty & Health", name_ar="الجمال والصحة", icon="💄", sort_order=4,
+                     image_url="https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=400"),
+            Category(id="cat-sports", name_en="Sports & Outdoors", name_ar="رياضة وأنشطة خارجية", icon="⚽", sort_order=5,
+                     image_url="https://images.unsplash.com/photo-1461896836934-bd45ba8fcf9b?w=400"),
+            Category(id="cat-toys", name_en="Toys & Kids", name_ar="ألعاب وأطفال", icon="🧸", sort_order=6,
+                     image_url="https://images.unsplash.com/photo-1558060370-d644479cb6f7?w=400"),
+            Category(id="cat-auto", name_en="Automotive", name_ar="سيارات", icon="🚗", sort_order=7,
+                     image_url="https://images.unsplash.com/photo-1489824904134-891ab64532f1?w=400"),
+            Category(id="cat-books", name_en="Books & Stationery", name_ar="كتب وقرطاسية", icon="📚", sort_order=8,
+                     image_url="https://images.unsplash.com/photo-1524578271613-d550eacf6090?w=400"),
+        ]
+        db.add_all(categories)
 
-@app.post("/api/scrape")
-def scrape_product(url: str = Query(..., description="URL of the product detail page")):
-    """
-    Backend scraper endpoint (Option A) to parse product details from HTML.
-    Sends a request, handles basic headers, and extracts details.
-    """
-    config = get_config_for_url(url)
-    if not config:
-        raise HTTPException(status_code=404, detail="No scraper configuration found for this website.")
+        # Products
+        products = [
+            Product(
+                title_en="Wireless Bluetooth Headphones",
+                title_ar="سماعات بلوتوث لاسلكية",
+                description_en="Premium noise-cancelling headphones with 30hr battery life",
+                description_ar="سماعات فاخرة بخاصية إلغاء الضوضاء مع بطارية تدوم 30 ساعة",
+                price=299.0, discount_price=249.0, category_id="cat-electronics",
+                stock=50, rating=4.5, rating_count=128,
+                images=["https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400"],
+            ),
+            Product(
+                title_en="Smart Watch Pro",
+                title_ar="ساعة ذكية برو",
+                description_en="Advanced fitness tracking, heart rate monitor, GPS",
+                description_ar="تتبع اللياقة البدنية المتقدم، مراقب معدل ضربات القلب، GPS",
+                price=599.0, discount_price=499.0, category_id="cat-electronics",
+                stock=30, rating=4.7, rating_count=256,
+                images=["https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400"],
+            ),
+            Product(
+                title_en="Elegant Summer Dress",
+                title_ar="فستان صيفي أنيق",
+                description_en="Lightweight floral summer dress, perfect for warm days",
+                description_ar="فستان صيفي خفيف بنقشة زهور، مثالي للأيام الدافئة",
+                price=189.0, discount_price=149.0, category_id="cat-fashion",
+                stock=100, rating=4.3, rating_count=89,
+                images=["https://images.unsplash.com/photo-1572804013309-59a88b7e92f1?w=400"],
+            ),
+            Product(
+                title_en="Men's Casual Sneakers",
+                title_ar="حذاء رياضي كاجوال رجالي",
+                description_en="Comfortable everyday sneakers with memory foam insole",
+                description_ar="حذاء رياضي مريح للاستخدام اليومي مع نعل داخلي من الإسفنج",
+                price=259.0, category_id="cat-fashion",
+                stock=75, rating=4.1, rating_count=67,
+                images=["https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400"],
+            ),
+            Product(
+                title_en="Luxury Perfume Set",
+                title_ar="طقم عطور فاخر",
+                description_en="Premium fragrance collection, 3 bottles gift set",
+                description_ar="مجموعة عطور فاخرة، طقم هدايا 3 زجاجات",
+                price=450.0, discount_price=380.0, category_id="cat-beauty",
+                stock=40, rating=4.8, rating_count=192,
+                images=["https://images.unsplash.com/photo-1541643600914-78b084683601?w=400"],
+            ),
+            Product(
+                title_en="Kids Formal Suit - 5 Pieces",
+                title_ar="طقم ولادي رسمي - 5 قطع",
+                description_en="Complete formal suit set for boys, ideal for events",
+                description_ar="طقم بدلة رسمية كامل للأولاد، مثالي للمناسبات",
+                price=330.0, discount_price=315.0, category_id="cat-toys",
+                stock=25, rating=4.4, rating_count=45,
+                images=["https://images.unsplash.com/photo-1503944583220-79d8926ad5e2?w=400"],
+            ),
+            Product(
+                title_en="Robot Vacuum Cleaner",
+                title_ar="مكنسة روبوت ذكية",
+                description_en="Self-charging robot vacuum with mapping technology",
+                description_ar="مكنسة روبوت ذاتية الشحن مع تقنية الخرائط",
+                price=899.0, discount_price=749.0, category_id="cat-home",
+                stock=20, rating=4.6, rating_count=312,
+                images=["https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=400"],
+            ),
+            Product(
+                title_en="Yoga Mat Premium",
+                title_ar="سجادة يوغا فاخرة",
+                description_en="Non-slip exercise mat, extra thick, eco-friendly",
+                description_ar="سجادة تمارين مانعة للانزلاق، سميكة، صديقة للبيئة",
+                price=120.0, discount_price=89.0, category_id="cat-sports",
+                stock=60, rating=4.2, rating_count=78,
+                images=["https://images.unsplash.com/photo-1601925260368-ae2f83cf8b7f?w=400"],
+            ),
+        ]
+        db.add_all(products)
 
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.5",
-        "Cache-Control": "no-cache",
-        "Pragma": "no-cache"
-    }
+        # Banners
+        banners = [
+            Banner(
+                title_en="Summer Sale - Up to 50% Off",
+                title_ar="تخفيضات الصيف - خصم يصل إلى 50%",
+                image_url="https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=800",
+                sort_order=1,
+            ),
+            Banner(
+                title_en="New Arrivals Collection",
+                title_ar="مجموعة الوصول الجديدة",
+                image_url="https://images.unsplash.com/photo-1483985988355-763728e1935b?w=800",
+                sort_order=2,
+            ),
+            Banner(
+                title_en="Free Shipping on Orders Over 200 SAR",
+                title_ar="شحن مجاني للطلبات فوق 200 ريال",
+                image_url="https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=800",
+                sort_order=3,
+            ),
+        ]
+        db.add_all(banners)
 
-    try:
-        # We use a client with redirection handling
-        with httpx.Client(follow_redirects=True, headers=headers, timeout=10.0) as client:
-            response = client.get(url)
-            
-            if response.status_code != 200:
-                raise HTTPException(status_code=response.status_code, detail=f"Failed to fetch webpage. Site returned status code: {response.status_code}")
-            
-            soup = BeautifulSoup(response.text, 'html.parser')
-            
-            # Extract product title
-            title_elem = soup.select_one(config.title_selector)
-            title = title_elem.get_text(strip=True) if title_elem else "Unknown Title"
-            
-            # Extract price
-            price = "Unknown Price"
-            for price_selector in config.price_selectors:
-                price_elem = soup.select_one(price_selector)
-                if price_elem:
-                    price = price_elem.get_text(strip=True)
-                    break
-            
-            # Extract image
-            image_url = ""
-            for image_selector in config.image_selectors:
-                img_elem = soup.select_one(image_selector)
-                if img_elem:
-                    # Check standard attributes
-                    if img_elem.has_attr("src"):
-                        image_url = img_elem["src"]
-                    elif img_elem.has_attr("data-a-dynamic-image"):
-                        # Amazon dynamic image parse (JSON object where keys are URLs)
-                        import json
-                        try:
-                            dyn_img = json.loads(img_elem["data-a-dynamic-image"])
-                            if dyn_img:
-                                image_url = list(dyn_img.keys())[0]
-                        except Exception:
-                            pass
-                    if image_url:
-                        break
-            
-            return {
-                "title": title,
-                "price": price,
-                "image_url": image_url,
-                "url": url,
-                "site": config.name
-            }
-            
-    except httpx.RequestError as e:
-        raise HTTPException(status_code=500, detail=f"Request error while scraping: {str(e)}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to scrape webpage: {str(e)}")
+        # Coupons
+        coupons = [
+            Coupon(
+                code="WELCOME10",
+                description_en="10% off your first order",
+                description_ar="خصم 10% على طلبك الأول",
+                discount_type="percentage",
+                discount_value=10.0,
+                min_order_amount=50.0,
+                max_discount=100.0,
+                expires_at=datetime.now(timezone.utc) + timedelta(days=90),
+            ),
+            Coupon(
+                code="SUMMER50",
+                description_en="50 SAR off orders over 300 SAR",
+                description_ar="خصم 50 ريال على الطلبات فوق 300 ريال",
+                discount_type="fixed",
+                discount_value=50.0,
+                min_order_amount=300.0,
+                expires_at=datetime.now(timezone.utc) + timedelta(days=30),
+            ),
+        ]
+        db.add_all(coupons)
+
+        await db.commit()
+        print("✅ Demo data seeded successfully.")
