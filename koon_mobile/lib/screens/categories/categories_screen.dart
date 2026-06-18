@@ -29,7 +29,7 @@ class CategoriesScreen extends StatelessWidget {
               children: [
                 const Icon(Icons.category_outlined, size: 64, color: AppColors.textHint),
                 const SizedBox(height: 16),
-                Text('No categories available', style: GoogleFonts.inter(color: AppColors.textSecondary)),
+                Text('no_categories_available'.tr(), style: GoogleFonts.inter(color: AppColors.textSecondary)),
               ],
             ),
           );

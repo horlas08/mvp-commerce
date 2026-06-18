@@ -78,8 +78,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       prefixIcon: const Icon(Icons.email_outlined, color: AppColors.textHint),
                     ),
                     validator: (v) {
-                      if (v == null || v.isEmpty) return 'Email is required';
-                      if (!v.contains('@')) return 'Enter a valid email';
+                      if (v == null || v.isEmpty) return 'email_is_required'.tr();
+                      if (!v.contains('@')) return 'enter_valid_email'.tr();
                       return null;
                     },
                   ),
@@ -110,7 +110,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     children: [
                       const Icon(Icons.check_circle, color: AppColors.success, size: 48),
                       const SizedBox(height: 12),
-                      Text('Check your email for the reset link.',
+                      Text('check_email_reset_link'.tr(),
                           style: TextStyle(color: AppColors.success, fontWeight: FontWeight.w600),
                           textAlign: TextAlign.center),
                     ],

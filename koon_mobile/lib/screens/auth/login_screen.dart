@@ -97,8 +97,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         prefixIcon: const Icon(Icons.email_outlined, color: AppColors.textHint),
                       ),
                       validator: (v) {
-                        if (v == null || v.isEmpty) return 'Email is required';
-                        if (!v.contains('@')) return 'Enter a valid email';
+                        if (v == null || v.isEmpty) return 'email_is_required'.tr();
+                        if (!v.contains('@')) return 'enter_valid_email'.tr();
                         return null;
                       },
                     ).animate(delay: 200.ms).fadeIn(duration: 400.ms).slideY(begin: 0.1),
@@ -118,8 +118,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                       validator: (v) {
-                        if (v == null || v.isEmpty) return 'Password is required';
-                        if (v.length < 6) return 'Password must be at least 6 characters';
+                        if (v == null || v.isEmpty) return 'password_is_required'.tr();
+                        if (v.length < 6) return 'password_min_length'.tr();
                         return null;
                       },
                     ).animate(delay: 300.ms).fadeIn(duration: 400.ms).slideY(begin: 0.1),

@@ -5,9 +5,9 @@ import 'api_service.dart';
 class WishlistService {
   final Dio _dio = ApiService().dio;
 
-  Future<List<Map<String, dynamic>>> getWishlist() async {
+  Future<List<Map<String, dynamic>>> getWishlist({String lang = 'en'}) async {
     try {
-      final response = await _dio.get(ApiConstants.wishlist);
+      final response = await _dio.get(ApiConstants.wishlist, queryParameters: {'lang': lang});
       if (response.statusCode == 200) {
         return List<Map<String, dynamic>>.from(response.data);
       }

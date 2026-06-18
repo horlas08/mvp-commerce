@@ -31,7 +31,8 @@ class _WishlistScreenState extends State<WishlistScreen> {
 
   Future<void> _loadWishlist() async {
     setState(() => _isLoading = true);
-    final data = await _wishlistService.getWishlist();
+    final lang = context.locale.languageCode;
+    final data = await _wishlistService.getWishlist(lang: lang);
     setState(() {
       _items = data;
       _isLoading = false;
@@ -57,7 +58,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
       siteName: source == 'internal' ? 'Internal' : source,
     );
     if (success != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Added to cart'.tr())));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('added_to_cart'.tr())));
     }
   }
 
@@ -77,7 +78,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
                     children: [
                       const Icon(Icons.favorite_border_outlined, size: 64, color: AppColors.textHint),
                       const SizedBox(height: 16),
-                      Text('Your wishlist is empty'.tr(), style: GoogleFonts.inter(color: AppColors.textSecondary)),
+                      Text('your_wishlist_is_empty'.tr(), style: GoogleFonts.inter(color: AppColors.textSecondary)),
                     ],
                   ),
                 )
@@ -175,7 +176,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
                                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                               padding: EdgeInsets.zero,
                                             ),
-                                            child: Text('Add to Cart'.tr(), style: const TextStyle(fontSize: 11, color: Colors.white)),
+                                            child: Text('add_to_cart'.tr(), style: const TextStyle(fontSize: 11, color: Colors.white)),
                                           ),
                                         ),
                                       ],

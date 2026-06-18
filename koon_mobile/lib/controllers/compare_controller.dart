@@ -1,5 +1,6 @@
 import 'dart:convert';
-import 'package:get/get.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'package:get/get.dart' hide Trans;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class CompareController extends GetxController {
@@ -38,18 +39,18 @@ class CompareController extends GetxController {
     if (isComparing(productId)) {
       comparedProducts.removeWhere((p) => p['id'] == productId);
       if (Get.key.currentState != null) {
-        Get.snackbar('Compare List', 'Product removed from compare list', snackPosition: SnackPosition.BOTTOM);
+        Get.snackbar('compare_list'.tr(), 'product_removed_compare'.tr(), snackPosition: SnackPosition.BOTTOM);
       }
     } else {
       if (comparedProducts.length >= 4) {
         if (Get.key.currentState != null) {
-          Get.snackbar('Compare List', 'You can compare up to 4 products at a time.', snackPosition: SnackPosition.BOTTOM);
+          Get.snackbar('compare_list'.tr(), 'compare_limit_reached'.tr(), snackPosition: SnackPosition.BOTTOM);
         }
         return;
       }
       comparedProducts.add(product);
       if (Get.key.currentState != null) {
-        Get.snackbar('Compare List', 'Product added to compare list', snackPosition: SnackPosition.BOTTOM);
+        Get.snackbar('compare_list'.tr(), 'product_added_compare'.tr(), snackPosition: SnackPosition.BOTTOM);
       }
     }
     _saveComparedProducts();

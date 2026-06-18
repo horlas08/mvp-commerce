@@ -24,6 +24,7 @@ class AddWishlistRequest(BaseModel):
 
 @router.get("")
 async def get_wishlist(
+    lang: str = Query("en"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -31,12 +32,13 @@ async def get_wishlist(
         select(WishlistItem).where(WishlistItem.user_id == user.id).options(selectinload(WishlistItem.product))
     )
     items = result.scalars().all()
-    return [item.to_dict() for item in items]
+    return [item.to_dict(lang) for item in items]
 
 
 @router.post("")
 async def add_to_wishlist(
     req: AddWishlistRequest,
+    lang: str = Query("en"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -44,7 +46,7 @@ async def add_to_wishlist(
     db.add(item)
     await db.commit()
     await db.refresh(item)
-    return item.to_dict()
+    return item.to_dict(lang)
 
 
 @router.delete("/{item_id}")

@@ -113,15 +113,15 @@ class AppTheme {
         seedColor: AppColors.primary,
         primary: AppColors.primary,
         secondary: AppColors.secondary,
-        surface: const Color(0xFF1E1E1E),
+        surface: const Color(0xFF1E293B),
         error: AppColors.error,
         brightness: Brightness.dark,
       ),
-      scaffoldBackgroundColor: const Color(0xFF121212),
+      scaffoldBackgroundColor: const Color(0xFF0F172A),
       textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
       appBarTheme: AppBarTheme(
         centerTitle: true,
-        backgroundColor: const Color(0xFF1E1E1E),
+        backgroundColor: const Color(0xFF1E293B),
         elevation: 0,
         scrolledUnderElevation: 0.5,
         surfaceTintColor: Colors.transparent,
@@ -134,10 +134,10 @@ class AppTheme {
       ),
       cardTheme: CardThemeData(
         elevation: 0,
-        color: const Color(0xFF1E1E1E),
+        color: const Color(0xFF1E293B),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: Color(0xFF2E2E2E), width: 0.5),
+          side: const BorderSide(color: Color(0xFF334155), width: 0.5),
         ),
         margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
       ),
@@ -162,14 +162,14 @@ class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: const Color(0xFF2A2A2A),
+        fillColor: const Color(0xFF334155),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF333333), width: 0.5),
+          borderSide: const BorderSide(color: Color(0xFF475569), width: 0.5),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -184,7 +184,7 @@ class AppTheme {
         labelStyle: GoogleFonts.inter(color: AppColors.textSecondary, fontSize: 14),
       ),
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-        backgroundColor: Color(0xFF1E1E1E),
+        backgroundColor: Color(0xFF1E293B),
         selectedItemColor: AppColors.primary,
         unselectedItemColor: Colors.grey,
         type: BottomNavigationBarType.fixed,
@@ -193,12 +193,12 @@ class AppTheme {
         unselectedLabelStyle: TextStyle(fontSize: 11),
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: const Color(0xFF2A2A2A),
+        backgroundColor: const Color(0xFF334155),
         labelStyle: GoogleFonts.inter(fontSize: 13, color: Colors.white),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        side: const BorderSide(color: Color(0xFF2E2E2E), width: 0.5),
+        side: const BorderSide(color: Color(0xFF475569), width: 0.5),
       ),
-      dividerTheme: const DividerThemeData(color: Color(0xFF2E2E2E), thickness: 0.5),
+      dividerTheme: const DividerThemeData(color: Color(0xFF334155), thickness: 0.5),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

@@ -129,7 +129,7 @@ class CartScreen extends StatelessWidget {
                           height: 50,
                           child: ElevatedButton(
                             onPressed: () {
-                              Get.snackbar('Checkout', 'Order placed successfully!', snackPosition: SnackPosition.BOTTOM);
+                              Get.snackbar('checkout'.tr(), 'order_placed_success'.tr(), snackPosition: SnackPosition.BOTTOM);
                             },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.secondary,

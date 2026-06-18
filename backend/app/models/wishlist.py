@@ -24,7 +24,7 @@ class WishlistItem(Base):
     user = relationship("User", back_populates="wishlist_items")
     product = relationship("Product")
 
-    def to_dict(self):
+    def to_dict(self, lang: str = "en"):
         result = {
             "id": self.id,
             "user_id": self.user_id,
@@ -32,7 +32,7 @@ class WishlistItem(Base):
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
         if self.product_id and self.product:
-            result["product"] = self.product.to_dict()
+            result["product"] = self.product.to_dict(lang)
         else:
             result["external_url"] = self.external_url
             result["title"] = self.title

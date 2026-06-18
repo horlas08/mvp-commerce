@@ -1,5 +1,6 @@
 import 'dart:convert';
-import 'package:get/get.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'package:get/get.dart' hide Trans;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/auth_service.dart';
 import '../app/constants/api_constants.dart';
@@ -49,7 +50,7 @@ class AuthController extends GetxController {
         return true;
       }
     } catch (e) {
-      Get.snackbar('Error', e.toString(), snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar('error'.tr(), e.toString(), snackPosition: SnackPosition.BOTTOM);
     } finally {
       isLoading.value = false;
     }
@@ -68,7 +69,7 @@ class AuthController extends GetxController {
         return true;
       }
     } catch (e) {
-      Get.snackbar('Error', e.toString(), snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar('error'.tr(), e.toString(), snackPosition: SnackPosition.BOTTOM);
     } finally {
       isLoading.value = false;
     }
@@ -87,7 +88,7 @@ class AuthController extends GetxController {
         return true;
       }
     } catch (e) {
-      Get.snackbar('Error', e.toString(), snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar('error'.tr(), e.toString(), snackPosition: SnackPosition.BOTTOM);
     } finally {
       isLoading.value = false;
     }
@@ -98,9 +99,9 @@ class AuthController extends GetxController {
     isLoading.value = true;
     try {
       await _authService.forgotPassword(email);
-      Get.snackbar('Success', 'Reset link sent to your email', snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar('success'.tr(), 'reset_link_sent'.tr(), snackPosition: SnackPosition.BOTTOM);
     } catch (e) {
-      Get.snackbar('Error', e.toString(), snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar('error'.tr(), e.toString(), snackPosition: SnackPosition.BOTTOM);
     } finally {
       isLoading.value = false;
     }

@@ -50,10 +50,10 @@ class _MainShellState extends State<MainShell> {
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: Theme.of(context).colorScheme.surface,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.06),
+              color: Colors.black.withOpacity(Theme.of(context).brightness == Brightness.dark ? 0.2 : 0.06),
               blurRadius: 20,
               offset: const Offset(0, -4),
             ),
@@ -80,6 +80,10 @@ class _MainShellState extends State<MainShell> {
 
   Widget _buildNavItem(int index, IconData icon, IconData activeIcon, String label) {
     final isActive = _currentIndex == index;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final unselectedColor = isDark ? Colors.grey[400]! : AppColors.textHint;
+
     return InkWell(
       onTap: () => setState(() => _currentIndex = index),
       borderRadius: BorderRadius.circular(12),
@@ -87,7 +91,7 @@ class _MainShellState extends State<MainShell> {
         duration: const Duration(milliseconds: 250),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: isActive ? AppColors.primarySurface : Colors.transparent,
+          color: isActive ? theme.colorScheme.primary.withOpacity(0.15) : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
@@ -95,7 +99,7 @@ class _MainShellState extends State<MainShell> {
           children: [
             Icon(
               isActive ? activeIcon : icon,
-              color: isActive ? AppColors.primary : AppColors.textHint,
+              color: isActive ? AppColors.primary : unselectedColor,
               size: 24,
             ),
             const SizedBox(height: 4),
@@ -104,7 +108,7 @@ class _MainShellState extends State<MainShell> {
               style: TextStyle(
                 fontSize: 10,
                 fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-                color: isActive ? AppColors.primary : AppColors.textHint,
+                color: isActive ? AppColors.primary : unselectedColor,
               ),
             ),
           ],
@@ -115,6 +119,10 @@ class _MainShellState extends State<MainShell> {
 
   Widget _buildCartNavItem() {
     final isActive = _currentIndex == 2;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final unselectedColor = isDark ? Colors.grey[400]! : AppColors.textHint;
+
     return InkWell(
       onTap: () => setState(() => _currentIndex = 2),
       borderRadius: BorderRadius.circular(12),
@@ -122,7 +130,7 @@ class _MainShellState extends State<MainShell> {
         duration: const Duration(milliseconds: 250),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: isActive ? AppColors.primarySurface : Colors.transparent,
+          color: isActive ? theme.colorScheme.primary.withOpacity(0.15) : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
@@ -134,7 +142,7 @@ class _MainShellState extends State<MainShell> {
                 children: [
                   Icon(
                     isActive ? Icons.shopping_bag_rounded : Icons.shopping_bag_outlined,
-                    color: isActive ? AppColors.primary : AppColors.textHint,
+                    color: isActive ? AppColors.primary : unselectedColor,
                     size: 24,
                   ),
                   if (controller.totalCartCount.value > 0)
@@ -164,7 +172,7 @@ class _MainShellState extends State<MainShell> {
               style: TextStyle(
                 fontSize: 10,
                 fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-                color: isActive ? AppColors.primary : AppColors.textHint,
+                color: isActive ? AppColors.primary : unselectedColor,
               ),
             ),
           ],

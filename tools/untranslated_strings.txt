@@ -1,0 +1,5 @@
+Untranslated strings:
+/Users/user/project/koon/koon_mobile/lib/screens/home/home_screen.dart:32: 'SHEIN'
+/Users/user/project/koon/koon_mobile/lib/screens/splash/splash_screen.dart:101: 'كون'
+/Users/user/project/koon/koon_mobile/lib/screens/webview/webview_screen.dart:99: "Unknown Price"
+/Users/user/project/koon/koon_mobile/lib/screens/profile/profile_screen.dart:222: 'العربية'

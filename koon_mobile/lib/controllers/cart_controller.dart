@@ -26,14 +26,16 @@ class CartController extends GetxController {
 
   Future<void> loadCart() async {
     isLoading.value = true;
-    cartItems.value = await _cartService.getCart(cartType: selectedCartType.value);
+    final lang = Get.locale?.languageCode ?? 'en';
+    cartItems.value = await _cartService.getCart(cartType: selectedCartType.value, lang: lang);
     isLoading.value = false;
     _refreshTotalCount();
   }
 
   Future<void> _refreshTotalCount() async {
     // Get total count across all cart types
-    final allItems = await _cartService.getCart();
+    final lang = Get.locale?.languageCode ?? 'en';
+    final allItems = await _cartService.getCart(lang: lang);
     totalCartCount.value = allItems.length;
   }
 

@@ -9,6 +9,8 @@ import '../../app/theme/app_theme.dart';
 import '../../controllers/auth_controller.dart';
 import '../../controllers/settings_controller.dart';
 import '../../controllers/compare_controller.dart';
+import '../../controllers/home_controller.dart';
+import '../../controllers/cart_controller.dart';
 import '../../services/seller_service.dart';
 import '../auth/login_screen.dart';
 
@@ -97,7 +99,7 @@ class ProfileScreen extends StatelessWidget {
                                           borderRadius: BorderRadius.circular(10),
                                         ),
                                         child: Text(
-                                          'Store Owner'.tr(),
+                                          'store_owner'.tr(),
                                           style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
                                         ),
                                       ),
@@ -111,7 +113,7 @@ class ProfileScreen extends StatelessWidget {
                                 ),
                               ] else ...[
                                 Text(
-                                  'Welcome Guest'.tr(),
+                                  'welcome_guest'.tr(),
                                   style: GoogleFonts.inter(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800),
                                 ),
                                 const SizedBox(height: 8),
@@ -148,7 +150,7 @@ class ProfileScreen extends StatelessWidget {
                   const SizedBox(height: 8),
 
                   // Account Settings Card
-                  _buildSectionHeader('My Account'.tr()),
+                  _buildSectionHeader('my_account'.tr()),
                   _buildCardContainer([
                     _buildSettingsTile(
                       icon: Icons.edit_outlined,
@@ -176,7 +178,7 @@ class ProfileScreen extends StatelessWidget {
                   const SizedBox(height: 20),
 
                   // E-Commerce Features Card
-                  _buildSectionHeader('Features'.tr()),
+                  _buildSectionHeader('features'.tr()),
                   _buildCardContainer([
                     _buildSettingsTile(
                       icon: Icons.favorite_outline,
@@ -211,7 +213,7 @@ class ProfileScreen extends StatelessWidget {
                   const SizedBox(height: 20),
 
                   // App Preferences Card
-                  _buildSectionHeader('Preferences'.tr()),
+                  _buildSectionHeader('preferences'.tr()),
                   _buildCardContainer([
                     _buildSettingsTile(
                       icon: Icons.translate_outlined,
@@ -220,12 +222,16 @@ class ProfileScreen extends StatelessWidget {
                       trailingText: context.locale.languageCode == 'en' ? 'English' : 'العربية',
                       onTap: () async {
                         final currentLocale = context.locale;
-                        if (currentLocale.languageCode == 'en') {
-                          await context.setLocale(const Locale('ar'));
-                          Get.updateLocale(const Locale('ar'));
-                        } else {
-                          await context.setLocale(const Locale('en'));
-                          Get.updateLocale(const Locale('en'));
+                        final nextLocale = currentLocale.languageCode == 'en' ? const Locale('ar') : const Locale('en');
+                        await context.setLocale(nextLocale);
+                        Get.updateLocale(nextLocale);
+
+                        // Reload home and cart data in selected language
+                        if (Get.isRegistered<HomeController>()) {
+                          Get.find<HomeController>().loadHomeData(lang: nextLocale.languageCode);
+                        }
+                        if (Get.isRegistered<CartController>()) {
+                          Get.find<CartController>().loadCart();
                         }
                       },
                     ),
@@ -400,12 +406,12 @@ class ProfileScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Be a Seller'.tr(),
+            'be_a_seller'.tr(),
             style: GoogleFonts.inter(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 6),
           Text(
-            'Start selling your products directly on Koon and reach thousands of buyers.'.tr(),
+            'become_seller_desc'.tr(),
             style: GoogleFonts.inter(color: Colors.white.withOpacity(0.9), fontSize: 13, height: 1.4),
           ),
           const SizedBox(height: 16),
@@ -417,7 +423,7 @@ class ProfileScreen extends StatelessWidget {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
             ),
-            child: Text('Apply Now'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
+            child: Text('apply_now'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -443,14 +449,14 @@ class ProfileScreen extends StatelessWidget {
               const Icon(Icons.dashboard_outlined, color: Colors.white, size: 24),
               const SizedBox(width: 10),
               Text(
-                'Seller Dashboard'.tr(),
+                'seller_dashboard'.tr(),
                 style: GoogleFonts.inter(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800),
               ),
             ],
           ),
           const SizedBox(height: 8),
           Text(
-            'Manage your store listings, view customer orders, and track your shop performance.'.tr(),
+            'seller_dashboard_desc'.tr(),
             style: GoogleFonts.inter(color: Colors.white.withOpacity(0.9), fontSize: 13, height: 1.4),
           ),
           const SizedBox(height: 16),
@@ -464,7 +470,7 @@ class ProfileScreen extends StatelessWidget {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
             ),
-            child: Text('Manage Shop'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
+            child: Text('manage_shop'.tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -485,20 +491,20 @@ class ProfileScreen extends StatelessWidget {
               children: [
                 const Icon(Icons.storefront, color: AppColors.secondary, size: 28),
                 const SizedBox(width: 12),
-                Text('Store Dashboard'.tr(), style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700)),
+                Text('store_dashboard'.tr(), style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700)),
               ],
             ),
             const SizedBox(height: 24),
-            _buildDashboardRow(Icons.shopping_bag_outlined, 'Total Products'.tr(), '12'),
+            _buildDashboardRow(Icons.shopping_bag_outlined, 'total_products'.tr(), '12'),
             const SizedBox(height: 16),
-            _buildDashboardRow(Icons.receipt_long_outlined, 'Pending Orders'.tr(), '3'),
+            _buildDashboardRow(Icons.receipt_long_outlined, 'pending_orders'.tr(), '3'),
             const SizedBox(height: 16),
-            _buildDashboardRow(Icons.monetization_on_outlined, 'Monthly Sales'.tr(), '1,840.00 SAR'),
+            _buildDashboardRow(Icons.monetization_on_outlined, 'monthly_sales'.tr(), '1,840.00 SAR'),
             const SizedBox(height: 28),
             ElevatedButton(
               onPressed: () => Navigator.pop(context),
               style: ElevatedButton.styleFrom(backgroundColor: AppColors.secondary),
-              child: Text('Close'.tr(), style: const TextStyle(color: Colors.white)),
+              child: Text('close'.tr(), style: const TextStyle(color: Colors.white)),
             ),
           ],
         ),
@@ -528,10 +534,10 @@ class ProfileScreen extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Select Currency'.tr(), style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700)),
+            Text('select_currency'.tr(), style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700)),
             const SizedBox(height: 20),
             ListTile(
-              title: const Text('Saudi Riyal (SAR)'),
+              title: Text('saudi_riyal'.tr()),
               trailing: settingsController.currentCurrency.value == 'SAR' ? const Icon(Icons.check, color: AppColors.primary) : null,
               onTap: () {
                 settingsController.setCurrency('SAR');
@@ -539,7 +545,7 @@ class ProfileScreen extends StatelessWidget {
               },
             ),
             ListTile(
-              title: const Text('US Dollar (USD)'),
+              title: Text('us_dollar'.tr()),
               trailing: settingsController.currentCurrency.value == 'USD' ? const Icon(Icons.check, color: AppColors.primary) : null,
               onTap: () {
                 settingsController.setCurrency('USD');
@@ -583,7 +589,7 @@ class ProfileScreen extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('Registered Sellers'.tr(), style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700)),
+                  Text('registered_sellers'.tr(), style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 12),
                   Flexible(
                     child: ListView.builder(
@@ -598,7 +604,7 @@ class ProfileScreen extends StatelessWidget {
                             child: seller['logo_url'] == null ? const Icon(Icons.storefront, color: AppColors.primary) : null,
                           ),
                           title: Text(seller['store_name'] ?? ''),
-                          subtitle: Text(seller['description'] ?? 'No description'.tr()),
+                          subtitle: Text(seller['description'] ?? 'no_description'.tr()),
                           onTap: () {
                             Navigator.pop(context);
                             Navigator.push(

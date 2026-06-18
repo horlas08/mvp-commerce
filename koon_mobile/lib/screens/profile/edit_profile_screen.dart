@@ -55,11 +55,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
       if (updated != null) {
         _authController.user.value = updated;
-        Get.snackbar('Success'.tr(), 'Profile updated successfully'.tr(), snackPosition: SnackPosition.BOTTOM);
+        Get.snackbar('success'.tr(), 'profile_updated_success'.tr(), snackPosition: SnackPosition.BOTTOM);
         Navigator.pop(context);
       }
     } catch (e) {
-      Get.snackbar('Error'.tr(), e.toString(), snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar('error'.tr(), e.toString(), snackPosition: SnackPosition.BOTTOM);
     } finally {
       setState(() => _isLoading = false);
     }
@@ -93,8 +93,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           _avatarUrl = uploadedUrl;
         });
         Get.snackbar(
-          'Success'.tr(),
-          'Avatar uploaded successfully'.tr(),
+          'success'.tr(),
+          'avatar_uploaded_success'.tr(),
           snackPosition: SnackPosition.BOTTOM,
           backgroundColor: Colors.green.withOpacity(0.9),
           colorText: Colors.white,
@@ -102,7 +102,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       }
     } catch (e) {
       Get.snackbar(
-        'Error'.tr(),
+        'error'.tr(),
         e.toString(),
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Colors.red.withOpacity(0.9),
@@ -281,7 +281,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         labelText: 'name'.tr(),
                         prefixIcon: const Icon(Icons.person_outline),
                       ),
-                      validator: (v) => v == null || v.isEmpty ? 'Name is required'.tr() : null,
+                      validator: (v) => v == null || v.isEmpty ? 'name_is_required'.tr() : null,
                     ),
                     const SizedBox(height: 20),
 
@@ -304,7 +304,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                         ),
                         child: Text(
-                          'Save Changes'.tr(),
+                          'save_changes'.tr(),
                           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
                         ),
                       ),

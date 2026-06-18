@@ -71,7 +71,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ).animate().fadeIn(duration: 400.ms).slideX(begin: -0.1),
               const SizedBox(height: 8),
               Text(
-                'Create your account to get started',
+                'create_account_desc'.tr(),
                 style: GoogleFonts.inter(fontSize: 15, color: AppColors.textSecondary),
               ).animate(delay: 100.ms).fadeIn(duration: 400.ms),
               const SizedBox(height: 32),
@@ -85,7 +85,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         labelText: 'name'.tr(),
                         prefixIcon: const Icon(Icons.person_outline, color: AppColors.textHint),
                       ),
-                      validator: (v) => (v == null || v.isEmpty) ? 'Name is required' : null,
+                      validator: (v) => (v == null || v.isEmpty) ? 'name_is_required'.tr() : null,
                     ).animate(delay: 200.ms).fadeIn(duration: 300.ms).slideY(begin: 0.1),
                     const SizedBox(height: 14),
                     TextFormField(
@@ -96,8 +96,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         prefixIcon: const Icon(Icons.email_outlined, color: AppColors.textHint),
                       ),
                       validator: (v) {
-                        if (v == null || v.isEmpty) return 'Email is required';
-                        if (!v.contains('@')) return 'Enter a valid email';
+                        if (v == null || v.isEmpty) return 'email_is_required'.tr();
+                        if (!v.contains('@')) return 'enter_valid_email'.tr();
                         return null;
                       },
                     ).animate(delay: 250.ms).fadeIn(duration: 300.ms).slideY(begin: 0.1),
@@ -123,8 +123,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ),
                       ),
                       validator: (v) {
-                        if (v == null || v.isEmpty) return 'Password is required';
-                        if (v.length < 6) return 'At least 6 characters';
+                        if (v == null || v.isEmpty) return 'password_is_required'.tr();
+                        if (v.length < 6) return 'password_min_length'.tr();
                         return null;
                       },
                     ).animate(delay: 350.ms).fadeIn(duration: 300.ms).slideY(begin: 0.1),
@@ -137,7 +137,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         prefixIcon: const Icon(Icons.lock_outline, color: AppColors.textHint),
                       ),
                       validator: (v) {
-                        if (v != _passwordController.text) return 'Passwords do not match';
+                        if (v != _passwordController.text) return 'passwords_dont_match'.tr();
                         return null;
                       },
                     ).animate(delay: 400.ms).fadeIn(duration: 300.ms).slideY(begin: 0.1),

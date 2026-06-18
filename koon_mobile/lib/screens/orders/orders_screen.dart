@@ -101,7 +101,7 @@ class OrdersScreen extends StatelessWidget {
             const SizedBox(height: 12),
             const Divider(height: 1),
             const SizedBox(height: 12),
-            Text('${items.length} item${items.length != 1 ? 's' : ''}',
+            Text(items.length == 1 ? 'one_item'.tr() : 'items_count'.tr(args: [items.length.toString()]),
                 style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary)),
             const SizedBox(height: 8),
             Row(
@@ -109,7 +109,7 @@ class OrdersScreen extends StatelessWidget {
               children: [
                 Text(createdAt.toString().split('T').first,
                     style: GoogleFonts.inter(fontSize: 12, color: AppColors.textHint)),
-                Text('$total SAR',
+                Text('$total ' + 'SAR'.tr(),
                     style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.primary)),
               ],
             ),

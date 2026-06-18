@@ -33,6 +33,7 @@ class UpdateCartRequest(BaseModel):
 @router.get("")
 async def get_cart(
     cart_type: Optional[str] = Query(None),
+    lang: str = Query("en"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -48,12 +49,13 @@ async def get_cart(
     query = query.options(selectinload(CartItem.product))
     result = await db.execute(query)
     items = result.scalars().all()
-    return [item.to_dict() for item in items]
+    return [item.to_dict(lang) for item in items]
 
 
 @router.post("")
 async def add_to_cart(
     req: AddToCartRequest,
+    lang: str = Query("en"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -76,13 +78,14 @@ async def add_to_cart(
     db.add(item)
     await db.commit()
     await db.refresh(item)
-    return item.to_dict()
+    return item.to_dict(lang)
 
 
 @router.put("/{item_id}")
 async def update_cart_item(
     item_id: str,
     req: UpdateCartRequest,
+    lang: str = Query("en"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -104,7 +107,7 @@ async def update_cart_item(
 
     await db.commit()
     await db.refresh(item)
-    return item.to_dict()
+    return item.to_dict(lang)
 
 
 @router.delete("/{item_id}")

@@ -5,10 +5,11 @@ import 'api_service.dart';
 class CartService {
   final Dio _dio = ApiService().dio;
 
-  Future<List<Map<String, dynamic>>> getCart({String? cartType}) async {
+  Future<List<Map<String, dynamic>>> getCart({String? cartType, String lang = 'en'}) async {
     try {
       final response = await _dio.get(ApiConstants.cart, queryParameters: {
         if (cartType != null) 'cart_type': cartType,
+        'lang': lang,
       });
       return List<Map<String, dynamic>>.from(response.data);
     } catch (_) { return []; }

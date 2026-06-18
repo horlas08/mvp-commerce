@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'package:get/get.dart' hide Trans;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../app/theme/app_theme.dart';
 
@@ -44,13 +45,13 @@ class SettingsController extends GetxController {
       return '\$${converted.toStringAsFixed(2)}';
     } else if (currentCurrency.value == 'SAR' && originalCurrency == 'USD') {
       final converted = price * 3.75;
-      return '${converted.toStringAsFixed(2)} SAR';
+      return '${converted.toStringAsFixed(2)} ' + 'SAR'.tr();
     } else {
       // display original currency format
       if (originalCurrency == 'USD') {
         return '\$${price.toStringAsFixed(2)}';
       }
-      return '${price.toStringAsFixed(2)} SAR';
+      return '${price.toStringAsFixed(2)} ' + 'SAR'.tr();
     }
   }
 }

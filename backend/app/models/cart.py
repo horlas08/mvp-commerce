@@ -40,7 +40,7 @@ class CartItem(Base):
     user = relationship("User", back_populates="cart_items")
     product = relationship("Product")
 
-    def to_dict(self):
+    def to_dict(self, lang: str = "en"):
         result = {
             "id": self.id,
             "user_id": self.user_id,
@@ -50,7 +50,7 @@ class CartItem(Base):
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
         if self.cart_type == CartType.INTERNAL and self.product:
-            result["product"] = self.product.to_dict()
+            result["product"] = self.product.to_dict(lang)
         else:
             result["title"] = self.title
             result["price"] = self.price

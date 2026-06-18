@@ -72,7 +72,7 @@ class _SearchScreenState extends State<SearchScreen> {
                     children: [
                       const Icon(Icons.search, size: 64, color: AppColors.textHint),
                       const SizedBox(height: 16),
-                      Text('Search for products', style: GoogleFonts.inter(color: AppColors.textSecondary)),
+                      Text('search_for_products'.tr(), style: GoogleFonts.inter(color: AppColors.textSecondary)),
                     ],
                   ),
                 )

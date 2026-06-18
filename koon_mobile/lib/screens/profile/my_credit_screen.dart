@@ -39,7 +39,7 @@ class MyCreditScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   Obx(() => Text(
-                        '${authController.userCredit.toStringAsFixed(2)} SAR',
+                        '${authController.userCredit.toStringAsFixed(2)} ' + 'SAR'.tr(),
                         style: GoogleFonts.poppins(fontSize: 32, fontWeight: FontWeight.w700, color: Colors.white),
                       )),
                 ],
@@ -71,7 +71,7 @@ class MyCreditScreen extends StatelessWidget {
               height: 52,
               child: ElevatedButton(
                 onPressed: () {
-                  Get.snackbar('Top Up', 'Payment gateway loading...', snackPosition: SnackPosition.BOTTOM);
+                  Get.snackbar('top_up'.tr(), 'payment_gateway_loading'.tr(), snackPosition: SnackPosition.BOTTOM);
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
