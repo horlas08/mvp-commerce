@@ -5,12 +5,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import os
 import uuid
 import shutil
+from passlib.context import CryptContext
 
 from app.database import get_db
 from app.models.user import User
 from app.auth.dependencies import get_current_user
 
 router = APIRouter(prefix="/users", tags=["Users"])
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 class UpdateProfileRequest(BaseModel):
@@ -19,6 +21,11 @@ class UpdateProfileRequest(BaseModel):
     avatar_url: Optional[str] = None
     preferred_language: Optional[str] = None
     preferred_currency: Optional[str] = None
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: Optional[str] = None
+    new_password: str
 
 
 @router.get("/me")
@@ -76,3 +83,23 @@ async def upload_avatar(
     await db.commit()
     await db.refresh(user)
     return {"avatar_url": avatar_url, "user": user.to_dict()}
+
+
+@router.put("/me/change-password")
+async def change_password(
+    req: ChangePasswordRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if len(req.new_password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+
+    if user.password_hash:
+        if not req.current_password:
+            raise HTTPException(status_code=400, detail="Current password is required")
+        if not pwd_context.verify(req.current_password, user.password_hash):
+            raise HTTPException(status_code=400, detail="Incorrect current password")
+
+    user.password_hash = pwd_context.hash(req.new_password)
+    await db.commit()
+    return {"message": "Password changed successfully"}

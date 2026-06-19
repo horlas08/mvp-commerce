@@ -18,6 +18,8 @@ class User(Base):
     google_id: Mapped[Optional[str]] = mapped_column(String(255), unique=True, nullable=True, index=True)
     role: Mapped[str] = mapped_column(String(20), default="customer")  # customer, seller, admin
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    verification_code: Mapped[Optional[str]] = mapped_column(String(6), nullable=True)
     preferred_language: Mapped[str] = mapped_column(String(5), default="en")
     preferred_currency: Mapped[str] = mapped_column(String(5), default="SAR")
     credit_balance: Mapped[float] = mapped_column(default=0.0)
@@ -40,6 +42,8 @@ class User(Base):
             "avatar_url": self.avatar_url,
             "role": self.role,
             "is_active": self.is_active,
+            "is_verified": self.is_verified,
+            "has_password": self.password_hash is not None,
             "preferred_language": self.preferred_language,
             "preferred_currency": self.preferred_currency,
             "credit_balance": self.credit_balance,

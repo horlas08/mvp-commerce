@@ -68,7 +68,22 @@ extra_translations = {
     "items_count": ("{} items", "{} منتجات"),
     "connection_error": ("Connection error", "خطأ في الاتصال"),
     "SAR": ("SAR", "ريال"),
-    "USD": ("USD", "دولار")
+    "USD": ("USD", "دولار"),
+    "email_verification": ("Email Verification", "تأكيد البريد الإلكتروني"),
+    "enter_verification_code": ("Enter 6-digit code", "أدخل رمز التأكيد المكون من 6 أرقام"),
+    "verify": ("Verify", "تأكيد"),
+    "resend_code": ("Resend Code", "إعادة إرسال الرمز"),
+    "resend_in": ("Resend in {}s", "إعادة الإرسال خلال {} ثانية"),
+    "verification_sent_to": ("We have sent a verification code to {}", "لقد أرسلنا رمز التأكيد إلى {}"),
+    "email_verified_success": ("Email verified successfully", "تم تأكيد البريد الإلكتروني بنجاح"),
+    "verification_code_sent": ("Verification code sent", "تم إرسال رمز التأكيد"),
+    "change_password": ("Change Password", "تغيير كلمة المرور"),
+    "current_password": ("Current Password", "كلمة المرور الحالية"),
+    "new_password": ("New Password", "كلمة المرور الجديدة"),
+    "confirm_new_password": ("Confirm New Password", "تأكيد كلمة المرور الجديدة"),
+    "update_password": ("Update Password", "تحديث كلمة المرور"),
+    "current_password_required": ("Current password is required", "كلمة المرور الحالية مطلوبة"),
+    "new_password_required": ("New password is required", "كلمة المرور الجديدة مطلوبة")
 }
 
 def apply():

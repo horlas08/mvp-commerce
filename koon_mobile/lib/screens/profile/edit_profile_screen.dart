@@ -19,13 +19,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final AuthController _authController = Get.find<AuthController>();
   final AuthService _authService = AuthService();
   final _formKey = GlobalKey<FormState>();
+  final _changePasswordFormKey = GlobalKey<FormState>();
 
   late TextEditingController _nameController;
   late TextEditingController _phoneController;
+  late TextEditingController _currentPasswordController;
+  late TextEditingController _newPasswordController;
+  late TextEditingController _confirmPasswordController;
   
   String? _avatarUrl;
   bool _isLoading = false;
   bool _isAvatarUploading = false;
+  bool _isPasswordLoading = false;
 
   @override
   void initState() {
@@ -33,12 +38,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _nameController = TextEditingController(text: _authController.userName);
     _phoneController = TextEditingController(text: _authController.user.value?['phone'] ?? '');
     _avatarUrl = _authController.user.value?['avatar_url'] ?? '';
+    _currentPasswordController = TextEditingController();
+    _newPasswordController = TextEditingController();
+    _confirmPasswordController = TextEditingController();
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
+    _currentPasswordController.dispose();
+    _newPasswordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -62,6 +73,28 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       Get.snackbar('error'.tr(), e.toString(), snackPosition: SnackPosition.BOTTOM);
     } finally {
       setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _changePassword() async {
+    if (!_changePasswordFormKey.currentState!.validate()) return;
+
+    setState(() => _isPasswordLoading = true);
+    try {
+      final hasPassword = _authController.user.value?['has_password'] ?? false;
+      final success = await _authController.changePassword(
+        currentPassword: hasPassword ? _currentPasswordController.text : null,
+        newPassword: _newPasswordController.text,
+      );
+      if (success) {
+        _currentPasswordController.clear();
+        _newPasswordController.clear();
+        _confirmPasswordController.clear();
+      }
+    } catch (e) {
+      Get.snackbar('error'.tr(), e.toString(), snackPosition: SnackPosition.BOTTOM);
+    } finally {
+      setState(() => _isPasswordLoading = false);
     }
   }
 
@@ -291,6 +324,123 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       decoration: InputDecoration(
                         labelText: 'phone'.tr(),
                         prefixIcon: const Icon(Icons.phone_outlined),
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                    const Divider(height: 1),
+                    const SizedBox(height: 32),
+                    
+                    // Change Password Section
+                    Form(
+                      key: _changePasswordFormKey,
+                      child: Card(
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          side: const BorderSide(color: AppColors.divider, width: 0.5),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.lock_outline, color: AppColors.primary),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'change_password'.tr(),
+                                    style: GoogleFonts.inter(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.textPrimary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 20),
+                              if (_authController.user.value?['has_password'] ?? false) ...[
+                                TextFormField(
+                                  controller: _currentPasswordController,
+                                  obscureText: true,
+                                  decoration: InputDecoration(
+                                    labelText: 'current_password'.tr(),
+                                    prefixIcon: const Icon(Icons.lock_outline),
+                                  ),
+                                  validator: (v) {
+                                    if (v == null || v.isEmpty) {
+                                      return 'current_password_required'.tr();
+                                    }
+                                    return null;
+                                  },
+                                ),
+                                const SizedBox(height: 16),
+                              ],
+                              TextFormField(
+                                controller: _newPasswordController,
+                                obscureText: true,
+                                decoration: InputDecoration(
+                                  labelText: 'new_password'.tr(),
+                                  prefixIcon: const Icon(Icons.lock_reset_outlined),
+                                ),
+                                validator: (v) {
+                                  if (v == null || v.isEmpty) {
+                                    return 'new_password_required'.tr();
+                                  }
+                                  if (v.length < 6) {
+                                    return 'password_min_length'.tr();
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 16),
+                              TextFormField(
+                                controller: _confirmPasswordController,
+                                obscureText: true,
+                                decoration: InputDecoration(
+                                  labelText: 'confirm_new_password'.tr(),
+                                  prefixIcon: const Icon(Icons.lock_reset_outlined),
+                                ),
+                                validator: (v) {
+                                  if (v != _newPasswordController.text) {
+                                    return 'passwords_dont_match'.tr();
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 24),
+                              SizedBox(
+                                height: 48,
+                                child: ElevatedButton(
+                                  onPressed: _isPasswordLoading ? null : _changePassword,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.primary,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                  child: _isPasswordLoading
+                                      ? const SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                            color: Colors.white,
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : Text(
+                                          'update_password'.tr(),
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 40),

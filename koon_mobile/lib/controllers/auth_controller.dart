@@ -47,6 +47,11 @@ class AuthController extends GetxController {
         isLoggedIn.value = true;
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('user_data', jsonEncode(result['user']));
+        final debugCode = result['debug_code'];
+        if (debugCode != null) {
+          Get.snackbar('Verification Code (Debug)', 'Use code: $debugCode',
+              snackPosition: SnackPosition.BOTTOM, duration: const Duration(seconds: 10));
+        }
         return true;
       }
     } catch (e) {
@@ -66,6 +71,11 @@ class AuthController extends GetxController {
         isLoggedIn.value = true;
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('user_data', jsonEncode(result['user']));
+        final debugCode = result['debug_code'];
+        if (debugCode != null) {
+          Get.snackbar('Verification Code (Debug)', 'Use code: $debugCode',
+              snackPosition: SnackPosition.BOTTOM, duration: const Duration(seconds: 10));
+        }
         return true;
       }
     } catch (e) {
@@ -85,6 +95,11 @@ class AuthController extends GetxController {
         isLoggedIn.value = true;
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('user_data', jsonEncode(result['user']));
+        final debugCode = result['debug_code'];
+        if (debugCode != null) {
+          Get.snackbar('Verification Code (Debug)', 'Use code: $debugCode',
+              snackPosition: SnackPosition.BOTTOM, duration: const Duration(seconds: 10));
+        }
         return true;
       }
     } catch (e) {
@@ -105,6 +120,64 @@ class AuthController extends GetxController {
     } finally {
       isLoading.value = false;
     }
+  }
+
+  Future<bool> verifyEmail(String code) async {
+    isLoading.value = true;
+    try {
+      final res = await _authService.verifyEmail(code);
+      if (res != null) {
+        user.value = res['user'];
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('user_data', jsonEncode(res['user']));
+        Get.snackbar('success'.tr(), 'email_verified_success'.tr(), snackPosition: SnackPosition.BOTTOM);
+        return true;
+      }
+    } catch (e) {
+      Get.snackbar('error'.tr(), e.toString(), snackPosition: SnackPosition.BOTTOM);
+    } finally {
+      isLoading.value = false;
+    }
+    return false;
+  }
+
+  Future<void> resendVerification() async {
+    isLoading.value = true;
+    try {
+      final res = await _authService.resendVerification();
+      if (res != null) {
+        final debugCode = res['debug_code'];
+        if (debugCode != null) {
+          Get.snackbar('Verification Code (Debug)', 'Use code: $debugCode',
+              snackPosition: SnackPosition.BOTTOM, duration: const Duration(seconds: 10));
+        } else {
+          Get.snackbar('success'.tr(), 'verification_code_sent'.tr(), snackPosition: SnackPosition.BOTTOM);
+        }
+      }
+    } catch (e) {
+      Get.snackbar('error'.tr(), e.toString(), snackPosition: SnackPosition.BOTTOM);
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  Future<bool> changePassword({String? currentPassword, required String newPassword}) async {
+    isLoading.value = true;
+    try {
+      final success = await _authService.changePassword(
+        currentPassword: currentPassword,
+        newPassword: newPassword,
+      );
+      if (success) {
+        Get.snackbar('success'.tr(), 'password_changed_success'.tr(), snackPosition: SnackPosition.BOTTOM);
+        return true;
+      }
+    } catch (e) {
+      Get.snackbar('error'.tr(), e.toString(), snackPosition: SnackPosition.BOTTOM);
+    } finally {
+      isLoading.value = false;
+    }
+    return false;
   }
 
   Future<void> logout() async {

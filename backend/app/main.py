@@ -18,6 +18,7 @@ from app.routers import (
     seller_router,
     refund_router,
     config_router,
+    admin_router,
 )
 
 # Ensure all models are imported so SQLAlchemy can create their tables
@@ -67,6 +68,7 @@ app.include_router(coupon_router.router, prefix=API_PREFIX)
 app.include_router(seller_router.router, prefix=API_PREFIX)
 app.include_router(refund_router.router, prefix=API_PREFIX)
 app.include_router(config_router.router, prefix=API_PREFIX)
+app.include_router(admin_router.router, prefix=API_PREFIX)
 
 
 @app.get("/")

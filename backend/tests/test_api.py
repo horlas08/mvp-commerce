@@ -151,7 +151,17 @@ def _get_auth_header():
         "password": "password123",
         "name": "Auth User",
     })
-    return {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    data = reg.json()
+    token = data["access_token"]
+    debug_code = data.get("debug_code")
+    # Verify the email immediately so protected tests pass
+    if debug_code:
+        client.post(
+            "/api/v1/auth/verify-email",
+            json={"code": debug_code},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+    return {"Authorization": f"Bearer {token}"}
 
 
 def test_get_profile():

@@ -155,5 +155,20 @@
   "items_count": "{} منتجات",
   "connection_error": "خطأ في الاتصال",
   "SAR": "ريال",
-  "USD": "دولار"
+  "USD": "دولار",
+  "email_verification": "تأكيد البريد الإلكتروني",
+  "enter_verification_code": "أدخل رمز التأكيد المكون من 6 أرقام",
+  "verify": "تأكيد",
+  "resend_code": "إعادة إرسال الرمز",
+  "resend_in": "إعادة الإرسال خلال {} ثانية",
+  "verification_sent_to": "لقد أرسلنا رمز التأكيد إلى {}",
+  "email_verified_success": "تم تأكيد البريد الإلكتروني بنجاح",
+  "verification_code_sent": "تم إرسال رمز التأكيد",
+  "change_password": "تغيير كلمة المرور",
+  "current_password": "كلمة المرور الحالية",
+  "new_password": "كلمة المرور الجديدة",
+  "confirm_new_password": "تأكيد كلمة المرور الجديدة",
+  "update_password": "تحديث كلمة المرور",
+  "current_password_required": "كلمة المرور الحالية مطلوبة",
+  "new_password_required": "كلمة المرور الجديدة مطلوبة"
 }

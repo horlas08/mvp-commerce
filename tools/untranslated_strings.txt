@@ -3,3 +3,11 @@ Untranslated strings:
 /Users/user/project/koon/koon_mobile/lib/screens/splash/splash_screen.dart:101: 'كون'
 /Users/user/project/koon/koon_mobile/lib/screens/webview/webview_screen.dart:99: "Unknown Price"
 /Users/user/project/koon/koon_mobile/lib/screens/profile/profile_screen.dart:222: 'العربية'
+/Users/user/project/koon/koon_mobile/lib/controllers/auth_controller.dart:52: 'Verification Code (Debug)'
+/Users/user/project/koon/koon_mobile/lib/controllers/auth_controller.dart:52: 'Use code: $debugCode'
+/Users/user/project/koon/koon_mobile/lib/controllers/auth_controller.dart:76: 'Verification Code (Debug)'
+/Users/user/project/koon/koon_mobile/lib/controllers/auth_controller.dart:76: 'Use code: $debugCode'
+/Users/user/project/koon/koon_mobile/lib/controllers/auth_controller.dart:100: 'Verification Code (Debug)'
+/Users/user/project/koon/koon_mobile/lib/controllers/auth_controller.dart:100: 'Use code: $debugCode'
+/Users/user/project/koon/koon_mobile/lib/controllers/auth_controller.dart:151: 'Verification Code (Debug)'
+/Users/user/project/koon/koon_mobile/lib/controllers/auth_controller.dart:151: 'Use code: $debugCode'

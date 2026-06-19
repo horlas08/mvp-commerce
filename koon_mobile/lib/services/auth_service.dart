@@ -127,6 +127,50 @@ class AuthService {
     await prefs.remove('user_data');
   }
 
+  Future<Map<String, dynamic>?> verifyEmail(String code) async {
+    try {
+      final response = await _dio.post(
+        ApiConstants.verifyEmail,
+        data: {'code': code},
+      );
+      if (response.statusCode == 200) {
+        return response.data;
+      }
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+    return null;
+  }
+
+  Future<Map<String, dynamic>?> resendVerification() async {
+    try {
+      final response = await _dio.post(
+        ApiConstants.resendVerification,
+      );
+      if (response.statusCode == 200) {
+        return response.data;
+      }
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+    return null;
+  }
+
+  Future<bool> changePassword({String? currentPassword, required String newPassword}) async {
+    try {
+      final response = await _dio.put(
+        ApiConstants.changePassword,
+        data: {
+          if (currentPassword != null) 'current_password': currentPassword,
+          'new_password': newPassword,
+        },
+      );
+      return response.statusCode == 200;
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
   Future<bool> isLoggedIn() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('access_token') != null;

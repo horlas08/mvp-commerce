@@ -155,5 +155,20 @@
   "items_count": "{} items",
   "connection_error": "Connection error",
   "SAR": "SAR",
-  "USD": "USD"
+  "USD": "USD",
+  "email_verification": "Email Verification",
+  "enter_verification_code": "Enter 6-digit code",
+  "verify": "Verify",
+  "resend_code": "Resend Code",
+  "resend_in": "Resend in {}s",
+  "verification_sent_to": "We have sent a verification code to {}",
+  "email_verified_success": "Email verified successfully",
+  "verification_code_sent": "Verification code sent",
+  "change_password": "Change Password",
+  "current_password": "Current Password",
+  "new_password": "New Password",
+  "confirm_new_password": "Confirm New Password",
+  "update_password": "Update Password",
+  "current_password_required": "Current password is required",
+  "new_password_required": "New password is required"
 }

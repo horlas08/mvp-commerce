@@ -3,6 +3,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get/get.dart' hide Trans;
 import '../../app/theme/app_colors.dart';
+import '../../controllers/auth_controller.dart';
 import '../../controllers/cart_controller.dart';
 import '../../controllers/home_controller.dart';
 import '../../controllers/order_controller.dart';
@@ -13,6 +14,7 @@ import '../categories/categories_screen.dart';
 import '../cart/cart_screen.dart';
 import '../orders/orders_screen.dart';
 import '../profile/profile_screen.dart';
+import '../auth/email_verification_screen.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -43,39 +45,49 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _screens,
-      ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(Theme.of(context).brightness == Brightness.dark ? 0.2 : 0.06),
-              blurRadius: 20,
-              offset: const Offset(0, -4),
-            ),
-          ],
+    final authController = Get.find<AuthController>();
+
+    return Obx(() {
+      if (authController.isLoggedIn.value &&
+          authController.user.value != null &&
+          authController.user.value!['is_verified'] == false) {
+        return const EmailVerificationScreen();
+      }
+
+      return Scaffold(
+        body: IndexedStack(
+          index: _currentIndex,
+          children: _screens,
         ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildNavItem(0, Icons.home_outlined, Icons.home_rounded, 'home'.tr()),
-                _buildNavItem(1, Icons.grid_view_outlined, Icons.grid_view_rounded, 'categories'.tr()),
-                _buildCartNavItem(),
-                _buildNavItem(3, Icons.receipt_long_outlined, Icons.receipt_long_rounded, 'orders'.tr()),
-                _buildNavItem(4, Icons.person_outline, Icons.person_rounded, 'profile'.tr()),
-              ],
+        bottomNavigationBar: Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(Theme.of(context).brightness == Brightness.dark ? 0.2 : 0.06),
+                blurRadius: 20,
+                offset: const Offset(0, -4),
+              ),
+            ],
+          ),
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildNavItem(0, Icons.home_outlined, Icons.home_rounded, 'home'.tr()),
+                  _buildNavItem(1, Icons.grid_view_outlined, Icons.grid_view_rounded, 'categories'.tr()),
+                  _buildCartNavItem(),
+                  _buildNavItem(3, Icons.receipt_long_outlined, Icons.receipt_long_rounded, 'orders'.tr()),
+                  _buildNavItem(4, Icons.person_outline, Icons.person_rounded, 'profile'.tr()),
+                ],
+              ),
             ),
           ),
         ),
-      ),
-    );
+      );
+    });
   }
 
   Widget _buildNavItem(int index, IconData icon, IconData activeIcon, String label) {

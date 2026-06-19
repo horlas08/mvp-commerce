@@ -27,9 +27,12 @@ class ApiConstants {
   static String get googleAuth => '$baseUrl/auth/google';
   static String get forgotPassword => '$baseUrl/auth/forgot-password';
   static String get refreshToken => '$baseUrl/auth/refresh';
+  static String get verifyEmail => '$baseUrl/auth/verify-email';
+  static String get resendVerification => '$baseUrl/auth/resend-verification';
 
   // User
   static String get userProfile => '$baseUrl/users/me';
+  static String get changePassword => '$baseUrl/users/me/change-password';
 
   // Products
   static String get products => '$baseUrl/products';
