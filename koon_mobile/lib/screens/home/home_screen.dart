@@ -27,7 +27,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int _bannerIndex = 0;
 
   final List<Map<String, dynamic>> _externalStores = [
-    {'name': 'Alibaba', 'logo': '🏭', 'color': Color(0xFFFF6B00), 'url': 'https://www.alibaba.com', 'subtitle': 'Wholesale', 'enabled': true},
+    {'name': 'Alibaba', 'logo': '🏭', 'color': Color(0xFFFF6B00), 'url': 'https://arabic.alibaba.com', 'subtitle': 'Wholesale', 'enabled': true},
     {'name': 'AliExpress', 'logo': '🛒', 'color': Color(0xFFE53935), 'url': 'https://www.aliexpress.com', 'subtitle': '', 'enabled': true},
     {'name': 'SHEIN', 'logo': '👗', 'color': Color(0xFF1A1A2E), 'url': 'https://ar.shein.com', 'subtitle': '', 'enabled': true},
     {'name': 'Amazon', 'logo': '📦', 'color': Color(0xFFFFA726), 'url': 'https://www.amazon.sa', 'subtitle': '', 'enabled': true},
@@ -203,7 +203,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               SliverToBoxAdapter(
                 child: SizedBox(
-                  height: 110,
+                  height: 120,
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -229,7 +229,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           child: Stack(
                             children: [
                               Padding(
-                                padding: const EdgeInsets.all(14),
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [

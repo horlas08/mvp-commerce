@@ -170,5 +170,16 @@
   "confirm_new_password": "تأكيد كلمة المرور الجديدة",
   "update_password": "تحديث كلمة المرور",
   "current_password_required": "كلمة المرور الحالية مطلوبة",
-  "new_password_required": "كلمة المرور الجديدة مطلوبة"
+  "new_password_required": "كلمة المرور الجديدة مطلوبة",
+  "paste_link": "الصق الرابط أو ابحث...",
+  "link_copied": "تم نسخ الرابط",
+  "from": "من",
+  "search_by_link": "البحث عبر الرابط",
+  "search_by_link_desc": "الصق رابط أي منتج من المواقع المدعومة لفتحه هنا.",
+  "paste": "لصق",
+  "go": "انتقال",
+  "share": "مشاركة",
+  "back": "رجوع",
+  "forward": "تقدم",
+  "refresh": "تحديث"
 }

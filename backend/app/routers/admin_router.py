@@ -363,9 +363,8 @@ class AdminLoginRequest(BaseModel):
 @router.post("/login")
 async def admin_login(req: AdminLoginRequest, db: AsyncSession = Depends(get_db)):
     """Admin-specific login endpoint that only accepts admin-role users."""
-    from passlib.context import CryptContext
+    from app.auth.security import verify_password
     from app.auth.jwt_handler import create_access_token, create_refresh_token
-    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
     result = await db.execute(select(User).where(User.email == req.email, User.role == "admin"))
     user = result.scalar_one_or_none()
@@ -373,7 +372,7 @@ async def admin_login(req: AdminLoginRequest, db: AsyncSession = Depends(get_db)
         raise HTTPException(status_code=401, detail="Invalid credentials or not an admin")
     if not user.password_hash:
         raise HTTPException(status_code=401, detail="Password login not configured for this account")
-    if not pwd_context.verify(req.password, user.password_hash):
+    if not verify_password(req.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     access_token = create_access_token({"sub": user.id, "role": user.role})
@@ -388,15 +387,14 @@ async def admin_login(req: AdminLoginRequest, db: AsyncSession = Depends(get_db)
 @router.post("/seed-admin")
 async def seed_admin(db: AsyncSession = Depends(get_db)):
     """One-time endpoint to create the default admin account. Remove in production."""
-    from passlib.context import CryptContext
-    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    from app.auth.security import hash_password
 
     result = await db.execute(select(User).where(User.role == "admin"))
     existing = result.scalar_one_or_none()
     if existing:
         return {"message": "Admin already exists", "email": existing.email}
 
-    password_hash = pwd_context.hash("admin123")
+    password_hash = hash_password("admin123")
     admin = User(
         email="admin@koon.sa",
         password_hash=password_hash,

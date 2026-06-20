@@ -5,14 +5,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import os
 import uuid
 import shutil
-from passlib.context import CryptContext
-
 from app.database import get_db
 from app.models.user import User
 from app.auth.dependencies import get_current_user
+from app.auth.security import hash_password, verify_password
 
 router = APIRouter(prefix="/users", tags=["Users"])
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 class UpdateProfileRequest(BaseModel):
@@ -97,9 +95,9 @@ async def change_password(
     if user.password_hash:
         if not req.current_password:
             raise HTTPException(status_code=400, detail="Current password is required")
-        if not pwd_context.verify(req.current_password, user.password_hash):
+        if not verify_password(req.current_password, user.password_hash):
             raise HTTPException(status_code=400, detail="Incorrect current password")
 
-    user.password_hash = pwd_context.hash(req.new_password)
+    user.password_hash = hash_password(req.new_password)
     await db.commit()
     return {"message": "Password changed successfully"}

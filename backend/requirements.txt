@@ -6,7 +6,7 @@ beautifulsoup4
 sqlalchemy[asyncio]
 aiosqlite
 python-jose[cryptography]
-passlib[bcrypt]
+bcrypt
 python-multipart
 google-auth
 alembic

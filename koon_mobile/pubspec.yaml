@@ -35,6 +35,9 @@ dependencies:
   # Networking
   dio: ^5.8.0+1
 
+  # Filesystem (for HTML source dumps during webview development)
+  path_provider: ^2.1.4
+
   # Auth
   google_sign_in: ^6.2.2
   shared_preferences: ^2.5.3

@@ -170,5 +170,16 @@
   "confirm_new_password": "Confirm New Password",
   "update_password": "Update Password",
   "current_password_required": "Current password is required",
-  "new_password_required": "New password is required"
+  "new_password_required": "New password is required",
+  "paste_link": "Paste link or search...",
+  "link_copied": "Link copied to clipboard",
+  "from": "From",
+  "search_by_link": "Search by link",
+  "search_by_link_desc": "Paste a product URL from any supported site to open it here.",
+  "paste": "Paste",
+  "go": "Go",
+  "share": "Share",
+  "back": "Back",
+  "forward": "Forward",
+  "refresh": "Refresh"
 }

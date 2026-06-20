@@ -4,16 +4,14 @@ from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from passlib.context import CryptContext
-
 from app.database import get_db
 from app.models.user import User
 from app.auth.jwt_handler import create_access_token, create_refresh_token, verify_token
 from app.auth.google_auth import verify_google_token
 from app.auth.dependencies import get_current_user
+from app.auth.security import hash_password, verify_password
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 # ── Request / Response Schemas ──────────────────────────────────────────────
@@ -62,7 +60,7 @@ async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
     code = "".join(random.choices("0123456789", k=6))
     user = User(
         email=req.email,
-        password_hash=pwd_context.hash(req.password),
+        password_hash=hash_password(req.password),
         name=req.name,
         phone=req.phone,
         is_verified=False,
@@ -87,7 +85,7 @@ async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.email == req.email))
     user = result.scalar_one_or_none()
 
-    if not user or not user.password_hash or not pwd_context.verify(req.password, user.password_hash):
+    if not user or not user.password_hash or not verify_password(req.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
     if not user.is_active:
