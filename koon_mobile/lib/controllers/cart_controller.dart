@@ -60,6 +60,10 @@ class CartController extends GetxController {
       quantity: quantity,
     );
     if (result != null) {
+      // Auto-switch the active cart to the one we just added to, so the cart
+      // screen shows the correct site's cart (e.g. Alibaba) instead of staying
+      // on whatever was manually selected in the dropdown.
+      selectedCartType.value = cartType;
       await loadCart();
       return true;
     }

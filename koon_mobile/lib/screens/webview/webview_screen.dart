@@ -40,12 +40,16 @@ class _WebViewScreenState extends State<WebViewScreen> {
   String _currentUrl = '';
   Map<String, dynamic>? _currentConfig;
   Map<String, dynamic>? _currentProduct;
+  String? _loadError;
 
   // ── HTML source dumping (dev tool) ────────────────────────────────────────
-  // Saves the live page HTML to <appExternalStorage>/<site>_source.html after
-  // every page load so we can inspect the DOM and add hide-selectors for
-  // popups, "continue in app" banners, login modals, etc.
-  bool _dumpEnabled = true;
+  // Saves the live page HTML to <appExternalStorage>/<site>_source.html so we
+  // can inspect the DOM and add hide-selectors for popups, login modals, etc.
+  // Disabled by default: auto-dumping serialized the entire DOM (~700KB on
+  // Alibaba) over the JS bridge on every load, which stalled the page. Use the
+  // "Dump now" button (code icon in the app bar) when you need a snapshot, or
+  // toggle auto-dump back on there.
+  bool _dumpEnabled = false;
   String? _lastDumpPath;
   int _lastDumpBytes = 0;
   DateTime? _lastDumpAt;
@@ -70,9 +74,19 @@ class _WebViewScreenState extends State<WebViewScreen> {
     } catch (_) {}
   }
 
+  // Throttle so the heavy combined-JS isn't re-injected on every progress tick.
+  DateTime? _lastInjectAt;
+
   // ── Inject CSS + JS to hide native cart/login UI & scrape product ────────
-  void _applyHidingAndScraping() async {
+  void _applyHidingAndScraping({bool force = false}) async {
     if (_webViewController == null || _currentConfig == null) return;
+    final now = DateTime.now();
+    if (!force &&
+        _lastInjectAt != null &&
+        now.difference(_lastInjectAt!).inMilliseconds < 1500) {
+      return;
+    }
+    _lastInjectAt = now;
 
     final hideSelectors = List<String>.from(_currentConfig!['hide_selectors']);
     final titleSelector = _currentConfig!['title_selector'];
@@ -99,21 +113,74 @@ class _WebViewScreenState extends State<WebViewScreen> {
             } catch(e) {}
           }
         }
+        // Throttle the observer: Alibaba is a heavy SPA that mutates the DOM
+        // constantly, so running hideElements() on every mutation pegs the CPU
+        // and makes scrolling/loading janky. Coalesce bursts into one run.
         if (!window._hideObserver) {
-          window._hideObserver = new MutationObserver(() => { hideElements(); });
-          window._hideObserver.observe(document.documentElement, { childList: true, subtree: true, attributes: false });
+          window._hidePending = false;
+          window._hideObserver = new MutationObserver(() => {
+            if (window._hidePending) return;
+            window._hidePending = true;
+            setTimeout(() => { window._hidePending = false; hideElements(); }, 350);
+          });
+          window._hideObserver.observe(document.body || document.documentElement, { childList: true, subtree: true, attributes: false });
         }
         if (!window._hideIntervalId) {
           hideElements();
-          window._hideIntervalId = setInterval(hideElements, 800);
+          window._hideIntervalId = setInterval(hideElements, 1200);
         } else {
           hideElements();
         }
+        // Parse schema.org Product JSON-LD (most reliable source for title,
+        // price & image — works even when the visible DOM uses minified /
+        // localized classes like Alibaba's "id-text-[...]" tailwind classes).
+        function getJsonLdProduct() {
+          try {
+            const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+            for (const s of scripts) {
+              let data;
+              try { data = JSON.parse(s.textContent); } catch(e) { continue; }
+              const items = Array.isArray(data) ? data : (data['@graph'] ? data['@graph'] : [data]);
+              for (const item of items) {
+                if (!item || !item['@type']) continue;
+                const types = Array.isArray(item['@type']) ? item['@type'] : [item['@type']];
+                if (types.indexOf('Product') === -1) continue;
+                let offers = item.offers;
+                if (Array.isArray(offers)) offers = offers[0];
+                let rawPrice = '';
+                let currency = '';
+                if (offers) {
+                  currency = offers.priceCurrency || '';
+                  if (offers.lowPrice && offers.highPrice && offers.lowPrice !== offers.highPrice) {
+                    rawPrice = offers.lowPrice + ' - ' + offers.highPrice;
+                  } else {
+                    rawPrice = offers.price || offers.lowPrice ||
+                      (offers.priceSpecification && offers.priceSpecification.price) || '';
+                  }
+                }
+                let priceStr = '';
+                if (rawPrice) {
+                  const symbols = { USD: '\$', EUR: '€', GBP: '£', CNY: '¥', JPY: '¥', SAR: 'SAR ', AED: 'AED ', NGN: '₦' };
+                  const sym = symbols[currency];
+                  priceStr = sym ? (sym + rawPrice) : (currency ? (currency + ' ' + rawPrice) : ('' + rawPrice));
+                }
+                let image = '';
+                if (item.image) { image = Array.isArray(item.image) ? item.image[0] : item.image; }
+                let name = item.name || '';
+                if (name && typeof name === 'object') { name = name['@value'] || ''; }
+                return { name: ('' + name).trim(), price: priceStr, image: ('' + image).trim() };
+              }
+            }
+          } catch(e) {}
+          return null;
+        }
         function extractProduct() {
           try {
+            const ld = getJsonLdProduct();
+            let title = '';
             const titleElem = document.querySelector("$titleSelector");
-            if (!titleElem) return null;
-            const title = titleElem.textContent.trim();
+            if (titleElem) title = titleElem.textContent.trim();
+            if (!title && ld && ld.name) title = ld.name;
             if (!title) return null;
             const priceSelectors = $priceSelectorsJson;
             let price = "Unknown Price";
@@ -121,6 +188,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
               const elem = document.querySelector(selector);
               if (elem) { const text = elem.textContent.trim(); if (text) { price = text; break; } }
             }
+            if ((price === "Unknown Price" || !price) && ld && ld.price) { price = ld.price; }
             const imageSelectors = $imageSelectorsJson;
             let imageUrl = "";
             for (const selector of imageSelectors) {
@@ -133,6 +201,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
                 if (imageUrl) break;
               }
             }
+            if (!imageUrl && ld && ld.image) { imageUrl = ld.image; }
             return { title: title, price: price, image_url: imageUrl, url: window.location.href, site: "$siteName" };
           } catch (e) { return null; }
         }
@@ -237,7 +306,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
   }
 
   void _openAppCart() {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => const CartScreen()));
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const CartScreen(showBackButton: true)));
   }
 
   // ── HTML dump helpers ────────────────────────────────────────────────────
@@ -416,6 +485,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
         body: Stack(
           children: [
             _buildWebView(),
+            if (_loadError != null) _buildLoadErrorOverlay(),
             if (_currentProduct != null) _buildProductBar(),
           ],
         ),
@@ -542,6 +612,30 @@ class _WebViewScreenState extends State<WebViewScreen> {
         useShouldOverrideUrlLoading: true,
         mediaPlaybackRequiresUserGesture: false,
         supportZoom: true,
+        // Alibaba/AliExpress open product pages via target="_blank" (new
+        // window). Without these, those clicks are silently dropped and the
+        // page never navigates. We catch the new-window request in
+        // onCreateWindow and load it in this same webview instead.
+        supportMultipleWindows: true,
+        javaScriptCanOpenWindowsAutomatically: true,
+        // Block the scripts that auto-evoke the native app and render the
+        // "open in app" popup. Alibaba uses @alife/sc-callapp ("换端"/switch-
+        // to-app) which fires enalibaba://...&ck=wap_auto_evoke. Killing the
+        // script removes BOTH the popup and the redirect attempt at the root.
+        contentBlockers: [
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*sc-callapp.*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*callapp.*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*wakeup.*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+        ],
       ),
       onWebViewCreated: (controller) {
         _webViewController = controller;
@@ -560,15 +654,51 @@ class _WebViewScreenState extends State<WebViewScreen> {
           },
         );
       },
-      onLoadStart: (_, url) async {
+      // Some sites (Alibaba, AliExpress, Amazon) open product links in a new
+      // window via target="_blank" or window.open(). Capture that here and
+      // load the URL in the current webview so the navigation actually happens.
+      onCreateWindow: (controller, createWindowAction) async {
+        final reqUrl = createWindowAction.request.url;
+        final scheme = reqUrl?.scheme.toLowerCase();
+        if (reqUrl != null && (scheme == 'http' || scheme == 'https')) {
+          await controller.loadUrl(urlRequest: URLRequest(url: reqUrl));
+        } else if (reqUrl != null) {
+          debugPrint('[webview] blocked new-window app redirect: $reqUrl');
+        }
+        // We handled it; don't let the platform create a detached window.
+        return false;
+      },
+      // useShouldOverrideUrlLoading is enabled. We allow normal web
+      // navigations (http/https) but BLOCK app deep-links. Alibaba's mobile
+      // web auto-evokes the native app via a custom scheme, e.g.
+      //   enalibaba://sc-home?...&ck=wap_auto_evoke
+      // which the webview can't load -> ERR_UNKNOWN_URL_SCHEME blank page.
+      // Others use intent://, alibaba://, aplus://, market://, android-app://,
+      // itms-apps://. Cancelling all non-web schemes keeps the user in-app.
+      shouldOverrideUrlLoading: (controller, navigationAction) async {
+        final uri = navigationAction.request.url;
+        if (uri == null) return NavigationActionPolicy.ALLOW;
+        final scheme = uri.scheme.toLowerCase();
+        const allowedSchemes = {'http', 'https', 'about', 'data', 'blank'};
+        if (!allowedSchemes.contains(scheme)) {
+          debugPrint('[webview] blocked app redirect: $uri');
+          return NavigationActionPolicy.CANCEL;
+        }
+        return NavigationActionPolicy.ALLOW;
+      },
+      onLoadStart: (_, url) {
         if (mounted) {
           setState(() {
             _isLoading = true;
+            _loadError = null;
             _currentProduct = null;
+            _lastInjectAt = null;
             if (url != null) _currentUrl = url.toString();
           });
         }
-        if (url != null) await _loadConfigForUrl(url.toString());
+        // Fire-and-forget: don't block the load-start handler on a backend
+        // round-trip, otherwise the progress bar appears to lag at the start.
+        if (url != null) _loadConfigForUrl(url.toString());
       },
       onLoadStop: (_, url) async {
         if (mounted) {
@@ -577,11 +707,20 @@ class _WebViewScreenState extends State<WebViewScreen> {
             if (url != null) _currentUrl = url.toString();
           });
         }
-        _applyHidingAndScraping();
+        _applyHidingAndScraping(force: true);
         _refreshNavButtons();
-        // Dump HTML for offline analysis (helps build hide-selectors for
-        // popups, "continue in app" banners, login modals, etc.)
+        // Dump HTML for offline analysis (dev tool, off by default — toggle via
+        // the code icon in the app bar).
         _dumpHtml();
+      },
+      onReceivedError: (controller, request, error) {
+        if (request.isForMainFrame != true) return;
+        if (!mounted) return;
+        setState(() {
+          _loadError = error.description;
+          _isLoading = false;
+        });
+        debugPrint('[webview] load error: ${error.type} ${error.description} ${request.url}');
       },
       onProgressChanged: (_, progress) {
         if (mounted) setState(() => _progress = progress / 100);
@@ -593,6 +732,52 @@ class _WebViewScreenState extends State<WebViewScreen> {
         }
         _refreshNavButtons();
       },
+    );
+  }
+
+  Widget _buildLoadErrorOverlay() {
+    final isDnsError = _loadError != null &&
+        (_loadError!.contains('ERR_NAME_NOT_RESOLVED') ||
+            _loadError!.toLowerCase().contains('name not resolved'));
+    return Container(
+      color: AppColors.surface,
+      padding: const EdgeInsets.all(24),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.wifi_off_rounded, size: 56, color: AppColors.textHint),
+            const SizedBox(height: 16),
+            Text(
+              'error_occurred'.tr(),
+              style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              isDnsError
+                  ? 'Check your internet connection. On Android emulators, DNS often breaks — try Cold Boot Now in AVD Manager, or test on a real device.'
+                  : (_loadError ?? ''),
+              style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: () {
+                setState(() => _loadError = null);
+                _webViewController?.reload();
+              },
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: Text('refresh'.tr()),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

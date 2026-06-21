@@ -11,7 +11,9 @@ import '../../controllers/settings_controller.dart';
 import '../auth/login_screen.dart';
 
 class CartScreen extends StatelessWidget {
-  const CartScreen({super.key});
+  final bool showBackButton;
+
+  const CartScreen({super.key, this.showBackButton = false});
 
   @override
   Widget build(BuildContext context) {
@@ -23,6 +25,13 @@ class CartScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text('cart'.tr()),
         automaticallyImplyLeading: false,
+        leading: showBackButton
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+                tooltip: 'back'.tr(),
+                onPressed: () => Navigator.of(context).maybePop(),
+              )
+            : null,
         actions: [
           Obx(() => cartController.cartItems.isNotEmpty
               ? IconButton(
