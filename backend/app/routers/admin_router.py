@@ -12,6 +12,7 @@ from app.models.order import Order, OrderStatus
 from app.models.category import Category
 from app.models.coupon import Coupon
 from app.models.banner import Banner
+from app.models.location import State, City
 from app.auth.dependencies import get_current_user
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
@@ -370,6 +371,8 @@ async def admin_login(req: AdminLoginRequest, db: AsyncSession = Depends(get_db)
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials or not an admin")
+    if not user.is_active:
+        raise HTTPException(status_code=401, detail="Admin account is inactive")
     if not user.password_hash:
         raise HTTPException(status_code=401, detail="Password login not configured for this account")
     if not verify_password(req.password, user.password_hash):
@@ -392,6 +395,10 @@ async def seed_admin(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.role == "admin"))
     existing = result.scalar_one_or_none()
     if existing:
+        if not existing.is_active:
+            existing.is_active = True
+            await db.commit()
+            return {"message": "Admin account activated", "email": existing.email}
         return {"message": "Admin already exists", "email": existing.email}
 
     password_hash = hash_password("admin123")
@@ -406,3 +413,132 @@ async def seed_admin(db: AsyncSession = Depends(get_db)):
     db.add(admin)
     await db.commit()
     return {"message": "Admin created", "email": "admin@koon.sa", "password": "admin123"}
+
+
+# ── States & Cities ──────────────────────────────────────────────────────────
+
+class StateRequest(BaseModel):
+    name_en: str
+    name_ar: str
+
+class CityRequest(BaseModel):
+    state_id: str
+    name_en: str
+    name_ar: str
+
+@router.get("/states")
+async def list_states_admin(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user)
+):
+    result = await db.execute(select(State).order_by(State.name_en))
+    return [s.to_dict() for s in result.scalars().all()]
+
+@router.post("/states")
+async def create_state_admin(
+    req: StateRequest,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user)
+):
+    state = State(**req.model_dump())
+    db.add(state)
+    await db.commit()
+    await db.refresh(state)
+    return state.to_dict()
+
+@router.patch("/states/{state_id}")
+async def update_state_admin(
+    state_id: str,
+    req: StateRequest,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user)
+):
+    result = await db.execute(select(State).where(State.id == state_id))
+    state = result.scalar_one_or_none()
+    if not state:
+        raise HTTPException(status_code=404, detail="State not found")
+    state.name_en = req.name_en
+    state.name_ar = req.name_ar
+    await db.commit()
+    await db.refresh(state)
+    return state.to_dict()
+
+@router.delete("/states/{state_id}")
+async def delete_state_admin(
+    state_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user)
+):
+    result = await db.execute(select(State).where(State.id == state_id))
+    state = result.scalar_one_or_none()
+    if not state:
+        raise HTTPException(status_code=404, detail="State not found")
+    await db.delete(state)
+    await db.commit()
+    return {"message": "State deleted"}
+
+@router.get("/cities")
+async def list_cities_admin(
+    state_id: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user)
+):
+    query = select(City)
+    if state_id:
+        query = query.where(City.state_id == state_id)
+    query = query.order_by(City.name_en)
+    result = await db.execute(query)
+    return [c.to_dict() for c in result.scalars().all()]
+
+@router.post("/cities")
+async def create_city_admin(
+    req: CityRequest,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user)
+):
+    # Verify state exists
+    state_check = await db.execute(select(State).where(State.id == req.state_id))
+    if not state_check.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="State not found")
+    city = City(**req.model_dump())
+    db.add(city)
+    await db.commit()
+    await db.refresh(city)
+    return city.to_dict()
+
+@router.patch("/cities/{city_id}")
+async def update_city_admin(
+    city_id: str,
+    req: CityRequest,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user)
+):
+    result = await db.execute(select(City).where(City.id == city_id))
+    city = result.scalar_one_or_none()
+    if not city:
+        raise HTTPException(status_code=404, detail="City not found")
+    
+    state_check = await db.execute(select(State).where(State.id == req.state_id))
+    if not state_check.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="State not found")
+
+    city.state_id = req.state_id
+    city.name_en = req.name_en
+    city.name_ar = req.name_ar
+    await db.commit()
+    await db.refresh(city)
+    return city.to_dict()
+
+@router.delete("/cities/{city_id}")
+async def delete_city_admin(
+    city_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user)
+):
+    result = await db.execute(select(City).where(City.id == city_id))
+    city = result.scalar_one_or_none()
+    if not city:
+        raise HTTPException(status_code=404, detail="City not found")
+    await db.delete(city)
+    await db.commit()
+    return {"message": "City deleted"}

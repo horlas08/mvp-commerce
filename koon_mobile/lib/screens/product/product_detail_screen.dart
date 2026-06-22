@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get/get.dart' hide Trans;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -10,7 +9,6 @@ import '../../controllers/compare_controller.dart';
 import '../../controllers/settings_controller.dart';
 import '../../controllers/auth_controller.dart';
 import '../../services/wishlist_service.dart';
-import '../../services/api_service.dart';
 import '../auth/login_screen.dart';
 import '../sellers/seller_shop_screen.dart';
 

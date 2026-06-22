@@ -8,7 +8,6 @@ import 'package:carousel_slider/carousel_slider.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 import '../../app/theme/app_colors.dart';
 import '../../controllers/home_controller.dart';
-import '../../controllers/auth_controller.dart';
 import '../../controllers/settings_controller.dart';
 import '../search/search_screen.dart';
 import '../webview/webview_screen.dart';

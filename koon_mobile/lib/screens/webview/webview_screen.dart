@@ -12,6 +12,7 @@ import '../../app/theme/app_colors.dart';
 import '../../controllers/cart_controller.dart';
 import '../../controllers/auth_controller.dart';
 import '../../services/api_service.dart';
+import '../../services/wishlist_service.dart';
 import '../../app/constants/api_constants.dart';
 import '../auth/login_screen.dart';
 import '../cart/cart_screen.dart';
@@ -174,9 +175,224 @@ class _WebViewScreenState extends State<WebViewScreen> {
           } catch(e) {}
           return null;
         }
+        function isPlaceholderValue(v) {
+          if (!v) return true;
+          return /^(select|choose|please select|pick|请选择|请选择|اختر|حدد)/i.test(('' + v).trim());
+        }
+        function readBorderBoxOption(box) {
+          const img = box.querySelector('img[alt]');
+          if (img && img.alt && img.alt.trim()) return img.alt.trim();
+          const span = box.querySelector('span');
+          return span ? span.textContent.trim() : '';
+        }
+        function isBorderBoxSelected(box) {
+          const cls = box.className || '';
+          return /\\bselected\\b/.test(cls) && !/\\bunselected\\b/.test(cls);
+        }
+        function normalizeAttrName(name) {
+          return ('' + name).trim().replace(/\\(\\d+\\)\$/, '').replace(/[:：]\\s*\$/, '').trim();
+        }
+        function isVisibleEl(el) {
+          if (!el || !el.getBoundingClientRect) return false;
+          const rect = el.getBoundingClientRect();
+          if (rect.width <= 0 || rect.height <= 0) return false;
+          const style = window.getComputedStyle(el);
+          return style.display !== 'none' && style.visibility !== 'hidden' && parseFloat(style.opacity || '1') > 0;
+        }
+        function upsertSelection(selections, entry) {
+          const key = normalizeAttrName(entry.name);
+          if (!key) return null;
+          let sel = selections.find(s => normalizeAttrName(s.name) === key);
+          if (!sel) {
+            sel = { name: key, value: entry.value || '', options: [] };
+            selections.push(sel);
+          }
+          (entry.options || []).forEach(o => {
+            o = ('' + o).trim();
+            if (o && sel.options.indexOf(o) === -1) sel.options.push(o);
+          });
+          if (entry.value && !isPlaceholderValue(entry.value)) sel.value = entry.value;
+          else if (!sel.value && sel.options.length === 1) sel.value = sel.options[0];
+          return sel;
+        }
+        function finalizeSelections(selections) {
+          const merged = [];
+          selections.forEach(entry => {
+            upsertSelection(merged, entry);
+          });
+          return merged.filter(s => {
+            if (s.options.length > 0) return true;
+            return s.value && !isPlaceholderValue(s.value);
+          }).map(s => {
+            if (!s.value && s.options.length === 1) s.value = s.options[0];
+            return s;
+          });
+        }
+        function parseSkuListBlock(list, selections) {
+          const titleEl = list.querySelector('[data-testid="sku-list-title"] span, [data-testid="sku-list-title"]');
+          let name = titleEl ? normalizeAttrName(titleEl.textContent) : '';
+          if (!name) return;
+          const options = [];
+          let value = '';
+          list.querySelectorAll('[data-testid="double-bordered-box"]').forEach(box => {
+            const opt = readBorderBoxOption(box);
+            if (opt && options.indexOf(opt) === -1) options.push(opt);
+            if (isBorderBoxSelected(box) && opt) value = opt;
+          });
+          upsertSelection(selections, { name: name, value: value, options: options });
+        }
+        function extractSkuMeta() {
+          const selections = [];
+          let hasVariants = false;
+          let requiresSelection = false;
+          let minQuantity = 1;
+          let selectedQuantity = 0;
+          const skuRoots = [
+            document.querySelector('[data-testid="sku-summary"]'),
+            document.querySelector('[data-module-name="module_sku"]'),
+          ].filter(Boolean);
+          skuRoots.forEach(root => {
+            hasVariants = true;
+            root.querySelectorAll('[data-testid="sku-summary-attr-floor"]').forEach(floor => {
+              let name = floor.getAttribute('data-attr-name') || '';
+              if (!name) {
+                const h = floor.querySelector('h2,h3');
+                name = h ? h.textContent.trim().replace(/\\(\\d+\\)\$/, '').trim() : '';
+              }
+              const options = [];
+              floor.querySelectorAll('[data-testid="sku-summary-value-name"]').forEach(el => {
+                const v = el.textContent.trim();
+                if (v && options.indexOf(v) === -1) options.push(v);
+              });
+              let value = '';
+              floor.querySelectorAll('[data-testid="sku-summary-value"]').forEach(el => {
+                const cls = (el.className || '') + ' ' + (el.getAttribute('aria-selected') || '');
+                const selected = /selected|active|border|ring/i.test(cls);
+                const v = el.querySelector('[data-testid="sku-summary-value-name"]');
+                if (selected && v) value = v.textContent.trim();
+              });
+              if (!value && options.length === 1) value = options[0];
+              const items = floor.querySelectorAll('[data-testid="sku-summary-value"]');
+              if (!value && items.length === 1) {
+                const v = items[0].querySelector('[data-testid="sku-summary-value-name"]');
+                if (v) value = v.textContent.trim();
+              }
+              if (!value && options.length > 1) requiresSelection = true;
+              if (isPlaceholderValue(value)) requiresSelection = true;
+              if (name) upsertSelection(selections, { name: name, value: value, options: options });
+            });
+            if (!root.querySelector('[data-testid="sku-summary"]')) {
+              root.querySelectorAll('[data-testid="sku-list"]').forEach(list => parseSkuListBlock(list, selections));
+            }
+          });
+          document.querySelectorAll('[data-testid="sku-panel-sku-group"]').forEach(group => {
+            if (!isVisibleEl(group)) return;
+            hasVariants = true;
+            let name = group.getAttribute('data-sku-group-name') || '';
+            let value = '';
+            const h4 = group.querySelector('h4 span, h4');
+            if (h4) {
+              const text = h4.textContent.trim();
+              if (!name && text.indexOf(':') !== -1) {
+                const parts = text.split(':');
+                name = parts[0].trim();
+                value = parts.slice(1).join(':').trim();
+              } else if (!name) {
+                name = text;
+              }
+            }
+            const options = [];
+            group.querySelectorAll('[data-testid="double-bordered-box"]').forEach(box => {
+              const opt = readBorderBoxOption(box);
+              if (opt && options.indexOf(opt) === -1) options.push(opt);
+              if (isBorderBoxSelected(box) && opt) value = opt;
+            });
+            if (name) upsertSelection(selections, { name: name, value: value, options: options });
+          });
+          document.querySelectorAll('[data-testid="sku-panel-sku"]').forEach(panel => {
+            if (!isVisibleEl(panel)) return;
+            hasVariants = true;
+            panel.querySelectorAll('[data-testid="sku-summary-attr-floor"], [data-testid*="attr-floor"]').forEach(floor => {
+              let name = floor.getAttribute('data-attr-name') || '';
+              if (!name) {
+                const h = floor.querySelector('h2,h3');
+                name = h ? normalizeAttrName(h.textContent) : '';
+              } else {
+                name = normalizeAttrName(name);
+              }
+              if (!name) return;
+              const options = [];
+              let value = '';
+              floor.querySelectorAll('[data-testid="sku-summary-value-name"], [data-testid*="value-name"]').forEach(el => {
+                const v = el.textContent.trim();
+                if (v && options.indexOf(v) === -1) options.push(v);
+              });
+              floor.querySelectorAll('[data-testid="sku-summary-value"]').forEach(el => {
+                const cls = (el.className || '') + ' ' + (el.getAttribute('aria-selected') || '');
+                const selected = /selected|active|border|ring/i.test(cls);
+                const v = el.querySelector('[data-testid="sku-summary-value-name"]');
+                if (selected && v) value = v.textContent.trim();
+              });
+              if (!value && options.length === 1) value = options[0];
+              upsertSelection(selections, { name: name, value: value, options: options });
+            });
+            panel.querySelectorAll('[data-testid="sku-list"]').forEach(list => parseSkuListBlock(list, selections));
+          });
+          document.querySelectorAll('input[aria-label="Quantity"]').forEach(inp => {
+            const q = parseInt(('' + (inp.value || '0')).replace(/[^\\d]/g, ''), 10) || 0;
+            selectedQuantity += q;
+          });
+          const ladder = document.querySelector('[data-testid="ladder-prices"]');
+          if (ladder) {
+            const tier = ladder.querySelector('[class*="text-nowrap"]');
+            const tierText = tier ? tier.textContent.trim() : '';
+            const m = tierText.match(/(\\d+)/);
+            if (m) minQuantity = Math.max(minQuantity, parseInt(m[1], 10) || 1);
+          }
+          const ladderPrice = document.querySelector('[data-testid="ladder-price"]');
+          if (ladderPrice) {
+            const firstTier = ladderPrice.querySelector('.price-item');
+            if (firstTier) {
+              const m = firstTier.textContent.match(/(\\d+)/);
+              if (m) minQuantity = Math.max(minQuantity, parseInt(m[1], 10) || 1);
+            }
+          }
+          const skuScope = document.querySelector('[data-module-name="module_sku"], [data-testid="sku-panel-sku"], [data-testid="product-price"]');
+          if (skuScope) {
+            const moqMatch = skuScope.textContent.match(/MOQ[:\\s]+(\\d+)/i);
+            if (moqMatch) minQuantity = Math.max(minQuantity, parseInt(moqMatch[1], 10) || 1);
+          }
+          document.querySelectorAll('#twister .a-row, [id^="variation_"]').forEach(row => {
+            const label = row.querySelector('label, .a-form-label');
+            const selected = row.querySelector('.selection, .a-dropdown-prompt, .twisterTextDiv');
+            const name = label ? label.textContent.trim().replace(':', '') : '';
+            const value = selected ? selected.textContent.trim() : '';
+            if (name) {
+              hasVariants = true;
+              if (!value || isPlaceholderValue(value)) requiresSelection = true;
+              selections.push({ name: name, value: value, options: value ? [value] : [] });
+            }
+          });
+          const finalSelections = finalizeSelections(selections);
+          if (finalSelections.length) hasVariants = true;
+          finalSelections.forEach(s => {
+            if (!s.value && s.options.length > 1) requiresSelection = true;
+            if (isPlaceholderValue(s.value)) requiresSelection = true;
+          });
+          const selectionSummary = finalSelections.filter(s => s.value).map(s => s.name + ': ' + s.value).join(' | ');
+          return {
+            has_variants: hasVariants,
+            requires_selection: requiresSelection,
+            selections: finalSelections,
+            min_quantity: minQuantity,
+            selected_quantity: selectedQuantity,
+            selection_summary: selectionSummary,
+          };
+        }
         function extractProduct() {
           try {
             const ld = getJsonLdProduct();
+            const sku = extractSkuMeta();
             let title = '';
             const titleElem = document.querySelector("$titleSelector");
             if (titleElem) title = titleElem.textContent.trim();
@@ -202,9 +418,25 @@ class _WebViewScreenState extends State<WebViewScreen> {
               }
             }
             if (!imageUrl && ld && ld.image) { imageUrl = ld.image; }
-            return { title: title, price: price, image_url: imageUrl, url: window.location.href, site: "$siteName" };
+            return Object.assign({
+              title: title,
+              price: price,
+              image_url: imageUrl,
+              url: window.location.href,
+              site: "$siteName",
+            }, sku);
           } catch (e) { return null; }
         }
+        window.__koonExtractProduct = extractProduct;
+        window.__koonOpenSkuPicker = function() {
+          const action = document.querySelector('[data-testid="sku-action"]');
+          if (action) { action.click(); return true; }
+          const layout = document.querySelector('[data-module-name="module_sku"] [data-testid="sku-layout"], [data-testid="sku-summary"]');
+          if (layout) { layout.click(); return true; }
+          const panel = document.querySelector('[data-testid="sku-panel-sku"]');
+          if (panel) { panel.scrollIntoView({ behavior: 'smooth', block: 'center' }); return true; }
+          return false;
+        };
         if (!window._scraperIntervalId) {
           window._scraperIntervalId = setInterval(() => {
             const product = extractProduct();
@@ -227,24 +459,167 @@ class _WebViewScreenState extends State<WebViewScreen> {
     return 'internal';
   }
 
-  Future<void> _onAddToCart() async {
-    if (_currentProduct == null) return;
+  Future<Map<String, dynamic>?> _fetchProductFromPage() async {
+    if (_webViewController == null) return _currentProduct;
+    try {
+      final raw = await _webViewController!.evaluateJavascript(
+        source: 'window.__koonExtractProduct ? window.__koonExtractProduct() : null',
+      );
+      if (raw == null) return _currentProduct;
+      final data = Map<String, dynamic>.from(raw as Map);
+      if (mounted) setState(() => _currentProduct = data);
+      return data;
+    } catch (_) {
+      return _currentProduct;
+    }
+  }
+
+  Future<void> _openNativeSkuPicker() async {
+    await _webViewController?.evaluateJavascript(source: 'window.__koonOpenSkuPicker && window.__koonOpenSkuPicker()');
+  }
+
+  String _buildExternalTitle(Map<String, dynamic> product, Map<String, String> chosenSelections) {
+    final base = (product['title'] ?? '').toString();
+    final parts = chosenSelections.entries
+        .where((e) => e.value.trim().isNotEmpty)
+        .map((e) => e.value.trim())
+        .toList();
+    if (parts.isEmpty) {
+      final summary = (product['selection_summary'] ?? '').toString().trim();
+      if (summary.isNotEmpty) return '$base ($summary)';
+      return base;
+    }
+    return '$base (${parts.join(', ')})';
+  }
+
+  Future<void> _handleProductAction(String action) async {
+    final product = await _fetchProductFromPage();
+    if (product == null) return;
+
     final authController = Get.find<AuthController>();
     if (!authController.isLoggedIn.value) {
       final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
       if (result != true) return;
     }
 
-    final cartController = Get.find<CartController>();
-    final success = await cartController.addToCart(
-      cartType: _cartTypeForSite(),
-      title: _currentProduct!['title'],
-      price: _currentProduct!['price'],
-      imageUrl: _currentProduct!['image_url'],
-      externalUrl: _currentProduct!['url'],
-      siteName: _currentProduct!['site'],
-    );
+    final requiresSelection = product['requires_selection'] == true;
+    final selections = _parseSelections(product['selections']);
 
+    Map<String, String>? chosen;
+    final minQty = (product['min_quantity'] is num) ? (product['min_quantity'] as num).toInt() : 1;
+    final pageQty = (product['selected_quantity'] is num) ? (product['selected_quantity'] as num).toInt() : 0;
+    int quantity = pageQty > 0 ? pageQty : minQty;
+
+    if (requiresSelection ||
+        quantity > 1 ||
+        selections.any((s) {
+          final opts = s['options'];
+          return opts is List && opts.length > 1;
+        })) {
+      final result = await showModalBottomSheet<Map<String, dynamic>>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => _ProductSelectionSheet(
+          product: product,
+          selections: selections,
+          initialQuantity: quantity,
+          requiresSelection: requiresSelection,
+          action: action,
+          onOpenNativePicker: _openNativeSkuPicker,
+        ),
+      );
+      if (result == null) return;
+      chosen = Map<String, String>.from(result['selections'] as Map? ?? {});
+      quantity = (result['quantity'] as num?)?.toInt() ?? quantity;
+    }
+
+    final finalTitle = _buildExternalTitle(product, chosen ?? _selectionsToMap(selections));
+    final cartType = _cartTypeForSite();
+
+    if (action == 'cart') {
+      final cartController = Get.find<CartController>();
+      final success = await cartController.addToCart(
+        cartType: cartType,
+        title: finalTitle,
+        price: product['price']?.toString(),
+        imageUrl: product['image_url']?.toString(),
+        externalUrl: product['url']?.toString(),
+        siteName: product['site']?.toString() ?? widget.siteName,
+        quantity: quantity,
+      );
+      _showActionSnack(success, 'added_to_cart'.tr());
+    } else {
+      final wishlistService = WishlistService();
+      final res = await wishlistService.addToWishlist(
+        externalUrl: product['url']?.toString(),
+        title: finalTitle,
+        price: product['price']?.toString(),
+        imageUrl: product['image_url']?.toString(),
+        source: cartType,
+      );
+      _showActionSnack(res != null, 'added_to_wishlist'.tr());
+    }
+  }
+
+  List<Map<String, dynamic>> _parseSelections(dynamic raw) {
+    if (raw is! List) return [];
+    return _dedupeSelections(raw.map((e) => Map<String, dynamic>.from(e as Map)).toList());
+  }
+
+  static String _normAttrName(String name) {
+    return name.trim().replaceAll(RegExp(r'\(\d+\)$'), '').replaceAll(RegExp(r'[:：]\s*$'), '');
+  }
+
+  static List<Map<String, dynamic>> _dedupeSelections(List<Map<String, dynamic>> raw) {
+    final merged = <String, Map<String, dynamic>>{};
+    for (final s in raw) {
+      final name = _normAttrName((s['name'] ?? '').toString());
+      if (name.isEmpty) continue;
+      final existing = merged[name];
+      if (existing == null) {
+        merged[name] = {
+          'name': name,
+          'value': (s['value'] ?? '').toString(),
+          'options': <String>[],
+        };
+      }
+      final target = merged[name]!;
+      final opts = target['options'] as List<String>;
+      final rawOpts = s['options'];
+      if (rawOpts is List) {
+        for (final o in rawOpts) {
+          final v = o.toString().trim();
+          if (v.isNotEmpty && !opts.contains(v)) opts.add(v);
+        }
+      }
+      final value = (s['value'] ?? '').toString().trim();
+      if (value.isNotEmpty) target['value'] = value;
+    }
+    return merged.values.where((s) {
+      final opts = s['options'] as List<String>;
+      final value = (s['value'] ?? '').toString().trim();
+      return opts.isNotEmpty || value.isNotEmpty;
+    }).map((s) {
+      final opts = s['options'] as List<String>;
+      if ((s['value'] ?? '').toString().isEmpty && opts.length == 1) {
+        s['value'] = opts.first;
+      }
+      return s;
+    }).toList();
+  }
+
+  Map<String, String> _selectionsToMap(List<Map<String, dynamic>> selections) {
+    final out = <String, String>{};
+    for (final s in selections) {
+      final name = (s['name'] ?? '').toString();
+      final value = (s['value'] ?? '').toString();
+      if (name.isNotEmpty && value.isNotEmpty) out[name] = value;
+    }
+    return out;
+  }
+
+  void _showActionSnack(bool success, String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -252,7 +627,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
           children: [
             Icon(success ? Icons.check_circle : Icons.error, color: Colors.white),
             const SizedBox(width: 10),
-            Text(success ? 'added_to_cart'.tr() : 'error_occurred'.tr(),
+            Text(success ? message : 'error_occurred'.tr(),
                 style: const TextStyle(fontWeight: FontWeight.bold)),
           ],
         ),
@@ -263,6 +638,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
       ),
     );
   }
+
+  Future<void> _onAddToCart() => _handleProductAction('cart');
+
+  Future<void> _onAddToWishlist() => _handleProductAction('wishlist');
 
   // ── Navigation helpers ───────────────────────────────────────────────────
   Future<void> _refreshNavButtons() async {
@@ -647,7 +1026,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
               if (mounted &&
                   (_currentProduct == null ||
                       _currentProduct!['title'] != data['title'] ||
-                      _currentProduct!['price'] != data['price'])) {
+                      _currentProduct!['price'] != data['price'] ||
+                      _currentProduct!['selection_summary'] != data['selection_summary'])) {
                 setState(() => _currentProduct = data);
               }
             }
@@ -936,6 +1316,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
   // Floating detected-product card with "Add to Cart"
   Widget _buildProductBar() {
     final img = (_currentProduct!['image_url'] ?? '').toString();
+    final selectionSummary = (_currentProduct!['selection_summary'] ?? '').toString();
+    final hasVariants = _currentProduct!['has_variants'] == true;
     return Positioned(
       bottom: 16,
       left: 16,
@@ -974,14 +1356,36 @@ class _WebViewScreenState extends State<WebViewScreen> {
                     _currentProduct!['price'] ?? '',
                     style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.primary),
                   ),
-                  Text(
-                    '${'from'.tr()} ${_currentProduct!['site'] ?? widget.siteName}',
-                    style: GoogleFonts.inter(fontSize: 10, color: AppColors.textSecondary),
-                  ),
+                  if (selectionSummary.isNotEmpty)
+                    Text(
+                      selectionSummary,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(fontSize: 10, color: AppColors.textSecondary),
+                    )
+                  else if (hasVariants)
+                    Text(
+                      'select_options_hint'.tr(),
+                      style: GoogleFonts.inter(fontSize: 10, color: AppColors.warning),
+                    )
+                  else
+                    Text(
+                      '${'from'.tr()} ${_currentProduct!['site'] ?? widget.siteName}',
+                      style: GoogleFonts.inter(fontSize: 10, color: AppColors.textSecondary),
+                    ),
                 ],
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
+            IconButton(
+              onPressed: _onAddToWishlist,
+              icon: Icon(Icons.favorite_border, color: AppColors.error, size: 22),
+              tooltip: 'add_to_wishlist'.tr(),
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            ),
+            const SizedBox(width: 4),
             SizedBox(
               height: 40,
               child: ElevatedButton.icon(
@@ -1010,6 +1414,242 @@ class _WebViewScreenState extends State<WebViewScreen> {
       height: 52,
       color: AppColors.surfaceVariant,
       child: Icon(Icons.shopping_bag_outlined, color: AppColors.textHint, size: 22),
+    );
+  }
+}
+
+class _ProductSelectionSheet extends StatefulWidget {
+  final Map<String, dynamic> product;
+  final List<Map<String, dynamic>> selections;
+  final int initialQuantity;
+  final bool requiresSelection;
+  final String action;
+  final Future<void> Function() onOpenNativePicker;
+
+  const _ProductSelectionSheet({
+    required this.product,
+    required this.selections,
+    required this.initialQuantity,
+    required this.requiresSelection,
+    required this.action,
+    required this.onOpenNativePicker,
+  });
+
+  @override
+  State<_ProductSelectionSheet> createState() => _ProductSelectionSheetState();
+}
+
+class _ProductSelectionSheetState extends State<_ProductSelectionSheet> {
+  late final Map<String, String> _chosen;
+  late int _quantity;
+  late final List<Map<String, dynamic>> _activeSelections;
+
+  @override
+  void initState() {
+    super.initState();
+    _quantity = widget.initialQuantity.clamp(1, 9999);
+    _activeSelections = _WebViewScreenState._dedupeSelections(widget.selections);
+    _chosen = {};
+    for (final s in _activeSelections) {
+      final name = (s['name'] ?? '').toString();
+      if (name.isEmpty) continue;
+      final opts = _optionsFor(s);
+      final value = (s['value'] ?? '').toString().trim();
+      if (opts.length == 1) {
+        _chosen[name] = opts.first;
+      } else if (value.isNotEmpty) {
+        _chosen[name] = value;
+      }
+    }
+  }
+
+  List<String> _optionsFor(Map<String, dynamic> sel) {
+    final opts = <String>[];
+    final raw = sel['options'];
+    if (raw is List) {
+      for (final o in raw) {
+        final v = o.toString().trim();
+        if (v.isNotEmpty && !opts.contains(v)) opts.add(v);
+      }
+    }
+    final current = (sel['value'] ?? '').toString().trim();
+    if (current.isNotEmpty && !opts.contains(current)) opts.insert(0, current);
+    return opts;
+  }
+
+  bool get _canConfirm {
+    for (final s in _activeSelections) {
+      final opts = _optionsFor(s);
+      if (opts.isEmpty) continue;
+      if (opts.length == 1) continue;
+      final name = (s['name'] ?? '').toString();
+      if ((_chosen[name] ?? '').trim().isEmpty) return false;
+    }
+    return _quantity >= widget.initialQuantity.clamp(1, 9999);
+  }
+
+  List<Map<String, dynamic>> get _displaySelections {
+    return _activeSelections.where((s) => _optionsFor(s).isNotEmpty).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isCart = widget.action == 'cart';
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.82),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 14),
+                decoration: BoxDecoration(
+                  color: AppColors.divider,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            ),
+            Text(
+              'confirm_product_options'.tr(),
+              style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              (widget.product['title'] ?? '').toString(),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary),
+            ),
+            if (widget.requiresSelection) ...[
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.warning.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.warning.withOpacity(0.35)),
+                ),
+                child: Text(
+                  'select_options_on_page_hint'.tr(),
+                  style: GoogleFonts.inter(fontSize: 12, color: AppColors.textPrimary),
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final sel in _displaySelections) ...[
+                      Text(
+                        (sel['name'] ?? '').toString(),
+                        style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 13),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _optionsFor(sel).map((opt) {
+                          final name = (sel['name'] ?? '').toString();
+                          final selected = _chosen[name] == opt;
+                          return ChoiceChip(
+                            label: Text(opt),
+                            selected: selected,
+                            onSelected: (_) => setState(() => _chosen[name] = opt),
+                            selectedColor: AppColors.primarySurface,
+                            labelStyle: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: selected ? AppColors.primary : AppColors.textPrimary,
+                              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 14),
+                    ],
+                    Text('quantity'.tr(), style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 13)),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        IconButton(
+                          onPressed: _quantity > 1 ? () => setState(() => _quantity--) : null,
+                          icon: const Icon(Icons.remove_circle_outline),
+                        ),
+                        Text('$_quantity', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700)),
+                        IconButton(
+                          onPressed: () => setState(() => _quantity++),
+                          icon: const Icon(Icons.add_circle_outline),
+                        ),
+                        if (widget.initialQuantity > 1) ...[
+                          const SizedBox(width: 8),
+                          Text(
+                            '${'min_order'.tr()}: ${widget.initialQuantity}',
+                            style: GoogleFonts.inter(fontSize: 11, color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (widget.requiresSelection)
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    await widget.onOpenNativePicker();
+                    if (context.mounted) Navigator.pop(context);
+                  },
+                  icon: const Icon(Icons.tune, size: 18),
+                  label: Text('open_options_on_page'.tr()),
+                ),
+              ),
+            if (widget.requiresSelection) const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text('cancel'.tr()),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  flex: 2,
+                  child: ElevatedButton.icon(
+                    onPressed: _canConfirm
+                        ? () => Navigator.pop(context, {
+                              'selections': _chosen,
+                              'quantity': _quantity,
+                            })
+                        : null,
+                    icon: Icon(isCart ? Icons.add_shopping_cart : Icons.favorite, size: 18),
+                    label: Text(isCart ? 'add_to_cart'.tr() : 'add_to_wishlist'.tr()),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isCart ? AppColors.primary : AppColors.error,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

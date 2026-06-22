@@ -3,6 +3,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
+from dotenv import load_dotenv
+
+# Load .env so SMTP / config vars are available via os.getenv()
+load_dotenv()
 
 from app.database import init_db
 from app.routers import (
@@ -19,6 +23,7 @@ from app.routers import (
     refund_router,
     config_router,
     admin_router,
+    location_router,
 )
 
 # Ensure all models are imported so SQLAlchemy can create their tables
@@ -69,6 +74,7 @@ app.include_router(seller_router.router, prefix=API_PREFIX)
 app.include_router(refund_router.router, prefix=API_PREFIX)
 app.include_router(config_router.router, prefix=API_PREFIX)
 app.include_router(admin_router.router, prefix=API_PREFIX)
+app.include_router(location_router.router, prefix=API_PREFIX)
 
 
 @app.get("/")
@@ -85,10 +91,40 @@ async def _seed_demo_data():
     from app.models.product import Product
     from app.models.banner import Banner
     from app.models.coupon import Coupon
+    from app.models.location import State, City
     from sqlalchemy import select
     from datetime import datetime, timedelta, timezone
 
     async with async_session() as db:
+        # Seed States & Cities if State table is empty
+        state_check = await db.execute(select(State).limit(1))
+        if not state_check.scalar_one_or_none():
+            riyadh = State(id="state-riyadh", name_en="Riyadh", name_ar="منطقة الرياض")
+            makkah = State(id="state-makkah", name_en="Makkah", name_ar="منطقة مكة المكرمة")
+            eastern = State(id="state-eastern", name_en="Eastern Province", name_ar="المنطقة الشرقية")
+            medina = State(id="state-medina", name_en="Medina", name_ar="منطقة المدينة المنورة")
+            db.add_all([riyadh, makkah, eastern, medina])
+
+            cities = [
+                City(id="city-riyadh", state_id=riyadh.id, name_en="Riyadh", name_ar="الرياض"),
+                City(id="city-kharj", state_id=riyadh.id, name_en="Al Kharj", name_ar="الخرج"),
+                City(id="city-diriyah", state_id=riyadh.id, name_en="Ad Diriyah", name_ar="الدرعية"),
+                
+                City(id="city-jeddah", state_id=makkah.id, name_en="Jeddah", name_ar="جدة"),
+                City(id="city-makkah", state_id=makkah.id, name_en="Makkah", name_ar="مكة المكرمة"),
+                City(id="city-taif", state_id=makkah.id, name_en="Taif", name_ar="الطائف"),
+
+                City(id="city-dammam", state_id=eastern.id, name_en="Dammam", name_ar="الدمام"),
+                City(id="city-khobar", state_id=eastern.id, name_en="Al Khobar", name_ar="الخبر"),
+                City(id="city-jubail", state_id=eastern.id, name_en="Al Jubail", name_ar="الجبيل"),
+
+                City(id="city-medina", state_id=medina.id, name_en="Medina", name_ar="المدينة المنورة"),
+                City(id="city-yanbu", state_id=medina.id, name_en="Yanbu", name_ar="ينبع"),
+            ]
+            db.add_all(cities)
+            await db.commit()
+            print("✅ States and Cities seeded successfully.")
+
         # Only seed if categories table is empty
         result = await db.execute(select(Category).limit(1))
         if result.scalar_one_or_none():

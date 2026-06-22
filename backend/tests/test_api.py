@@ -263,6 +263,40 @@ def test_cart_crud():
     assert len(response.json()) == 0
 
 
+def test_cart_deduplication():
+    headers = _get_auth_header()
+
+    # Add external item first time
+    response = client.post("/api/v1/cart", headers=headers, json={
+        "cart_type": "amazon",
+        "title": "Dup Test Product",
+        "price": "SAR 100",
+        "image_url": "https://example.com/img.jpg",
+        "external_url": "https://amazon.sa/dp/dup123",
+        "site_name": "Amazon SA",
+        "quantity": 1,
+    })
+    assert response.status_code == 200
+    
+    # Add exact same item second time
+    response2 = client.post("/api/v1/cart", headers=headers, json={
+        "cart_type": "amazon",
+        "title": "Dup Test Product",
+        "price": "SAR 100",
+        "image_url": "https://example.com/img.jpg",
+        "external_url": "https://amazon.sa/dp/dup123",
+        "site_name": "Amazon SA",
+        "quantity": 2,
+    })
+    assert response2.status_code == 200
+    assert response2.json()["quantity"] == 3
+
+    # Verify cart has only 1 item with quantity 3
+    response_list = client.get("/api/v1/cart?cart_type=amazon", headers=headers)
+    assert len(response_list.json()) == 1
+    assert response_list.json()[0]["quantity"] == 3
+
+
 # ── Orders ──────────────────────────────────────────────────────────────────
 
 def test_create_order():
@@ -287,6 +321,44 @@ def test_create_order():
     response = client.get("/api/v1/orders", headers=headers)
     assert response.status_code == 200
     assert len(response.json()) >= 1
+
+
+def test_place_order_multipart():
+    headers = _get_auth_header()
+
+    # Add item to cart first
+    client.post("/api/v1/cart", headers=headers, json={
+        "cart_type": "internal",
+        "title": "Multipart Product",
+        "price": "200",
+        "site_name": "Internal",
+    })
+
+    # Prepare multipart form fields
+    data = {
+        "address_id": "addr_123",
+        "cart_type": "internal",
+        "shipping_type": "home",
+        "payment_method_id": "cod",
+        "additional_note": "Please deliver quickly",
+    }
+    # Mocking a payment proof file upload
+    files = {
+        "payment_proof": ("proof.jpg", b"fake image bytes", "image/jpeg")
+    }
+
+    # Place order
+    response = client.post(
+        "/api/v1/orders/place",
+        headers=headers,
+        data=data,
+        files=files,
+    )
+    assert response.status_code == 200
+    order = response.json()
+    assert "payment_method=cod" in order["notes"]
+    assert "proof=" in order["notes"]
+    assert len(order["items"]) == 1
 
 
 # ── Coupons ─────────────────────────────────────────────────────────────────

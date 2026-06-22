@@ -297,8 +297,9 @@ SITE_CONFIGS: Dict[str, ScraperConfig] = {
             "[class*='msite-login-banner']",
             "[class*='icbu-m-login-banner']",
         ],
-        title_selector=".module-pdp-title h1, .title-text, h1.product-title, [class*='product-title'] h1, h1",
+        title_selector="[data-testid='product-title'] h1, .module-pdp-title h1, .title-text, h1.product-title, [class*='product-title'] h1, h1",
         price_selectors=[
+            "[data-testid='ladder-prices'] span",
             ".module-pdp-price .price",
             ".price-origin",
             ".ladder-price-item",
@@ -307,6 +308,7 @@ SITE_CONFIGS: Dict[str, ScraperConfig] = {
             "[class*='price-value']",
         ],
         image_selectors=[
+            "[data-testid='product-image'] img",
             ".main-image img",
             ".detail-gallery-turn img",
             ".pdp-gallery img",
