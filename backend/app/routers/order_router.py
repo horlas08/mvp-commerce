@@ -237,10 +237,18 @@ async def place_order(
     if allow_team_review and cart_type != "internal":
         total += 5.0
 
+    total = round(total, 2)
+
+    # ── Process wallet payment if selected ────────────────────────────────
+    if payment_method_id == "wallet":
+        if user.credit_balance < total:
+            raise HTTPException(status_code=400, detail="Insufficient wallet balance")
+        user.credit_balance = round(user.credit_balance - total, 2)
+
     # ── Create order ──────────────────────────────────────────────────────
     order = Order(
         user_id=user.id,
-        total=round(total, 2),
+        total=total,
         shipping_address={"address_id": address_id, "shipping_type": shipping_type,
                           "pickup_station_id": pickup_station_id},
         notes=additional_note,

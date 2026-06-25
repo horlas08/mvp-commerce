@@ -462,6 +462,34 @@ def test_address_crud():
     assert response.status_code == 200
 
 
+def test_address_location_update():
+    headers = _get_auth_header()
+
+    # Add address
+    response = client.post("/api/v1/addresses", headers=headers, json={
+        "label": "Work",
+        "full_name": "Test User",
+        "phone": "+966500000000",
+        "street": "456 Office Rd",
+        "city": "Jeddah",
+        "is_default": False,
+    })
+    assert response.status_code == 200
+    addr_id = response.json()["id"]
+
+    # Update location
+    response = client.patch(f"/api/v1/addresses/{addr_id}/location", headers=headers, json={
+        "lat": 24.7136,
+        "lng": 46.6753,
+    })
+    assert response.status_code == 200
+    assert response.json()["lat"] == 24.7136
+    assert response.json()["lng"] == 46.6753
+
+    # Clean up
+    client.delete(f"/api/v1/addresses/{addr_id}", headers=headers)
+
+
 # ── Wishlist ────────────────────────────────────────────────────────────────
 
 def test_wishlist_crud():
@@ -483,3 +511,92 @@ def test_wishlist_crud():
     # Remove
     response = client.delete(f"/api/v1/wishlist/{item_id}", headers=headers)
     assert response.status_code == 200
+
+
+# ── Wallet ──────────────────────────────────────────────────────────────────
+
+def test_wallet_endpoints():
+    import uuid
+    import asyncio
+    from app.database import async_session
+    from sqlalchemy import update
+    from app.models.user import User
+
+    # Register a new user manually to have access to their email
+    email = f"wallet-{uuid.uuid4().hex[:8]}@koon.com"
+    reg = client.post("/api/v1/auth/register", json={
+        "email": email,
+        "password": "password123",
+        "name": "Wallet User",
+    })
+    assert reg.status_code == 201
+    data = reg.json()
+    token = data["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    debug_code = data.get("debug_code")
+    if debug_code:
+        client.post(
+            "/api/v1/auth/verify-email",
+            json={"code": debug_code},
+            headers=headers
+        )
+
+    # Get balance - should be 0.0 initially
+    response = client.get("/api/v1/wallet/balance", headers=headers)
+    assert response.status_code == 200
+    assert response.json()["balance"] == 0.0
+
+    # Add item to cart first
+    client.post("/api/v1/cart", headers=headers, json={
+        "cart_type": "internal",
+        "title": "Wallet Test Product",
+        "price": "100",
+        "site_name": "Internal",
+    })
+
+    # Try to place order via wallet with insufficient balance
+    data_order = {
+        "address_id": "addr_wallet",
+        "cart_type": "internal",
+        "shipping_type": "home",
+        "payment_method_id": "wallet",
+        "additional_note": "Wallet test",
+    }
+    response = client.post(
+        "/api/v1/orders/place",
+        headers=headers,
+        data=data_order,
+    )
+    assert response.status_code == 400
+    assert "Insufficient wallet balance" in response.json()["detail"]
+
+    # Fund the wallet
+    async def update_balance():
+        async with async_session() as session:
+            await session.execute(
+                update(User).where(User.email == email).values(credit_balance=150.0)
+            )
+            await session.commit()
+    
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(update_balance())
+
+    # Get balance - should be 150.0
+    response = client.get("/api/v1/wallet/balance", headers=headers)
+    assert response.status_code == 200
+    assert response.json()["balance"] == 150.0
+
+    # Place order successfully
+    response = client.post(
+        "/api/v1/orders/place",
+        headers=headers,
+        data=data_order,
+    )
+    assert response.status_code == 200
+    assert "payment_method=wallet" in response.json()["notes"]
+
+    # Verify wallet has been deducted
+    response = client.get("/api/v1/wallet/balance", headers=headers)
+    assert response.status_code == 200
+    assert response.json()["balance"] == 50.0
+

@@ -249,5 +249,7 @@
   "home_delivery_subtitle": "توصيل إلى عنوانك المرتبط",
   "pickup_subtitle": "استلام من نقطة قريبة",
   "standard_processing": "معالجة قياسية",
-  "switch_currency": "تبديل العملة"
+  "switch_currency": "تبديل العملة",
+  "insufficient_balance": "رصيد غير كافٍ",
+  "insufficient_balance_desc": "رصيد محفظتك غير كافٍ لإتمام هذا الطلب. يرجى شحن محفظتك أو اختيار طريقة دفع أخرى."
 }

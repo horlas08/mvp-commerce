@@ -1,9 +1,11 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:get/get.dart' hide Trans;
 import 'package:image_picker/image_picker.dart';
+import '../app/theme/app_colors.dart';
 import '../services/address_service.dart';
 import '../services/checkout_service.dart';
-
+import 'cart_controller.dart';
+import 'package:flutter/material.dart';
 class CheckoutController extends GetxController {
   final AddressService _addressService = AddressService();
   final CheckoutService _checkoutService = CheckoutService();
@@ -125,6 +127,21 @@ class CheckoutController extends GetxController {
       return;
     }
 
+    // Validate wallet balance if paying with wallet
+    if (payment['id'] == 'wallet') {
+      if (walletBalance.value < orderTotal) {
+        isPlacingOrder.value = false;
+        Get.snackbar(
+          'insufficient_balance'.tr(),
+          'insufficient_balance_desc'.tr(),
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: AppColors.error,
+          colorText: Colors.white,
+        );
+        return;
+      }
+    }
+
     final result = await _checkoutService.placeOrder(
       addressId: address['id'].toString(),
       cartType: cartType,
@@ -141,6 +158,12 @@ class CheckoutController extends GetxController {
     if (result != null) {
       placedOrder.value = result;
       orderPlaced.value = true;
+
+      // Clear the cart upon success
+      try {
+        final cartCtrl = Get.find<CartController>();
+        await cartCtrl.clearCurrentCart();
+      } catch (_) {}
     } else {
       Get.snackbar(
         'error'.tr(),

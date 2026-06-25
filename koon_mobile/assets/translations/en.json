@@ -249,5 +249,7 @@
   "home_delivery_subtitle": "Delivered to your linked address",
   "pickup_subtitle": "Pick up from a nearby station",
   "standard_processing": "Standard Processing",
-  "switch_currency": "Switch Currency"
+  "switch_currency": "Switch Currency",
+  "insufficient_balance": "Insufficient Balance",
+  "insufficient_balance_desc": "Your wallet balance is insufficient to place this order. Please top up or choose another payment method."
 }

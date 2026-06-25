@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../app/theme/app_colors.dart';
 import '../../controllers/checkout_controller.dart';
 import '../../controllers/cart_controller.dart';
+import '../../controllers/settings_controller.dart';
 import 'steps/step1_address.dart';
 import 'steps/step2_shipping.dart';
 import 'steps/step3_review.dart';
@@ -55,12 +56,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           'checkout'.tr(),
           style: GoogleFonts.inter(fontWeight: FontWeight.w700),
         ),
-        leading: Obx(() => IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new, size: 20),
-              onPressed: _ctrl.currentStep.value == 0
-                  ? () => Navigator.of(context).maybePop()
-                  : _ctrl.prevStep,
-            )),
+        automaticallyImplyLeading: false,
+        leading: Obx(() {
+          if (_ctrl.orderPlaced.value) return const SizedBox();
+          return IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+            onPressed: _ctrl.currentStep.value == 0
+                ? () => Navigator.of(context).maybePop()
+                : _ctrl.prevStep,
+          );
+        }),
         elevation: 0,
       ),
       body: Obx(() {
@@ -73,6 +78,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           children: [
             // ── Step indicator ──────────────────────────────────────────
             _buildStepIndicator(),
+
+            // ── Currency selector banner/row ────────────────────────────
+            _buildCurrencySelector(),
 
             // ── Step content ────────────────────────────────────────────
             Expanded(
@@ -97,6 +105,70 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           ],
         );
       }),
+    );
+  }
+
+  Widget _buildCurrencySelector() {
+    final settings = Get.find<SettingsController>();
+    final currencies = [
+      {'code': 'SAR', 'label': 'SAR', 'symbol': '﷼'},
+      {'code': 'USD', 'label': 'USD', 'symbol': '\$'},
+    ];
+
+    return Container(
+      color: AppColors.surface,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.currency_exchange_rounded, size: 16, color: AppColors.secondary),
+              const SizedBox(width: 8),
+              Text(
+                'select_currency'.tr(),
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+          Obx(() => Container(
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceVariant,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.border),
+                ),
+                padding: const EdgeInsets.all(3),
+                child: Row(
+                  children: currencies.map((c) {
+                    final isSelected = settings.currentCurrency.value == c['code'];
+                    return GestureDetector(
+                      onTap: () => settings.setCurrency(c['code']!),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: isSelected ? AppColors.secondary : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '${c['symbol']} ${c['label']}',
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: isSelected ? Colors.white : AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              )),
+        ],
+      ),
     );
   }
 

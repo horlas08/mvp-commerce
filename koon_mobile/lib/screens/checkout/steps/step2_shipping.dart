@@ -134,7 +134,7 @@ class Step2Shipping extends StatelessWidget {
             }),
           ] else ...[
             // ── External cart: Team Review toggle ─────────────────────
-            Obx(() => _TeamReviewCard(ctrl: ctrl))
+            _TeamReviewCard(ctrl: ctrl)
                 .animate()
                 .fadeIn(duration: 300.ms)
                 .slideX(begin: -0.04),
@@ -290,7 +290,7 @@ class _TeamReviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return Obx(() => Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
         gradient: LinearGradient(
@@ -353,17 +353,16 @@ class _TeamReviewCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                Obx(() => Switch(
-                      value: ctrl.allowTeamReview.value,
-                      onChanged: (v) => ctrl.allowTeamReview.value = v,
-                      activeColor: AppColors.secondary,
-                    )),
+                Switch(
+                  value: ctrl.allowTeamReview.value,
+                  onChanged: (v) => ctrl.allowTeamReview.value = v,
+                  activeColor: AppColors.secondary,
+                ),
               ],
             ),
             // Fee badge when enabled
-            Obx(() {
-              if (!ctrl.allowTeamReview.value) return const SizedBox();
-              return Padding(
+            if (ctrl.allowTeamReview.value)
+              Padding(
                 padding: const EdgeInsets.only(top: 12),
                 child: Container(
                   padding: const EdgeInsets.symmetric(
@@ -394,11 +393,10 @@ class _TeamReviewCard extends StatelessWidget {
                     ],
                   ),
                 ),
-              ).animate().fadeIn(duration: 200.ms).slideY(begin: -0.2);
-            }),
+              ).animate().fadeIn(duration: 200.ms).slideY(begin: -0.2),
           ],
         ),
       ),
-    );
+    ));
   }
 }

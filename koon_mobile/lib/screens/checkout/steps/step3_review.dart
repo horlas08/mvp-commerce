@@ -141,7 +141,7 @@ class Step3Review extends StatelessWidget {
           const SizedBox(height: 16),
 
           // ── Price Breakdown ────────────────────────────────────────────
-          Obx(() => _PriceBreakdown(ctrl: ctrl, settings: settings))
+          _PriceBreakdown(ctrl: ctrl, settings: settings)
               .animate(delay: 200.ms)
               .fadeIn(duration: 300.ms),
         ],
@@ -302,7 +302,7 @@ class _PriceBreakdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return Obx(() => Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
@@ -343,7 +343,7 @@ class _PriceBreakdown extends StatelessWidget {
           ),
         ],
       ),
-    );
+    ));
   }
 
   Widget _priceRow(String label, String value, Color color,

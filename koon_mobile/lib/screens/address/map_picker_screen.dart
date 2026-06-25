@@ -48,8 +48,21 @@ class _MapPickerScreenState extends State<MapPickerScreen>
     final initLng = widget.initialLng ?? _defaultLng;
     _markerPosition = GeoPoint(latitude: initLat, longitude: initLng);
 
-    _mapController = MapController.withPosition(
+    _mapController = MapController.customLayer(
       initPosition: _markerPosition,
+      customTile: CustomTile(
+        sourceName: "cartodb_voyager",
+        tileExtension: ".png",
+        minZoomLevel: 2,
+        maxZoomLevel: 19,
+        urlsServers: [
+          TileURLs(
+            url: "https://a.basemaps.cartocdn.com/rastertiles/voyager/",
+            subdomains: [],
+          ),
+        ],
+        tileSize: 256,
+      ),
     );
     _mapController.addObserver(this);
   }
@@ -59,17 +72,19 @@ class _MapPickerScreenState extends State<MapPickerScreen>
   @override
   void onSingleTap(GeoPoint position) {
     super.onSingleTap(position);
-    _placeMarker(position);
-    setState(() => _markerPosition = position);
+    _mapController.moveTo(position, animate: true);
+  }
+
+  @override
+  void onRegionChanged(Region region) {
+    super.onRegionChanged(region);
+    _markerPosition = region.center;
   }
 
   @override
   Future<void> mapIsReady(bool isReady) async {
     if (!isReady) return;
     setState(() => _mapReady = true);
-
-    // Place the initial marker
-    await _placeMarker(_markerPosition);
 
     // If no initial position supplied → jump to device location
     if (widget.initialLat == null || widget.initialLng == null) {
@@ -80,25 +95,9 @@ class _MapPickerScreenState extends State<MapPickerScreen>
   @override
   Future<void> mapRestored() async {
     super.mapRestored();
-    if (_mapReady) {
-      await _placeMarker(_markerPosition);
-    }
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
-
-  Future<void> _placeMarker(GeoPoint point) async {
-    try {
-      // Remove previous marker (ignore errors if none exists yet)
-      await _mapController.removeMarker(_markerPosition);
-    } catch (_) {}
-    await _mapController.addMarker(
-      point,
-      markerIcon: const MarkerIcon(
-        icon: Icon(Icons.location_on, color: AppColors.primary, size: 48),
-      ),
-    );
-  }
 
   Future<void> _fetchCurrentLocation() async {
     try {
@@ -123,9 +122,8 @@ class _MapPickerScreenState extends State<MapPickerScreen>
         longitude: position.longitude,
       );
 
-      await _placeMarker(newPoint);
       await _mapController.moveTo(newPoint, animate: true);
-      setState(() => _markerPosition = newPoint);
+      _markerPosition = newPoint;
     } catch (_) {
       // Silently ignore – map already shows default position
     }
@@ -169,35 +167,85 @@ class _MapPickerScreenState extends State<MapPickerScreen>
       body: Stack(
         children: [
           // ── OSM Map ────────────────────────────────────────────────────────
-          OSMFlutter(
-            controller: _mapController,
-            osmOption: OSMOption(
-              zoomOption: const ZoomOption(
-                initZoom: 15,
-                minZoomLevel: 3,
-                maxZoomLevel: 19,
-              ),
-              userLocationMarker: UserLocationMaker(
-                personMarker: const MarkerIcon(
-                  icon: Icon(
-                    Icons.my_location,
-                    color: AppColors.secondary,
-                    size: 42,
+          Positioned.fill(
+            child: OSMFlutter(
+              controller: _mapController,
+              osmOption: OSMOption(
+                zoomOption: const ZoomOption(
+                  initZoom: 15,
+                  minZoomLevel: 3,
+                  maxZoomLevel: 19,
+                ),
+                userLocationMarker: UserLocationMaker(
+                  personMarker: const MarkerIcon(
+                    icon: Icon(
+                      Icons.my_location,
+                      color: AppColors.secondary,
+                      size: 42,
+                    ),
+                  ),
+                  directionArrowMarker: const MarkerIcon(
+                    icon: Icon(Icons.navigation, size: 42),
                   ),
                 ),
-                directionArrowMarker: const MarkerIcon(
-                  icon: Icon(Icons.navigation, size: 42),
+              ),
+              mapIsLoading: const Center(
+                child: CircularProgressIndicator(color: AppColors.primary),
+              ),
+              onGeoPointClicked: (point) async {
+                await _mapController.moveTo(point, animate: true);
+              },
+            ),
+          ),
+
+          // ── Center Pin Overlay ─────────────────────────────────────────────
+          Center(
+            child: IgnorePointer(
+              child: SizedBox(
+                width: 50,
+                height: 100,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // Shadow dot at the exact center (y = 50)
+                    Positioned(
+                      top: 50,
+                      child: Container(
+                        width: 12,
+                        height: 6,
+                        decoration: const BoxDecoration(
+                          color: Colors.black26,
+                          shape: BoxShape.circle,
+                        ),
+                      )
+                      .animate(onPlay: (c) => c.repeat(reverse: true))
+                      .scale(
+                        begin: const Offset(1, 1),
+                        end: const Offset(0.5, 0.5),
+                        duration: 1000.ms,
+                        curve: Curves.easeInOut,
+                      ),
+                    ),
+                    // Pin hovering above the center (tip touching the center y = 50)
+                    Positioned(
+                      bottom: 50,
+                      child: const Icon(
+                        Icons.location_on,
+                        color: AppColors.primary,
+                        size: 48,
+                      )
+                      .animate(onPlay: (c) => c.repeat(reverse: true))
+                      .slideY(
+                        begin: 0,
+                        end: -0.2,
+                        duration: 1000.ms,
+                        curve: Curves.easeInOut,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
-            mapIsLoading: const Center(
-              child: CircularProgressIndicator(color: AppColors.primary),
-            ),
-            onGeoPointClicked: (point) async {
-              // Tapping the existing marker also repositions it
-              await _placeMarker(point);
-              setState(() => _markerPosition = point);
-            },
           ),
 
           // ── Top bar ────────────────────────────────────────────────────────

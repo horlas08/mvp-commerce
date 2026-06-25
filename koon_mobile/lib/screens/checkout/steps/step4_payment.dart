@@ -22,13 +22,6 @@ class Step4Payment extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Currency picker ────────────────────────────────────────────
-          _CurrencyPicker(settings: settings)
-              .animate()
-              .fadeIn(duration: 300.ms)
-              .slideY(begin: -0.1),
-          const SizedBox(height: 20),
-
           Text(
             'select_payment'.tr(),
             style: GoogleFonts.inter(
@@ -90,117 +83,6 @@ class Step4Payment extends StatelessWidget {
   }
 }
 
-// ── Currency Picker ─────────────────────────────────────────────────────────
-
-class _CurrencyPicker extends StatelessWidget {
-  final SettingsController settings;
-  const _CurrencyPicker({required this.settings});
-
-  @override
-  Widget build(BuildContext context) {
-    final currencies = [
-      {'code': 'SAR', 'label': 'SAR (ريال)', 'symbol': '﷼'},
-      {'code': 'USD', 'label': 'USD (\$)', 'symbol': '\$'},
-    ];
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.divider),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.currency_exchange, size: 16, color: AppColors.secondary),
-              const SizedBox(width: 8),
-              Text(
-                'select_currency'.tr(),
-                style: GoogleFonts.inter(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Obx(() => Row(
-                children: currencies.map((c) {
-                  final isSelected = settings.currentCurrency.value == c['code'];
-                  return Expanded(
-                    child: GestureDetector(
-                      onTap: () => settings.setCurrency(c['code']!),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        margin: const EdgeInsets.only(right: 8),
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          color: isSelected
-                              ? AppColors.secondary
-                              : AppColors.surfaceVariant,
-                          border: Border.all(
-                            color: isSelected
-                                ? AppColors.secondary
-                                : AppColors.border,
-                            width: isSelected ? 2 : 1,
-                          ),
-                          boxShadow: isSelected
-                              ? [
-                                  BoxShadow(
-                                    color: AppColors.secondary.withOpacity(0.25),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 3),
-                                  )
-                                ]
-                              : null,
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              c['symbol']!,
-                              style: GoogleFonts.inter(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w800,
-                                color: isSelected
-                                    ? Colors.white
-                                    : AppColors.textSecondary,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              c['label']!,
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: isSelected
-                                    ? Colors.white70
-                                    : AppColors.textHint,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              )),
-        ],
-      ),
-    );
-  }
-}
 
 
 
