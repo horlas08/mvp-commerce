@@ -9,6 +9,7 @@ import {
   Tag,
   LogOut,
   Menu,
+  MapPin,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { useLang } from "@/lib/lang-context";
@@ -18,8 +19,9 @@ import UsersPage from "./pages/UsersPage";
 import ProductsPage from "./pages/ProductsPage";
 import OrdersPage from "./pages/OrdersPage";
 import CategoriesPage from "./pages/CategoriesPage";
+import StatesCitiesPage from "./pages/StatesCitiesPage";
 
-type Page = "dashboard" | "users" | "products" | "orders" | "categories";
+type Page = "dashboard" | "users" | "products" | "orders" | "categories" | "statesAndCities";
 
 const NAV_ITEMS = [
   {
@@ -34,6 +36,7 @@ const NAV_ITEMS = [
       { id: "orders" as Page, labelKey: "orders" as const, icon: ShoppingBag },
       { id: "products" as Page, labelKey: "products" as const, icon: Package },
       { id: "categories" as Page, labelKey: "categories" as const, icon: Tag },
+      { id: "statesAndCities" as Page, labelKey: "statesAndCities" as const, icon: MapPin },
       { id: "users" as Page, labelKey: "users" as const, icon: Users },
     ],
   },
@@ -59,6 +62,7 @@ export default function AdminShell() {
       case "products": return <ProductsPage />;
       case "orders": return <OrdersPage />;
       case "categories": return <CategoriesPage />;
+      case "statesAndCities": return <StatesCitiesPage />;
     }
   };
 

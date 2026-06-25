@@ -12,6 +12,11 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
 
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
   if (!res.ok) {
+    if (res.status === 401 && typeof window !== "undefined") {
+      localStorage.removeItem("admin_token");
+      localStorage.removeItem("admin_user");
+      window.location.reload();
+    }
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail || "Request failed");
   }
@@ -77,6 +82,25 @@ export const adminApi = {
   updateCategory: (id: string, data: Partial<Category>) =>
     apiFetch<Category>(`/admin/categories/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   deleteCategory: (id: string) => apiFetch(`/admin/categories/${id}`, { method: "DELETE" }),
+
+  // States & Cities
+  listStates: () => apiFetch<State[]>("/admin/states"),
+  createState: (data: { name_en: string; name_ar: string }) =>
+    apiFetch<State>("/admin/states", { method: "POST", body: JSON.stringify(data) }),
+  updateState: (id: string, data: Partial<{ name_en: string; name_ar: string }>) =>
+    apiFetch<State>(`/admin/states/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  deleteState: (id: string) => apiFetch(`/admin/states/${id}`, { method: "DELETE" }),
+
+  listCities: (params?: { state_id?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.state_id) q.set("state_id", params.state_id);
+    return apiFetch<City[]>(`/admin/cities?${q}`);
+  },
+  createCity: (data: { state_id: string; name_en: string; name_ar: string }) =>
+    apiFetch<City>("/admin/cities", { method: "POST", body: JSON.stringify(data) }),
+  updateCity: (id: string, data: Partial<{ state_id: string; name_en: string; name_ar: string }>) =>
+    apiFetch<City>(`/admin/cities/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  deleteCity: (id: string) => apiFetch(`/admin/cities/${id}`, { method: "DELETE" }),
 };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -165,6 +189,19 @@ export interface Category {
   icon?: string;
   image_url?: string;
   sort_order: number;
+}
+
+export interface State {
+  id: string;
+  name_en: string;
+  name_ar: string;
+}
+
+export interface City {
+  id: string;
+  state_id: string;
+  name_en: string;
+  name_ar: string;
 }
 
 export interface PaginatedUsers { users: AdminUser[]; total: number; page: number; limit: number; }

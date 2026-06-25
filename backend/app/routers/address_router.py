@@ -26,6 +26,11 @@ class AddressRequest(BaseModel):
     is_default: bool = False
 
 
+class LocationUpdateRequest(BaseModel):
+    lat: float
+    lng: float
+
+
 @router.get("")
 async def list_addresses(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Address).where(Address.user_id == user.id))
@@ -91,3 +96,24 @@ async def delete_address(
     await db.delete(address)
     await db.commit()
     return {"message": "Address deleted"}
+
+
+@router.patch("/{address_id}/location")
+async def update_address_location(
+    address_id: str,
+    req: LocationUpdateRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Address).where(Address.id == address_id, Address.user_id == user.id))
+    address = result.scalar_one_or_none()
+    if not address:
+        raise HTTPException(status_code=404, detail="Address not found")
+
+    address.lat = req.lat
+    address.lng = req.lng
+
+    await db.commit()
+    await db.refresh(address)
+    return address.to_dict()
+

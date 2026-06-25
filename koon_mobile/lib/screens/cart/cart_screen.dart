@@ -9,6 +9,7 @@ import '../../controllers/cart_controller.dart';
 import '../../controllers/auth_controller.dart';
 import '../../controllers/settings_controller.dart';
 import '../auth/login_screen.dart';
+import '../checkout/checkout_screen.dart';
 
 class CartScreen extends StatelessWidget {
   final bool showBackButton;
@@ -138,7 +139,12 @@ class CartScreen extends StatelessWidget {
                           height: 50,
                           child: ElevatedButton(
                             onPressed: () {
-                              Get.snackbar('checkout'.tr(), 'order_placed_success'.tr(), snackPosition: SnackPosition.BOTTOM);
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const CheckoutScreen(),
+                                ),
+                              );
                             },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.secondary,

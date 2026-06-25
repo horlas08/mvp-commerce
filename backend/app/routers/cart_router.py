@@ -64,6 +64,31 @@ async def add_to_cart(
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Invalid cart type: {req.cart_type}")
 
+    # ── Deduplication: increment qty if same item already in cart ──────────
+    existing_query = select(CartItem).where(
+        CartItem.user_id == user.id,
+        CartItem.cart_type == ct,
+    )
+
+    if req.product_id:
+        # Internal product — match by product_id
+        existing_query = existing_query.where(CartItem.product_id == req.product_id)
+    elif req.external_url:
+        # External product — match by external_url
+        existing_query = existing_query.where(CartItem.external_url == req.external_url)
+    else:
+        existing_query = None  # no dedup key available
+
+    if existing_query is not None:
+        result = await db.execute(existing_query)
+        existing = result.scalar_one_or_none()
+        if existing:
+            existing.quantity += req.quantity
+            await db.commit()
+            await db.refresh(existing)
+            return existing.to_dict(lang)
+
+    # ── No existing item found → insert new ───────────────────────────────
     item = CartItem(
         user_id=user.id,
         cart_type=ct,
@@ -79,6 +104,7 @@ async def add_to_cart(
     await db.commit()
     await db.refresh(item)
     return item.to_dict(lang)
+
 
 
 @router.put("/{item_id}")

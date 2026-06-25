@@ -15,6 +15,40 @@ class AddressService {
     return [];
   }
 
+  Future<List<Map<String, dynamic>>> getStates() async {
+    try {
+      final response = await _dio.get(ApiConstants.states);
+      if (response.statusCode == 200) {
+        return List<Map<String, dynamic>>.from(response.data);
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  Future<List<Map<String, dynamic>>> getCities(String stateId) async {
+    try {
+      final response = await _dio.get(
+        ApiConstants.cities,
+        queryParameters: {'state_id': stateId},
+      );
+      if (response.statusCode == 200) {
+        return List<Map<String, dynamic>>.from(response.data);
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  Future<bool> linkLocation(String addressId, double lat, double lng) async {
+    try {
+      final response = await _dio.patch(
+        '${ApiConstants.addresses}/$addressId/location',
+        data: {'lat': lat, 'lng': lng},
+      );
+      return response.statusCode == 200;
+    } catch (_) {}
+    return false;
+  }
+
   Future<Map<String, dynamic>?> addAddress({
     required String label,
     required String fullName,
