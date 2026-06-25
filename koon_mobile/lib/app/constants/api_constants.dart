@@ -68,4 +68,5 @@ class ApiConstants {
 
   // Scraper Config
   static String get scraperConfig => '$baseUrl/config';
+  static String get scraperConfigAll => '$baseUrl/config/all';
 }

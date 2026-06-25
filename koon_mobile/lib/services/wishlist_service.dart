@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import '../app/constants/api_constants.dart';
 import 'api_service.dart';
+import 'currency_service.dart';
 
 class WishlistService {
   final Dio _dio = ApiService().dio;
@@ -24,13 +25,17 @@ class WishlistService {
     String source = "internal",
   }) async {
     try {
+      String? convertedPrice = price;
+      if (price != null) {
+        convertedPrice = await KoonCurrencyService.convertToSar(price);
+      }
       final response = await _dio.post(
         ApiConstants.wishlist,
         data: {
           if (productId != null) 'product_id': productId,
           if (externalUrl != null) 'external_url': externalUrl,
           if (title != null) 'title': title,
-          if (price != null) 'price': price,
+          if (convertedPrice != null) 'price': convertedPrice,
           if (imageUrl != null) 'image_url': imageUrl,
           'source': source,
         },

@@ -1,5 +1,6 @@
 import 'package:get/get.dart';
 import '../services/cart_service.dart';
+import '../services/currency_service.dart';
 
 class CartController extends GetxController {
   final CartService _cartService = CartService();
@@ -49,11 +50,16 @@ class CartController extends GetxController {
     String? siteName,
     int quantity = 1,
   }) async {
+    String? convertedPrice = price;
+    if (price != null) {
+      convertedPrice = await KoonCurrencyService.convertToSar(price);
+    }
+
     final result = await _cartService.addToCart(
       cartType: cartType,
       productId: productId,
       title: title,
-      price: price,
+      price: convertedPrice,
       imageUrl: imageUrl,
       externalUrl: externalUrl,
       siteName: siteName,

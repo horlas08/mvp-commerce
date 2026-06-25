@@ -217,6 +217,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.9"
+  currency_converter:
+    dependency: "direct main"
+    description:
+      name: currency_converter
+      sha256: f527e505baa9cae56fa1bc68f2c62d646dcf23563a171251a6aba81960ef868d
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.0.0"
   dart_style:
     dependency: transitive
     description:

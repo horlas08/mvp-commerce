@@ -37,10 +37,6 @@ class _MainShellState extends State<MainShell> {
   @override
   void initState() {
     super.initState();
-    // Register tab-level controllers
-    Get.put(HomeController());
-    Get.put(CartController());
-    Get.put(OrderController());
   }
 
   @override

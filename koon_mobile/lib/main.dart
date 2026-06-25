@@ -9,6 +9,7 @@ import 'controllers/cart_controller.dart';
 import 'controllers/order_controller.dart';
 import 'controllers/settings_controller.dart';
 import 'controllers/compare_controller.dart';
+import 'controllers/config_controller.dart';
 import 'screens/splash/splash_screen.dart';
 
 void main() async {
@@ -19,6 +20,10 @@ void main() async {
   Get.put(AuthController(), permanent: true);
   Get.put(SettingsController(), permanent: true);
   Get.put(CompareController(), permanent: true);
+  Get.put(ConfigController(), permanent: true);
+  Get.put(HomeController(), permanent: true);
+  Get.put(CartController(), permanent: true);
+  Get.put(OrderController(), permanent: true);
 
   runApp(
     EasyLocalization(

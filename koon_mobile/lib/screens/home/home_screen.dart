@@ -212,9 +212,14 @@ class _HomeScreenState extends State<HomeScreen> {
                       final store = _externalStores[index];
                       return GestureDetector(
                         onTap: store['enabled']
-                            ? () => Navigator.push(context, MaterialPageRoute(
-                                builder: (_) => WebViewScreen(initialUrl: store['url'], siteName: store['name'])))
+                            ? () async {
+                                await WebViewScreen.setupCurrencyCookies(store['url']);
+                                if (!context.mounted) return;
+                                Navigator.push(context, MaterialPageRoute(
+                                    builder: (_) => WebViewScreen(initialUrl: store['url'], siteName: store['name'])));
+                              }
                             : null,
+
                         child: Container(
                           width: 155,
                           margin: const EdgeInsets.symmetric(horizontal: 6),

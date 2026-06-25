@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../app/theme/app_colors.dart';
+import 'package:get/get.dart' hide Trans;
+import '../../controllers/config_controller.dart';
+import '../../controllers/home_controller.dart';
+import '../../controllers/cart_controller.dart';
 import '../main/main_shell.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -20,7 +23,30 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _navigateToHome() async {
-    await Future.delayed(const Duration(seconds: 3));
+    final startTime = DateTime.now();
+
+    try {
+      final configController = Get.find<ConfigController>();
+      final homeController = Get.find<HomeController>();
+      final cartController = Get.find<CartController>();
+
+      // Prefetch all required APIs in parallel
+      await Future.wait([
+        configController.fetchConfigs(),
+        homeController.loadHomeData(lang: context.locale.languageCode),
+        cartController.loadCart(),
+      ]);
+    } catch (e) {
+      debugPrint('[splash] Pre-fetching failed: $e');
+    }
+
+    // Ensure the splash screen remains visible for at least 3 seconds
+    final elapsed = DateTime.now().difference(startTime);
+    final remaining = const Duration(seconds: 3) - elapsed;
+    if (remaining > Duration.zero) {
+      await Future.delayed(remaining);
+    }
+
     if (!mounted) return;
     Navigator.pushReplacement(
       context,

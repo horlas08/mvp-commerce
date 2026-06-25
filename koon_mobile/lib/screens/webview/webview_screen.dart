@@ -11,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../app/theme/app_colors.dart';
 import '../../controllers/cart_controller.dart';
 import '../../controllers/auth_controller.dart';
+import '../../controllers/config_controller.dart';
 import '../../services/api_service.dart';
 import '../../app/constants/api_constants.dart';
 import '../auth/login_screen.dart';
@@ -25,6 +26,46 @@ class WebViewScreen extends StatefulWidget {
     required this.initialUrl,
     required this.siteName,
   });
+
+  // ── Currency Cookie Setter (force SAR display on the website itself) ──────
+  static Future<void> setupCurrencyCookies(String url) async {
+    try {
+      final uri = Uri.parse(url);
+      final host = uri.host.toLowerCase();
+      final cookieManager = CookieManager.instance();
+      final expiresDate = DateTime.now().add(const Duration(days: 365)).millisecondsSinceEpoch;
+
+      if (host.contains('alibaba.com')) {
+        await cookieManager.setCookie(
+          url: WebUri(url),
+          name: "sc_currency",
+          value: "SAR",
+          domain: ".alibaba.com",
+          expiresDate: expiresDate,
+          isSecure: true,
+        );
+        await cookieManager.setCookie(
+          url: WebUri(url),
+          name: "sc_country",
+          value: "SA",
+          domain: ".alibaba.com",
+          expiresDate: expiresDate,
+          isSecure: true,
+        );
+      } else if (host.contains('aliexpress.com')) {
+        await cookieManager.setCookie(
+          url: WebUri(url),
+          name: "aep_usuc_f",
+          value: "site=glo&c_tp=SAR&region=SA&b_locale=en_US",
+          domain: ".aliexpress.com",
+          expiresDate: expiresDate,
+          isSecure: true,
+        );
+      }
+    } catch (e) {
+      debugPrint('[webview] Cookie setup failed: $e');
+    }
+  }
 
   @override
   State<WebViewScreen> createState() => _WebViewScreenState();
@@ -58,10 +99,37 @@ class _WebViewScreenState extends State<WebViewScreen> {
   void initState() {
     super.initState();
     _currentUrl = widget.initialUrl;
+
+    // Set cookies to force SAR currency display on the website itself
+    WebViewScreen.setupCurrencyCookies(widget.initialUrl);
+
+    // Set config synchronously from prefetch if available
+    final configController = Get.find<ConfigController>();
+    final config = configController.getConfigForUrl(widget.initialUrl);
+    if (config != null) {
+      _currentConfig = config;
+    } else {
+      _fetchConfigFromApi(widget.initialUrl);
+    }
   }
 
   // ── Backend config loader (per-site selectors/JS) ─────────────────────────
-  Future<void> _loadConfigForUrl(String url) async {
+  void _loadConfigForUrl(String url) {
+    final configController = Get.find<ConfigController>();
+    final config = configController.getConfigForUrl(url);
+    if (config != null) {
+      if (mounted) {
+        setState(() => _currentConfig = config);
+      } else {
+        _currentConfig = config;
+      }
+      _applyHidingAndScraping();
+    } else {
+      _fetchConfigFromApi(url);
+    }
+  }
+
+  Future<void> _fetchConfigFromApi(String url) async {
     try {
       final response = await ApiService().dio.get(
         ApiConstants.scraperConfig,
@@ -696,9 +764,17 @@ class _WebViewScreenState extends State<WebViewScreen> {
             if (url != null) _currentUrl = url.toString();
           });
         }
-        // Fire-and-forget: don't block the load-start handler on a backend
-        // round-trip, otherwise the progress bar appears to lag at the start.
-        if (url != null) _loadConfigForUrl(url.toString());
+        if (url != null) {
+          final urlStr = url.toString();
+
+          // Force currency cookies to display prices in SAR on the website itself
+          WebViewScreen.setupCurrencyCookies(urlStr);
+
+          final currentDomain = _currentConfig?['domain'] as String?;
+          if (currentDomain == null || !urlStr.toLowerCase().contains(currentDomain.toLowerCase())) {
+            _loadConfigForUrl(urlStr);
+          }
+        }
       },
       onLoadStop: (_, url) async {
         if (mounted) {
