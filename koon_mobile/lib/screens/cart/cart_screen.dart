@@ -49,32 +49,70 @@ class CartScreen extends StatelessWidget {
 
         return Column(
           children: [
-            // Cart Type Dropdown
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceVariant,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.divider, width: 0.5),
-                ),
-                child: Obx(() => DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: cartController.selectedCartType.value,
-                        isExpanded: true,
-                        icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.textSecondary),
-                        items: cartController.cartTypes.map((type) {
-                          final label = lang == 'ar' ? type['label_ar']! : type['label_en']!;
-                          return DropdownMenuItem(value: type['key'], child: Text(label, style: GoogleFonts.inter(fontWeight: FontWeight.w600)));
-                        }).toList(),
-                        onChanged: (value) {
-                          if (value != null) cartController.selectedCartType.value = value;
-                        },
+            // Active Cart Selector (Card that opens the BottomSheet)
+            Obx(() {
+              final activeTypeKey = cartController.selectedCartType.value;
+              final activeType = cartController.cartTypes.firstWhere(
+                (type) => type['key'] == activeTypeKey,
+                orElse: () => cartController.cartTypes.first,
+              );
+              final activeLabel = lang == 'ar' ? activeType['label_ar']! : activeType['label_en']!;
+              return InkWell(
+                onTap: () => _showCartTypeBottomSheet(context, cartController, lang),
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.04),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      )
+                    ],
+                    border: Border.all(color: AppColors.divider, width: 1),
+                  ),
+                  child: Row(
+                    children: [
+                      _getStoreLogo(activeTypeKey),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              lang == 'ar' ? 'سلة التسوق النشطة' : 'Active Shopping Cart',
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              activeLabel,
+                              style: GoogleFonts.inter(
+                                fontSize: 15,
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    )),
-              ),
-            ).animate().fadeIn(duration: 300.ms),
+                      const Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        color: AppColors.textSecondary,
+                        size: 24,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }).animate().fadeIn(duration: 300.ms),
 
             // Cart Items
             Expanded(
@@ -263,6 +301,169 @@ class CartScreen extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _getStoreLogo(String cartType, {double size = 32}) {
+    Color logoBgColor;
+    Widget logoIcon;
+    
+    switch (cartType) {
+      case 'internal':
+        logoBgColor = AppColors.primary.withOpacity(0.1);
+        logoIcon = Icon(Icons.shopping_bag_outlined, color: AppColors.primary, size: size * 0.6);
+        break;
+      case 'amazon':
+        logoBgColor = const Color(0xFFFF9900).withOpacity(0.1);
+        logoIcon = Icon(Icons.storefront, color: const Color(0xFFFF9900), size: size * 0.6);
+        break;
+      case 'aliexpress':
+        logoBgColor = const Color(0xFFFF4747).withOpacity(0.1);
+        logoIcon = Icon(Icons.explore_outlined, color: const Color(0xFFFF4747), size: size * 0.6);
+        break;
+      case 'shein':
+        logoBgColor = Colors.black.withOpacity(0.08);
+        logoIcon = Icon(Icons.checkroom_outlined, color: Colors.black, size: size * 0.6);
+        break;
+      case 'alibaba':
+        logoBgColor = const Color(0xFFFF6600).withOpacity(0.1);
+        logoIcon = Icon(Icons.business_outlined, color: const Color(0xFFFF6600), size: size * 0.6);
+        break;
+      default:
+        logoBgColor = AppColors.textHint.withOpacity(0.1);
+        logoIcon = Icon(Icons.shopping_cart_outlined, color: AppColors.textHint, size: size * 0.6);
+    }
+
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: logoBgColor,
+        shape: BoxShape.circle,
+      ),
+      child: Center(child: logoIcon),
+    );
+  }
+
+  void _showCartTypeBottomSheet(BuildContext context, CartController cartController, String lang) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      backgroundColor: AppColors.surface,
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 40,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: AppColors.divider,
+                  borderRadius: BorderRadius.circular(2.5),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  children: [
+                    Text(
+                      lang == 'ar' ? 'اختر سلة التسوق' : 'Select Shopping Cart',
+                      style: GoogleFonts.inter(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, size: 20),
+                      onPressed: () => Navigator.pop(context),
+                      style: IconButton.styleFrom(
+                        backgroundColor: AppColors.surfaceVariant,
+                        padding: const EdgeInsets.all(4),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Divider(color: AppColors.divider, height: 1),
+              const SizedBox(height: 8),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  itemCount: cartController.cartTypes.length,
+                  itemBuilder: (context, index) {
+                    final type = cartController.cartTypes[index];
+                    final key = type['key']!;
+                    final label = lang == 'ar' ? type['label_ar']! : type['label_en']!;
+                    
+                    return Obx(() {
+                      final isSelected = cartController.selectedCartType.value == key;
+                      return Container(
+                        margin: const EdgeInsets.symmetric(vertical: 6),
+                        decoration: BoxDecoration(
+                          color: isSelected 
+                              ? AppColors.primarySurface 
+                              : AppColors.surface,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isSelected 
+                                ? AppColors.primary.withOpacity(0.5) 
+                                : AppColors.divider,
+                            width: isSelected ? 1.5 : 1,
+                          ),
+                        ),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                          leading: _getStoreLogo(key, size: 40),
+                          title: Text(
+                            label,
+                            style: GoogleFonts.inter(
+                              fontSize: 15,
+                              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                              color: isSelected ? AppColors.primaryDark : AppColors.textPrimary,
+                            ),
+                          ),
+                          trailing: isSelected
+                              ? Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: const BoxDecoration(
+                                    color: AppColors.primary,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.check,
+                                    color: Colors.white,
+                                    size: 14,
+                                  ),
+                                )
+                              : null,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          onTap: () {
+                            cartController.selectedCartType.value = key;
+                            Navigator.pop(context);
+                          },
+                        ),
+                      );
+                    });
+                  },
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
     );
   }
 }

@@ -1,5 +1,8 @@
+import os
+import shutil
+import uuid
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, File, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -24,6 +27,32 @@ async def get_admin_user(user: User = Depends(get_current_user)) -> User:
     if user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     return user
+
+
+@router.post("/upload-image")
+async def upload_image(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user),
+):
+    # Validate extension
+    file_ext = os.path.splitext(file.filename)[1].lower()
+    if file_ext not in [".jpg", ".jpeg", ".png", ".gif", ".webp"]:
+        raise HTTPException(status_code=400, detail="Only .jpg, .jpeg, .png, .gif, .webp files are allowed")
+
+    # Create directory path
+    static_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", "uploads", "images")
+    os.makedirs(static_dir, exist_ok=True)
+
+    # Save to unique filename
+    unique_filename = f"{uuid.uuid4()}{file_ext}"
+    file_path = os.path.join(static_dir, unique_filename)
+
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    image_url = f"/static/uploads/images/{unique_filename}"
+    return {"image_url": image_url}
 
 
 # ── Stats ───────────────────────────────────────────────────────────────────

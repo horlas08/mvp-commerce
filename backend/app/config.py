@@ -186,6 +186,25 @@ SITE_CONFIGS: Dict[str, ScraperConfig] = {
             "a[href*='/cart']",
             "a[href*='login']",
             "a[href*='register']",
+            # --- App download banners & popups ---
+            "#header-float-banner",
+            "[class*='smartBanner']",
+            "[class*='smartbanner']",
+            "[id*='smartBanner']",
+            "[id*='smartbanner']",
+            "[id*='float-banner']",
+            "[class*='float-banner']",
+            # --- Popup dialogs & Overlays ---
+            "[class*='newShopper']",
+            "[class*='new-user']",
+            "[class*='discount-pop']",
+            "[class*='modalMask']",
+            "[class*='modalMain']",
+            "[class*='modal-mask']",
+            "[class*='modal-main']",
+            "[class*='next-overlay']",
+            "[class*='next-dialog']",
+            "[mod-name='gmod-aum-overlay-mod']",
         ],
         title_selector="h1[data-pl='product-title'], h1.product-title-text, .product-title-text, h1",
         price_selectors=[
@@ -296,6 +315,17 @@ SITE_CONFIGS: Dict[str, ScraperConfig] = {
             ".icbu-m-login-banner",
             "[class*='msite-login-banner']",
             "[class*='icbu-m-login-banner']",
+            # --- Website bottom navigation bar ---
+            "#__new__bottom__bar",
+            ".bottomNavbar__0VHw5G",
+            "[class*='bottomNavbar']",
+            "[class*='navbar-container']",
+            "[class*='navbar-placeholder']",
+            ".bottom-actions-placeholder",
+            # --- Wholesale / Ladder prices (hide bulk tiers, keep 1st retail tier) ---
+            "[data-testid='ladder-prices'] .id-inline-block:not(:first-child)",
+            "[data-testid='ladder-prices'] div > div:not(:first-child)",
+            ".ladder-price-item:not(:first-child)",
         ],
         title_selector="[data-testid='product-title'] h1, .module-pdp-title h1, .title-text, h1.product-title, [class*='product-title'] h1, h1",
         price_selectors=[

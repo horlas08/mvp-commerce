@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Search, Plus, Pencil, Trash2, RefreshCw, Eye, EyeOff } from "lucide-react";
-import { adminApi, Product, Category } from "@/lib/api";
+import { adminApi, Product, Category, API_BASE } from "@/lib/api";
 import { useLang } from "@/lib/lang-context";
 
 const EMPTY_FORM = {
@@ -336,7 +336,42 @@ export default function ProductsPage() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">{t("imageUrls")}</label>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <label className="form-label" style={{ marginBottom: 0 }}>{t("imageUrls")}</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    id="product-image-file"
+                    style={{ display: "none" }}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      try {
+                        setSaving(true);
+                        const res = await adminApi.uploadImage(file);
+                        const uploadedUrl = res.image_url.startsWith('/') ? `${API_BASE.replace('/api/v1', '')}${res.image_url}` : res.image_url;
+                        setForm(f => {
+                          const currentImages = f.images.trim();
+                          const newImages = currentImages ? `${currentImages}\n${uploadedUrl}` : uploadedUrl;
+                          return { ...f, images: newImages };
+                        });
+                      } catch (err: any) {
+                        alert(err.message || "Upload failed");
+                      } finally {
+                        setSaving(false);
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    style={{ fontSize: 13, height: "auto", padding: "4px 8px" }}
+                    onClick={() => document.getElementById("product-image-file")?.click()}
+                    disabled={saving}
+                  >
+                    {saving ? "..." : "➕ Upload / Capture"}
+                  </button>
+                </div>
                 <textarea
                   id="form-images"
                   className="input"

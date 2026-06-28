@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Plus, Pencil, Trash2, RefreshCw } from "lucide-react";
-import { adminApi, Category } from "@/lib/api";
+import { adminApi, Category, API_BASE } from "@/lib/api";
 import { useLang } from "@/lib/lang-context";
 
 const EMPTY_FORM = { name_en: "", name_ar: "", icon: "", image_url: "", sort_order: "0" };
@@ -227,7 +227,37 @@ export default function CategoriesPage() {
 
               <div className="form-group">
                 <label className="form-label">{t("imageUrl")}</label>
-                <input id="cat-image" type="url" className="input" value={form.image_url} onChange={e => setForm(f => ({ ...f, image_url: e.target.value }))} placeholder="https://..." />
+                <div style={{ display: "flex", gap: 10 }}>
+                  <input id="cat-image" type="url" className="input" value={form.image_url} onChange={e => setForm(f => ({ ...f, image_url: e.target.value }))} placeholder="https://..." style={{ flex: 1 }} />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    id="cat-image-file"
+                    style={{ display: "none" }}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      try {
+                        setSaving(true);
+                        const res = await adminApi.uploadImage(file);
+                        const uploadedUrl = res.image_url.startsWith('/') ? `${API_BASE.replace('/api/v1', '')}${res.image_url}` : res.image_url;
+                        setForm(f => ({ ...f, image_url: uploadedUrl }));
+                      } catch (err: any) {
+                        alert(err.message || "Upload failed");
+                      } finally {
+                        setSaving(false);
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => document.getElementById("cat-image-file")?.click()}
+                    disabled={saving}
+                  >
+                    {saving ? "..." : "Upload / Capture"}
+                  </button>
+                </div>
                 {form.image_url && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={form.image_url} alt="preview" style={{ marginTop: 8, height: 80, borderRadius: 8, objectFit: "cover", width: "100%", border: "1px solid var(--border)" }} />

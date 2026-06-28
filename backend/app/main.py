@@ -1,9 +1,10 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
 from dotenv import load_dotenv
+import json
 
 # Load .env so SMTP / config vars are available via os.getenv()
 load_dotenv()
@@ -59,6 +60,52 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Middleware to dynamically convert relative static paths to absolute URLs
+@app.middleware("http")
+async def add_base_url_to_static_files(request: Request, call_next):
+    response = await call_next(request)
+    content_type = response.headers.get("content-type", "")
+    
+    if "application/json" in content_type:
+        response_body = b""
+        async for chunk in response.body_iterator:
+            response_body += chunk
+            
+        try:
+            data = json.loads(response_body)
+            base_url = str(request.base_url).rstrip('/')
+            
+            def prepend_base_url(obj):
+                if isinstance(obj, dict):
+                    return {k: prepend_base_url(v) for k, v in obj.items()}
+                elif isinstance(obj, list):
+                    return [prepend_base_url(x) for x in obj]
+                elif isinstance(obj, str) and obj.startswith("/static/"):
+                    return f"{base_url}{obj}"
+                return obj
+            
+            modified_data = prepend_base_url(data)
+            modified_body = json.dumps(modified_data).encode("utf-8")
+            
+            headers = dict(response.headers)
+            headers["content-length"] = str(len(modified_body))
+            
+            return Response(
+                content=modified_body,
+                status_code=response.status_code,
+                headers=headers,
+                media_type="application/json"
+            )
+        except Exception:
+            return Response(
+                content=response_body,
+                status_code=response.status_code,
+                headers=dict(response.headers),
+                media_type=content_type
+            )
+            
+    return response
 
 # ── Register API routers ────────────────────────────────────────────────────
 API_PREFIX = "/api/v1"
@@ -135,21 +182,21 @@ async def _seed_demo_data():
         # Categories
         categories = [
             Category(id="cat-electronics", name_en="Electronics", name_ar="إلكترونيات", icon="📱", sort_order=1,
-                     image_url="https://images.unsplash.com/photo-1498049794561-7780e7231661?w=400"),
+                     image_url="/static/seed/categories/electronics.jpg"),
             Category(id="cat-fashion", name_en="Fashion", name_ar="أزياء", icon="👗", sort_order=2,
-                     image_url="https://images.unsplash.com/photo-1445205170230-053b83016050?w=400"),
+                     image_url="/static/seed/categories/fashion.jpg"),
             Category(id="cat-home", name_en="Home & Garden", name_ar="المنزل والحديقة", icon="🏠", sort_order=3,
-                     image_url="https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=400"),
+                     image_url="/static/seed/categories/home.jpg"),
             Category(id="cat-beauty", name_en="Beauty & Health", name_ar="الجمال والصحة", icon="💄", sort_order=4,
-                     image_url="https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=400"),
+                     image_url="/static/seed/categories/beauty.jpg"),
             Category(id="cat-sports", name_en="Sports & Outdoors", name_ar="رياضة وأنشطة خارجية", icon="⚽", sort_order=5,
-                     image_url="https://images.unsplash.com/photo-1461896836934-bd45ba8fcf9b?w=400"),
+                     image_url="/static/seed/categories/sports.jpg"),
             Category(id="cat-toys", name_en="Toys & Kids", name_ar="ألعاب وأطفال", icon="🧸", sort_order=6,
-                     image_url="https://images.unsplash.com/photo-1558060370-d644479cb6f7?w=400"),
+                     image_url="/static/seed/categories/toys.jpg"),
             Category(id="cat-auto", name_en="Automotive", name_ar="سيارات", icon="🚗", sort_order=7,
-                     image_url="https://images.unsplash.com/photo-1489824904134-891ab64532f1?w=400"),
+                     image_url="/static/seed/categories/auto.jpg"),
             Category(id="cat-books", name_en="Books & Stationery", name_ar="كتب وقرطاسية", icon="📚", sort_order=8,
-                     image_url="https://images.unsplash.com/photo-1524578271613-d550eacf6090?w=400"),
+                     image_url="/static/seed/categories/books.jpg"),
         ]
         db.add_all(categories)
 
@@ -162,7 +209,7 @@ async def _seed_demo_data():
                 description_ar="سماعات فاخرة بخاصية إلغاء الضوضاء مع بطارية تدوم 30 ساعة",
                 price=299.0, discount_price=249.0, category_id="cat-electronics",
                 stock=50, rating=4.5, rating_count=128,
-                images=["https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400"],
+                images=["/static/seed/products/headphones.jpg"],
             ),
             Product(
                 title_en="Smart Watch Pro",
@@ -171,7 +218,7 @@ async def _seed_demo_data():
                 description_ar="تتبع اللياقة البدنية المتقدم، مراقب معدل ضربات القلب، GPS",
                 price=599.0, discount_price=499.0, category_id="cat-electronics",
                 stock=30, rating=4.7, rating_count=256,
-                images=["https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400"],
+                images=["/static/seed/products/smartwatch.jpg"],
             ),
             Product(
                 title_en="Elegant Summer Dress",
@@ -180,7 +227,7 @@ async def _seed_demo_data():
                 description_ar="فستان صيفي خفيف بنقشة زهور، مثالي للأيام الدافئة",
                 price=189.0, discount_price=149.0, category_id="cat-fashion",
                 stock=100, rating=4.3, rating_count=89,
-                images=["https://images.unsplash.com/photo-1572804013309-59a88b7e92f1?w=400"],
+                images=["/static/seed/products/dress.jpg"],
             ),
             Product(
                 title_en="Men's Casual Sneakers",
@@ -189,7 +236,7 @@ async def _seed_demo_data():
                 description_ar="حذاء رياضي مريح للاستخدام اليومي مع نعل داخلي من الإسفنج",
                 price=259.0, category_id="cat-fashion",
                 stock=75, rating=4.1, rating_count=67,
-                images=["https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400"],
+                images=["/static/seed/products/sneakers.jpg"],
             ),
             Product(
                 title_en="Luxury Perfume Set",
@@ -198,7 +245,7 @@ async def _seed_demo_data():
                 description_ar="مجموعة عطور فاخرة، طقم هدايا 3 زجاجات",
                 price=450.0, discount_price=380.0, category_id="cat-beauty",
                 stock=40, rating=4.8, rating_count=192,
-                images=["https://images.unsplash.com/photo-1541643600914-78b084683601?w=400"],
+                images=["/static/seed/products/perfume.jpg"],
             ),
             Product(
                 title_en="Kids Formal Suit - 5 Pieces",
@@ -207,7 +254,7 @@ async def _seed_demo_data():
                 description_ar="طقم بدلة رسمية كامل للأولاد، مثالي للمناسبات",
                 price=330.0, discount_price=315.0, category_id="cat-toys",
                 stock=25, rating=4.4, rating_count=45,
-                images=["https://images.unsplash.com/photo-1503944583220-79d8926ad5e2?w=400"],
+                images=["/static/seed/products/suit.jpg"],
             ),
             Product(
                 title_en="Robot Vacuum Cleaner",
@@ -216,7 +263,7 @@ async def _seed_demo_data():
                 description_ar="مكنسة روبوت ذاتية الشحن مع تقنية الخرائط",
                 price=899.0, discount_price=749.0, category_id="cat-home",
                 stock=20, rating=4.6, rating_count=312,
-                images=["https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=400"],
+                images=["/static/seed/products/vacuum.jpg"],
             ),
             Product(
                 title_en="Yoga Mat Premium",
@@ -225,7 +272,7 @@ async def _seed_demo_data():
                 description_ar="سجادة تمارين مانعة للانزلاق، سميكة، صديقة للبيئة",
                 price=120.0, discount_price=89.0, category_id="cat-sports",
                 stock=60, rating=4.2, rating_count=78,
-                images=["https://images.unsplash.com/photo-1601925260368-ae2f83cf8b7f?w=400"],
+                images=["/static/seed/products/yoga.jpg"],
             ),
         ]
         db.add_all(products)
@@ -235,19 +282,19 @@ async def _seed_demo_data():
             Banner(
                 title_en="Summer Sale - Up to 50% Off",
                 title_ar="تخفيضات الصيف - خصم يصل إلى 50%",
-                image_url="https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=800",
+                image_url="/static/seed/banners/summer_sale.jpg",
                 sort_order=1,
             ),
             Banner(
                 title_en="New Arrivals Collection",
                 title_ar="مجموعة الوصول الجديدة",
-                image_url="https://images.unsplash.com/photo-1483985988355-763728e1935b?w=800",
+                image_url="/static/seed/banners/new_arrivals.jpg",
                 sort_order=2,
             ),
             Banner(
                 title_en="Free Shipping on Orders Over 200 SAR",
                 title_ar="شحن مجاني للطلبات فوق 200 ريال",
-                image_url="https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=800",
+                image_url="/static/seed/banners/free_shipping.jpg",
                 sort_order=3,
             ),
         ]

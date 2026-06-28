@@ -101,6 +101,24 @@ export const adminApi = {
   updateCity: (id: string, data: Partial<{ state_id: string; name_en: string; name_ar: string }>) =>
     apiFetch<City>(`/admin/cities/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   deleteCity: (id: string) => apiFetch(`/admin/cities/${id}`, { method: "DELETE" }),
+
+  uploadImage: (file: File) => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("admin_token") : null;
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const headers: Record<string, string> = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
+    return fetch(`${API_BASE}/admin/upload-image`, {
+      method: "POST",
+      headers,
+      body: formData,
+    }).then((res) => {
+      if (!res.ok) throw new Error("Upload failed");
+      return res.json() as Promise<{ image_url: string }>;
+    });
+  },
 };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
