@@ -34,6 +34,7 @@
   "aliexpress_cart": "سلة علي إكسبريس",
   "shein_cart": "سلة شي إن",
   "alibaba_cart": "سلة علي بابا",
+  "iherb_cart": "سلة آي هيرب",
   "select_all": "تحديد الكل",
   "total_amount": "المبلغ الإجمالي",
   "proceed_to_checkout": "المتابعة للدفع",
@@ -251,5 +252,18 @@
   "standard_processing": "معالجة قياسية",
   "switch_currency": "تبديل العملة",
   "insufficient_balance": "رصيد غير كافٍ",
-  "insufficient_balance_desc": "رصيد محفظتك غير كافٍ لإتمام هذا الطلب. يرجى شحن محفظتك أو اختيار طريقة دفع أخرى."
+  "insufficient_balance_desc": "رصيد محفظتك غير كافٍ لإتمام هذا الطلب. يرجى شحن محفظتك أو اختيار طريقة دفع أخرى.",
+  "password_changed_success": "تم تغيير كلمة المرور بنجاح",
+  "enter_email_reset_code": "أدخل بريدك الإلكتروني لتلقي رمز التحقق المكون من 6 أرقام.",
+  "reset_password_code_sent": "تم إرسال رمز مكون من 6 أرقام إلى بريدك الإلكتروني.",
+  "enter_6digit_code": "أدخل الرمز المكون من 6 أرقام",
+  "reset_password_button": "إعادة تعيين كلمة المرور",
+  "password_reset_success": "تمت إعادة تعيين كلمة المرور بنجاح!",
+  "send_code": "إرسال الرمز",
+  "no_account_redirect_register": "لا يوجد حساب – سيتم نقلك للتسجيل",
+  "login_required_to_add": "يرجى تسجيل الدخول لإضافة المنتجات إلى سلتك",
+  "no_account_found_for_email": "لا يوجد حساب بهذا البريد الإلكتروني. يرجى التسجيل أولاً.",
+  "select_image_source": "اختر مصدر الصورة",
+  "camera": "الكاميرا",
+  "gallery": "المعرض"
 }

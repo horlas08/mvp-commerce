@@ -1,6 +1,13 @@
+import 'package:dio/dio.dart';
 import 'package:get/get.dart';
 import '../services/cart_service.dart';
 import '../services/currency_service.dart';
+
+enum AddToCartStatus {
+  success,
+  unauthorized,
+  error,
+}
 
 class CartController extends GetxController {
   final CartService _cartService = CartService();
@@ -16,6 +23,7 @@ class CartController extends GetxController {
     {'key': 'aliexpress', 'label_en': 'AliExpress Cart', 'label_ar': 'سلة علي إكسبريس'},
     {'key': 'shein', 'label_en': 'Shein Cart', 'label_ar': 'سلة شي إن'},
     {'key': 'alibaba', 'label_en': 'Alibaba Cart', 'label_ar': 'سلة علي بابا'},
+    {'key': 'iherb', 'label_en': 'iHerb Cart', 'label_ar': 'سلة آي هيرب'},
   ];
 
   @override
@@ -40,7 +48,7 @@ class CartController extends GetxController {
     totalCartCount.value = allItems.length;
   }
 
-  Future<bool> addToCart({
+  Future<AddToCartStatus> addToCart({
     required String cartType,
     String? productId,
     String? title,
@@ -55,25 +63,34 @@ class CartController extends GetxController {
       convertedPrice = await KoonCurrencyService.convertToSar(price);
     }
 
-    final result = await _cartService.addToCart(
-      cartType: cartType,
-      productId: productId,
-      title: title,
-      price: convertedPrice,
-      imageUrl: imageUrl,
-      externalUrl: externalUrl,
-      siteName: siteName,
-      quantity: quantity,
-    );
-    if (result != null) {
-      // Auto-switch the active cart to the one we just added to, so the cart
-      // screen shows the correct site's cart (e.g. Alibaba) instead of staying
-      // on whatever was manually selected in the dropdown.
-      selectedCartType.value = cartType;
-      await loadCart();
-      return true;
+    try {
+      final result = await _cartService.addToCart(
+        cartType: cartType,
+        productId: productId,
+        title: title,
+        price: convertedPrice,
+        imageUrl: imageUrl,
+        externalUrl: externalUrl,
+        siteName: siteName,
+        quantity: quantity,
+      );
+      if (result != null) {
+        // Auto-switch the active cart to the one we just added to, so the cart
+        // screen shows the correct site's cart (e.g. Alibaba) instead of staying
+        // on whatever was manually selected in the dropdown.
+        selectedCartType.value = cartType;
+        await loadCart();
+        return AddToCartStatus.success;
+      }
+      return AddToCartStatus.error;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 401) {
+        return AddToCartStatus.unauthorized;
+      }
+      return AddToCartStatus.error;
+    } catch (_) {
+      return AddToCartStatus.error;
     }
-    return false;
   }
 
   Future<void> updateQuantity(String itemId, int quantity) async {

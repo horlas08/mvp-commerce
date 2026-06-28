@@ -26,16 +26,20 @@ class ApiService {
       },
       onError: (error, handler) async {
         if (error.response?.statusCode == 401) {
-          // Try to refresh token
+          // Try to refresh token silently — tokens are 10-year so this should
+          // only happen if the server was wiped / secret key changed.
           final refreshed = await _refreshToken();
           if (refreshed) {
-            // Retry original request
+            // Retry original request with new token
             final prefs = await SharedPreferences.getInstance();
             final newToken = prefs.getString('access_token');
             error.requestOptions.headers['Authorization'] = 'Bearer $newToken';
             final response = await dio.fetch(error.requestOptions);
             return handler.resolve(response);
           }
+          // Refresh also failed → pass the 401 error up so the caller's
+          // catch/null-check handles it gracefully.  We NEVER force-logout;
+          // the user stays logged in on the app side until they log out manually.
         }
         handler.next(error);
       },

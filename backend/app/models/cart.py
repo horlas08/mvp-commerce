@@ -13,6 +13,8 @@ class CartType(str, enum.Enum):
     ALIEXPRESS = "aliexpress"
     SHEIN = "shein"
     ALIBABA = "alibaba"
+    IHERB = "iherb"
+
 
 
 class CartItem(Base):

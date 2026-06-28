@@ -7,11 +7,12 @@ void main() {
     });
 
     test('Cart types are defined correctly', () {
-      final cartTypes = ['internal', 'amazon', 'aliexpress', 'shein', 'alibaba'];
-      expect(cartTypes.length, 5);
+      final cartTypes = ['internal', 'amazon', 'aliexpress', 'shein', 'alibaba', 'iherb'];
+      expect(cartTypes.length, 6);
       expect(cartTypes.contains('internal'), true);
       expect(cartTypes.contains('amazon'), true);
       expect(cartTypes.contains('aliexpress'), true);
+      expect(cartTypes.contains('iherb'), true);
     });
 
     test('Supported locales include English and Arabic', () {

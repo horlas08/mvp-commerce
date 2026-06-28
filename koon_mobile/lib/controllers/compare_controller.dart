@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart' hide Trans;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../app/utils/app_snackbar.dart';
 
 class CompareController extends GetxController {
   final RxList<Map<String, dynamic>> comparedProducts = <Map<String, dynamic>>[].obs;
@@ -38,20 +40,14 @@ class CompareController extends GetxController {
     final productId = product['id'];
     if (isComparing(productId)) {
       comparedProducts.removeWhere((p) => p['id'] == productId);
-      if (Get.key.currentState != null) {
-        Get.snackbar('compare_list'.tr(), 'product_removed_compare'.tr(), snackPosition: SnackPosition.BOTTOM);
-      }
+      AppSnackbar.info(null, 'product_removed_compare'.tr(), icon: Icons.compare_arrows_rounded);
     } else {
       if (comparedProducts.length >= 4) {
-        if (Get.key.currentState != null) {
-          Get.snackbar('compare_list'.tr(), 'compare_limit_reached'.tr(), snackPosition: SnackPosition.BOTTOM);
-        }
+        AppSnackbar.warning(null, 'compare_limit_reached'.tr());
         return;
       }
       comparedProducts.add(product);
-      if (Get.key.currentState != null) {
-        Get.snackbar('compare_list'.tr(), 'product_added_compare'.tr(), snackPosition: SnackPosition.BOTTOM);
-      }
+      AppSnackbar.success(null, 'product_added_compare'.tr());
     }
     _saveComparedProducts();
   }

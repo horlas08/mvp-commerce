@@ -1,6 +1,6 @@
 from typing import Optional
 import random
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, BackgroundTasks
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -10,6 +10,7 @@ from app.auth.jwt_handler import create_access_token, create_refresh_token, veri
 from app.auth.google_auth import verify_google_token
 from app.auth.dependencies import get_current_user
 from app.auth.security import hash_password, verify_password
+from app.email_service import send_verification_email, send_password_reset_email
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -32,6 +33,11 @@ class GoogleAuthRequest(BaseModel):
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    code: str
+    new_password: str
+
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
 
@@ -48,7 +54,11 @@ class VerifyEmailRequest(BaseModel):
 # ── Endpoints ───────────────────────────────────────────────────────────────
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
-async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
+async def register(
+    req: RegisterRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
     # Check existing email
     result = await db.execute(select(User).where(User.email == req.email))
     if result.scalar_one_or_none():
@@ -70,6 +80,13 @@ async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
     await db.commit()
     await db.refresh(user)
 
+    background_tasks.add_task(
+        send_verification_email,
+        to_email=user.email,
+        name=user.name or user.email,
+        code=code,
+    )
+
     access_token = create_access_token({"sub": user.id})
     refresh_token = create_refresh_token({"sub": user.id})
     return AuthResponse(
@@ -85,7 +102,10 @@ async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.email == req.email))
     user = result.scalar_one_or_none()
 
-    if not user or not user.password_hash or not verify_password(req.password, user.password_hash):
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if not user.password_hash or not verify_password(req.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
     if not user.is_active:
@@ -156,20 +176,63 @@ async def google_auth(req: GoogleAuthRequest, db: AsyncSession = Depends(get_db)
 
 
 @router.post("/forgot-password")
-async def forgot_password(req: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
-    """
-    In production, this would send a reset email. For now, returns a reset token directly.
-    """
+async def forgot_password(
+    req: ForgotPasswordRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
     result = await db.execute(select(User).where(User.email == req.email))
     user = result.scalar_one_or_none()
 
-    # Always return success to prevent email enumeration
     if not user:
-        return {"message": "If an account exists with this email, a reset link has been sent."}
+        raise HTTPException(status_code=404, detail="User not found")
 
-    # Generate a short-lived reset token
-    reset_token = create_access_token({"sub": user.id, "purpose": "reset"})
-    return {"message": "If an account exists with this email, a reset link has been sent.", "reset_token": reset_token}
+    code = "".join(random.choices("0123456789", k=6))
+    user.verification_code = code
+    await db.commit()
+    await db.refresh(user)
+
+    background_tasks.add_task(
+        send_password_reset_email,
+        to_email=user.email,
+        name=user.name or user.email,
+        code=code,
+    )
+
+    return {
+        "message": "A 6-digit code has been sent to your email.",
+        "debug_code": code
+    }
+
+
+
+@router.post("/reset-password")
+async def reset_password(req: ResetPasswordRequest, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(User.email == req.email))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if not user.verification_code or user.verification_code != req.code:
+        raise HTTPException(status_code=400, detail="Invalid or expired verification code")
+
+    if len(req.new_password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+
+    user.password_hash = hash_password(req.new_password)
+    user.verification_code = None
+    await db.commit()
+    await db.refresh(user)
+
+    access_token = create_access_token({"sub": user.id})
+    refresh_token = create_refresh_token({"sub": user.id})
+    return {
+        "message": "Password reset successfully",
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "user": user.to_dict()
+    }
 
 
 @router.post("/refresh", response_model=AuthResponse)
@@ -211,6 +274,7 @@ async def verify_email(
 
 @router.post("/resend-verification")
 async def resend_verification(
+    background_tasks: BackgroundTasks,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -221,4 +285,12 @@ async def resend_verification(
     user.verification_code = code
     await db.commit()
     await db.refresh(user)
+
+    background_tasks.add_task(
+        send_verification_email,
+        to_email=user.email,
+        name=user.name or user.email,
+        code=code,
+    )
+
     return {"message": "Verification code resent.", "debug_code": code}

@@ -2,6 +2,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:get/get.dart' hide Trans;
 import 'package:image_picker/image_picker.dart';
 import '../app/theme/app_colors.dart';
+import '../app/utils/app_snackbar.dart';
 import '../services/address_service.dart';
 import '../services/checkout_service.dart';
 import 'cart_controller.dart';
@@ -131,13 +132,7 @@ class CheckoutController extends GetxController {
     if (payment['id'] == 'wallet') {
       if (walletBalance.value < orderTotal) {
         isPlacingOrder.value = false;
-        Get.snackbar(
-          'insufficient_balance'.tr(),
-          'insufficient_balance_desc'.tr(),
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: AppColors.error,
-          colorText: Colors.white,
-        );
+        AppSnackbar.error(null, 'insufficient_balance_desc'.tr());
         return;
       }
     }
@@ -152,6 +147,7 @@ class CheckoutController extends GetxController {
       paymentMethodId: payment['id']?.toString() ?? 'wallet',
       paymentFormData: Map<String, String>.from(paymentFormData),
       paymentProofImage: paymentProofImage.value,
+      paymentFields: payment['fields'],
     );
 
     isPlacingOrder.value = false;
@@ -165,11 +161,7 @@ class CheckoutController extends GetxController {
         await cartCtrl.clearCurrentCart();
       } catch (_) {}
     } else {
-      Get.snackbar(
-        'error'.tr(),
-        'error_occurred'.tr(),
-        snackPosition: SnackPosition.BOTTOM,
-      );
+      AppSnackbar.error(null, 'error_occurred'.tr());
     }
   }
 

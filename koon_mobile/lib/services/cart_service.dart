@@ -37,7 +37,14 @@ class CartService {
         'quantity': quantity,
       });
       return response.data;
-    } catch (_) { return null; }
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 401) {
+        rethrow;
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<bool> updateCartItem(String itemId, {int? quantity, bool? isSelected}) async {

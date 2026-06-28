@@ -4,6 +4,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../app/constants/api_constants.dart';
 import 'api_service.dart';
 
+/// Thrown when the server returns 404 on login — the email is not registered.
+/// The caller can use this to redirect the user to the registration screen.
+class UserNotFoundException implements Exception {
+  final String email;
+  const UserNotFoundException(this.email);
+  @override
+  String toString() => 'UserNotFoundException: $email';
+}
+
 class AuthService {
   final Dio _dio = ApiService().dio;
   final GoogleSignIn _googleSignIn = GoogleSignIn(scopes: ['email', 'profile']);
@@ -19,6 +28,10 @@ class AuthService {
         return response.data;
       }
     } on DioException catch (e) {
+      // 404 → email is not registered → let the caller redirect to register
+      if (e.response?.statusCode == 404) {
+        throw UserNotFoundException(email);
+      }
       throw _handleError(e);
     }
     return null;
@@ -70,12 +83,39 @@ class AuthService {
     return null;
   }
 
-  Future<void> forgotPassword(String email) async {
+  Future<Map<String, dynamic>?> forgotPassword(String email) async {
     try {
-      await _dio.post(ApiConstants.forgotPassword, data: {'email': email});
+      final response = await _dio.post(ApiConstants.forgotPassword, data: {'email': email});
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return response.data;
+      }
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) {
+        throw UserNotFoundException(email);
+      }
+      throw _handleError(e);
+    }
+    return null;
+  }
+
+  Future<Map<String, dynamic>?> resetPassword(String email, String code, String newPassword) async {
+    try {
+      final response = await _dio.post(
+        ApiConstants.resetPassword,
+        data: {
+          'email': email,
+          'code': code,
+          'new_password': newPassword,
+        },
+      );
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        await _saveTokens(response.data);
+        return response.data;
+      }
     } on DioException catch (e) {
       throw _handleError(e);
     }
+    return null;
   }
 
   Future<Map<String, dynamic>?> getProfile() async {

@@ -6,9 +6,11 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../app/theme/app_colors.dart';
 import '../../controllers/auth_controller.dart';
 import 'login_screen.dart';
+import 'email_verification_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
-  const RegisterScreen({super.key});
+  final String? initialEmail;
+  const RegisterScreen({super.key, this.initialEmail});
 
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
@@ -23,6 +25,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _confirmPasswordController = TextEditingController();
   final _authController = Get.find<AuthController>();
   bool _obscurePassword = true;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialEmail != null) {
+      _emailController.text = widget.initialEmail!;
+    }
+  }
 
   @override
   void dispose() {
@@ -43,7 +53,38 @@ class _RegisterScreenState extends State<RegisterScreen> {
       phone: _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
     );
     if (success && mounted) {
-      Navigator.pop(context, true);
+      // Show custom branded snackbar for verification code
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.mark_email_unread_outlined, color: Colors.white, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'verification_code_sent'.tr(),
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: AppColors.primary,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      await Future.delayed(const Duration(milliseconds: 400));
+      if (!mounted) return;
+      // Go to email verification — only pop true once the user verifies
+      final verified = await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const EmailVerificationScreen()),
+      );
+      if (verified == true && mounted) {
+        // Pop back to wherever register was opened from (e.g. webview add-to-cart)
+        Navigator.pop(context, true);
+      }
     }
   }
 

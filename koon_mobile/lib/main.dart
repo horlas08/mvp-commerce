@@ -7,6 +7,9 @@ import 'controllers/auth_controller.dart';
 import 'controllers/settings_controller.dart';
 import 'controllers/compare_controller.dart';
 import 'controllers/config_controller.dart';
+import 'controllers/home_controller.dart';
+import 'controllers/cart_controller.dart';
+import 'controllers/order_controller.dart';
 import 'screens/splash/splash_screen.dart';
 
 void main() async {

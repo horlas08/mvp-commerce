@@ -329,6 +329,10 @@ class CartScreen extends StatelessWidget {
         logoBgColor = const Color(0xFFFF6600).withOpacity(0.1);
         logoIcon = Icon(Icons.business_outlined, color: const Color(0xFFFF6600), size: size * 0.6);
         break;
+      case 'iherb':
+        logoBgColor = const Color(0xFF007943).withOpacity(0.1);
+        logoIcon = Icon(Icons.eco_outlined, color: const Color(0xFF007943), size: size * 0.6);
+        break;
       default:
         logoBgColor = AppColors.textHint.withOpacity(0.1);
         logoIcon = Icon(Icons.shopping_cart_outlined, color: AppColors.textHint, size: size * 0.6);

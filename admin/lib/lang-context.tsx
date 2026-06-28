@@ -160,6 +160,17 @@ export const translations = {
     deleteStateConfirm: "Delete this state? All cities in this state will also be deleted.",
     deleteCityConfirm: "Delete this city?",
     selectState: "Select State",
+    imageUrl: "Image URL",
+    paymentMethods: "Payment Methods",
+    addPaymentMethod: "Add Payment Method",
+    editPaymentMethodTitle: "Edit Payment Method",
+    addNewPaymentMethodTitle: "Add New Payment Method",
+    noPaymentMethodsYet: "No payment methods added yet.",
+    deletePaymentMethodConfirm: "Are you sure you want to delete this payment method? This cannot be undone.",
+    detailsEn: "Instructions / Details (EN) *",
+    detailsAr: "Instructions / Details (AR) *",
+    fieldsJson: "Dynamic Fields JSON (e.g. [{\"key\":\"bank\",\"label_en\":\"Bank\",\"label_ar\":\"البنك\"}])",
+    imageUrlLabel: "Image URL (optional)",
   },
   ar: {
     // Common / Buttons / Feedback
@@ -316,6 +327,17 @@ export const translations = {
     deleteStateConfirm: "حذف هذه المنطقة؟ سيتم حذف جميع المدن التابعة لها أيضاً.",
     deleteCityConfirm: "حذف هذه المدينة؟",
     selectState: "اختر المنطقة",
+    imageUrl: "رابط الصورة",
+    paymentMethods: "طرق الدفع",
+    addPaymentMethod: "إضافة طريقة دفع",
+    editPaymentMethodTitle: "تعديل طريقة الدفع",
+    addNewPaymentMethodTitle: "إضافة طريقة دفع جديدة",
+    noPaymentMethodsYet: "لم يتم إضافة طرق دفع بعد.",
+    deletePaymentMethodConfirm: "هل أنت متأكد من رغبتك في حذف طريقة الدفع هذه؟ لا يمكن التراجع عن هذا الإجراء.",
+    detailsEn: "التعليمات / التفاصيل (بالإنجليزي) *",
+    detailsAr: "التعليمات / التفاصيل (بالعربي) *",
+    fieldsJson: "حقول ديناميكية JSON (مثال: [{\"key\":\"bank\",\"label_en\":\"Bank\",\"label_ar\":\"البنك\"}])",
+    imageUrlLabel: "رابط الصورة (اختياري)",
   }
 };
 

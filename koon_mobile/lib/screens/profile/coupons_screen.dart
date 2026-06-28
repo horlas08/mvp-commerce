@@ -3,6 +3,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../app/theme/app_colors.dart';
+import '../../app/utils/app_snackbar.dart';
 import '../../services/coupon_service.dart';
 
 class CouponsScreen extends StatefulWidget {
@@ -95,9 +96,7 @@ class _CouponsScreenState extends State<CouponsScreen> {
                             ElevatedButton(
                               onPressed: () {
                                 Clipboard.setData(ClipboardData(text: code));
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Coupon code copied!'.tr())),
-                                );
+                                AppSnackbar.success(context, 'link_copied'.tr(), duration: const Duration(seconds: 2));
                               },
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppColors.secondary,

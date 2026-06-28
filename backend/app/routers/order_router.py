@@ -1,5 +1,5 @@
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, Form, UploadFile, File, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Query, Form, UploadFile, File, BackgroundTasks, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -145,6 +145,7 @@ async def get_order(
 
 @router.post("/place")
 async def place_order(
+    request: Request,
     background_tasks: BackgroundTasks,
     address_id: str = Form(...),
     cart_type: str = Form(...),
@@ -204,6 +205,57 @@ async def place_order(
 
         proof_url = f"/static/uploads/proofs/{filename}"
 
+    # ── Parse dynamic payment form fields & files ─────────────────────────
+    import json
+    payment_fields_data = {}
+    if payment_form_data:
+        try:
+            payment_fields_data = json.loads(payment_form_data)
+        except Exception:
+            payment_fields_data = {}
+
+    try:
+        form = await request.form()
+    except Exception:
+        form = {}
+
+    from app.models.payment_method import PaymentMethod
+    result_pm = await db.execute(
+        select(PaymentMethod).where(PaymentMethod.id == payment_method_id)
+    )
+    pm = result_pm.scalar_one_or_none()
+    if pm:
+        try:
+            fields_list = json.loads(pm.fields_json or "[]")
+        except Exception:
+            fields_list = []
+
+        for field in fields_list:
+            field_key = field.get("key")
+            field_type = field.get("type", "text")
+            if not field_key:
+                continue
+
+            if field_type == "file":
+                file_val = form.get(field_key)
+                if file_val and hasattr(file_val, "filename") and file_val.filename:
+                    static_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
+                    proofs_dir = os.path.join(static_dir, "uploads", "proofs")
+                    os.makedirs(proofs_dir, exist_ok=True)
+
+                    ext = os.path.splitext(file_val.filename)[-1].lower() or ".jpg"
+                    filename = f"{uuid.uuid4().hex}{ext}"
+                    file_path = os.path.join(proofs_dir, filename)
+
+                    content = await file_val.read()
+                    with open(file_path, "wb") as f:
+                        f.write(content)
+
+                    payment_fields_data[field_key] = f"/static/uploads/proofs/{filename}"
+            else:
+                if field_key in form and field_key not in payment_fields_data:
+                    payment_fields_data[field_key] = form[field_key]
+
     # ── Build order items & total ─────────────────────────────────────────
     total = 0.0
     order_items = []
@@ -256,11 +308,14 @@ async def place_order(
     )
     # Store payment info in notes field (extend Order model later if needed)
     if payment_method_id:
-        order.notes = (
-            f"payment_method={payment_method_id}"
-            + (f" | proof={proof_url}" if proof_url else "")
-            + (f" | note={additional_note}" if additional_note else "")
-        )
+        payment_info = f"payment_method={payment_method_id}"
+        if proof_url:
+            payment_info += f" | proof={proof_url}"
+        if payment_fields_data:
+            payment_info += f" | fields={json.dumps(payment_fields_data, ensure_ascii=False)}"
+        if additional_note:
+            payment_info += f" | note={additional_note}"
+        order.notes = payment_info
 
     db.add(order)
 

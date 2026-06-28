@@ -62,6 +62,15 @@ class WebViewScreen extends StatefulWidget {
           expiresDate: expiresDate,
           isSecure: true,
         );
+      } else if (host.contains('iherb.com')) {
+        await cookieManager.setCookie(
+          url: WebUri(url),
+          name: "iher-pref1",
+          value: "accsave=0&city=S1NBUklZ&ifv=1&lan=ar-SA&lchg=1&sccode=SA&scurcode=SAR&storeid=0&wp=2&zct=1782664399666",
+          domain: ".iherb.com",
+          expiresDate: expiresDate,
+          isSecure: true,
+        );
       }
     } catch (e) {
       debugPrint('[webview] Cookie setup failed: $e');
@@ -181,6 +190,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
               });
             } catch(e) {}
           }
+          try {
+            document.body.style.setProperty('overflow', 'auto', 'important');
+            document.documentElement.style.setProperty('overflow', 'auto', 'important');
+          } catch(e) {}
         }
         // Throttle the observer: Alibaba is a heavy SPA that mutates the DOM
         // constantly, so running hideElements() on every mutation pegs the CPU
@@ -315,6 +328,53 @@ class _WebViewScreenState extends State<WebViewScreen> {
           let requiresSelection = false;
           let minQuantity = 1;
           let selectedQuantity = 0;
+          // variant_images: { optionLabel -> imageUrl } gathered from all sources
+          const variantImages = {};
+
+          // ── Source 1: Alibaba embedded JSON (skuSummaryAttrs.hotIconUrl) ──────
+          try {
+            const scripts = document.querySelectorAll('script');
+            for (const s of scripts) {
+              const txt = s.textContent || '';
+              // Look for skuSummaryAttrs JSON which has per-value hotIconUrl fields
+              const m = txt.match(/["']skuSummaryAttrs["']\s*:\s*(\[.*?\])(?=\s*[,}])/s);
+              if (m) {
+                try {
+                  const attrs = JSON.parse(m[1]);
+                  if (Array.isArray(attrs)) {
+                    attrs.forEach(attr => {
+                      if (!Array.isArray(attr.values)) return;
+                      attr.values.forEach(v => {
+                        const label = (v.name || '').trim();
+                        const imgUrl = (v.hotIconUrl || v.imageUrl || v.imgUrl || '').trim();
+                        if (label && imgUrl) variantImages[label] = imgUrl;
+                      });
+                    });
+                  }
+                } catch(e2) {}
+              }
+              if (Object.keys(variantImages).length > 0) break;
+            }
+          } catch(e) {}
+
+          // ── Source 2: img elements inside variant selector boxes ─────────────
+          // Works for AliExpress and other sites that render swatches as <img>.
+          try {
+            document.querySelectorAll(
+              '[data-testid="double-bordered-box"] img, '
+              + '[data-testid="sku-summary-value"] img, '
+              + '.sku-item img, .product-sku img, '
+              + '[class*="sku"] [class*="swatch"] img, '
+              + '[class*="color"] img'
+            ).forEach(img => {
+              const label = (img.alt || img.getAttribute('title') || '').trim();
+              const src = img.src || '';
+              if (label && src && src.startsWith('http') && !variantImages[label]) {
+                variantImages[label] = src;
+              }
+            });
+          } catch(e) {}
+
           const skuRoots = [
             document.querySelector('[data-testid="sku-summary"]'),
             document.querySelector('[data-module-name="module_sku"]'),
@@ -374,6 +434,11 @@ class _WebViewScreenState extends State<WebViewScreen> {
               const opt = readBorderBoxOption(box);
               if (opt && options.indexOf(opt) === -1) options.push(opt);
               if (isBorderBoxSelected(box) && opt) value = opt;
+              // Also capture the box image if present
+              const boxImg = box.querySelector('img');
+              if (boxImg && boxImg.src && boxImg.src.startsWith('http') && opt) {
+                variantImages[opt] = variantImages[opt] || boxImg.src;
+              }
             });
             if (name) upsertSelection(selections, { name: name, value: value, options: options });
           });
@@ -400,6 +465,12 @@ class _WebViewScreenState extends State<WebViewScreen> {
                 const selected = /selected|active|border|ring/i.test(cls);
                 const v = el.querySelector('[data-testid="sku-summary-value-name"]');
                 if (selected && v) value = v.textContent.trim();
+                // Capture swatch image
+                const swatchImg = el.querySelector('img');
+                const label = v ? v.textContent.trim() : '';
+                if (swatchImg && swatchImg.src && swatchImg.src.startsWith('http') && label) {
+                  variantImages[label] = variantImages[label] || swatchImg.src;
+                }
               });
               if (!value && options.length === 1) value = options[0];
               upsertSelection(selections, { name: name, value: value, options: options });
@@ -441,6 +512,62 @@ class _WebViewScreenState extends State<WebViewScreen> {
               selections.push({ name: name, value: value, options: value ? [value] : [] });
             }
           });
+
+          // ── Source 4: Shein Specific Variant Selector ───────────────────────
+          try {
+            // Color Swatches (Style Type)
+            const colorHeader = document.querySelector('.bs-main-sales-attr__header-title, #color-heading');
+            const colorName = colorHeader ? colorHeader.textContent.trim().replace(/[:：]\\s*\$/, '') : 'Style Type';
+            const colorItems = document.querySelectorAll('.bs-color__item, [class*="color__item"], .bs-color-circle-image__item');
+            if (colorItems.length > 0) {
+              hasVariants = true;
+              const options = [];
+              let value = '';
+              colorItems.forEach(el => {
+                const opt = (el.getAttribute('aria-label') || el.getAttribute('data-attr_value') || el.textContent.trim()).trim();
+                if (opt && options.indexOf(opt) === -1) options.push(opt);
+                
+                const cls = (el.className || '') + ' ' + (el.getAttribute('aria-selected') || '') + ' ' + (el.getAttribute('aria-checked') || '');
+                const selected = /selected|active|true/i.test(cls);
+                if (selected && opt) value = opt;
+
+                // Extract image swatch if available
+                const img = el.querySelector('img');
+                if (img && img.src && img.src.startsWith('http') && opt && !img.alt.includes('hot')) {
+                  variantImages[opt] = img.src;
+                }
+              });
+              if (!value && options.length === 1) value = options[0];
+              if (!value && options.length > 1) requiresSelection = true;
+              if (isPlaceholderValue(value)) requiresSelection = true;
+              
+              if (colorName) upsertSelection(selections, { name: colorName, value: value, options: options });
+            }
+
+            // Size Swatches
+            const sizeHeader = document.querySelector('.goods-size__title-txt, .goods-size__title-wrap');
+            const sizeName = sizeHeader ? sizeHeader.textContent.trim().replace(/[:：]\\s*\$/, '') : 'Size';
+            const sizeItems = document.querySelectorAll('.goods-size__sizes-item, [class*="sizes-item"]');
+            if (sizeItems.length > 0) {
+              hasVariants = true;
+              const options = [];
+              let value = '';
+              sizeItems.forEach(el => {
+                const opt = (el.getAttribute('data-attr_value') || el.getAttribute('aria-label') || el.textContent.trim()).trim();
+                if (opt && options.indexOf(opt) === -1) options.push(opt);
+                
+                const cls = (el.className || '') + ' ' + (el.getAttribute('aria-selected') || '') + ' ' + (el.getAttribute('aria-checked') || '');
+                const selected = /selected|active|true/i.test(cls);
+                if (selected && opt) value = opt;
+              });
+              if (!value && options.length === 1) value = options[0];
+              if (!value && options.length > 1) requiresSelection = true;
+              if (isPlaceholderValue(value)) requiresSelection = true;
+              
+              if (sizeName) upsertSelection(selections, { name: sizeName, value: value, options: options });
+            }
+          } catch(e) {}
+
           const finalSelections = finalizeSelections(selections);
           if (finalSelections.length) hasVariants = true;
           finalSelections.forEach(s => {
@@ -454,11 +581,62 @@ class _WebViewScreenState extends State<WebViewScreen> {
             selections: finalSelections,
             min_quantity: minQuantity,
             selected_quantity: selectedQuantity,
-            selection_summary: selectionSummary,
+            variant_images: variantImages,
           };
+        }
+        function isProductPage() {
+          try {
+            const url = window.location.href.toLowerCase();
+            const host = window.location.hostname.toLowerCase();
+            // Aliexpress local dumps that are NOT product pages
+            if (url.includes('aliexpress_home') || url.includes('aliexpress_page') ||
+                url.includes('page_1') || url.includes('bunde') || url.includes('bundle')) {
+              return false;
+            }
+            // Legacy dump filename guards
+            if (url.includes('aliexpress.html') && !url.includes('aliexpress_source')) {
+              return false;
+            }
+            // Any aliexpress local dump named *source* or *detail* is a product page
+            if (url.includes('aliexpress_source.html') || url.includes('aliexpress/aliexpress_detail')) {
+              return getJsonLdProduct() !== null;
+            }
+            // Alibaba home dump guard
+            if ((url.includes('alibaba_home') || url.includes('alibaba.html')) &&
+                !url.includes('alibaba_source') && !url.includes('alibaba_detail')) {
+              return false;
+            }
+            if (url.includes('amazon_home') || url.includes('amazon_main')) {
+              return false;
+            }
+            const isLocal = url.startsWith('file://') || host.includes('localhost') || host.includes('127.0.0.1');
+            if (isLocal) {
+              if (url.includes('source') || url.includes('detail') || url.includes('product') || url.includes('item')) {
+                return true;
+              }
+              return false;
+            }
+            if (host.includes('amazon.')) {
+              return url.includes('/dp/') || url.includes('/gp/product/');
+            }
+            if (host.includes('aliexpress.')) {
+              return /\\/item\\/\\d+/.test(url);
+            }
+            if (host.includes('alibaba.')) {
+              return url.includes('/product-detail/') || url.includes('/detail/');
+            }
+            if (host.includes('shein.')) {
+              return url.includes('-p-') || url.includes('/goods-') || url.includes('/pd-');
+            }
+            if (host.includes('iherb.')) {
+              return url.includes('/pr/');
+            }
+          } catch(e) {}
+          return true;
         }
         function extractProduct() {
           try {
+            if (!isProductPage()) return null;
             const ld = getJsonLdProduct();
             const sku = extractSkuMeta();
             let title = '';
@@ -466,24 +644,165 @@ class _WebViewScreenState extends State<WebViewScreen> {
             if (titleElem) title = titleElem.textContent.trim();
             if (!title && ld && ld.name) title = ld.name;
             if (!title) return null;
-            const priceSelectors = $priceSelectorsJson;
-            let price = "Unknown Price";
-            for (const selector of priceSelectors) {
-              const elem = document.querySelector(selector);
-              if (elem) { const text = elem.textContent.trim(); if (text) { price = text; break; } }
+
+            // Handle site-specific currency detection
+            let currency = "";
+            if (window.location.hostname.includes("shein.com") || window.location.href.includes("shein")) {
+              // Check product:price:currency meta (present on mobile m.shein.com)
+              const currencyMeta = document.querySelector(
+                'meta[property="product:price:currency"], meta[name="product:price:currency"],' +
+                'meta[property="og:price:currency"], meta[name="twitter:price:currency"]'
+              );
+              if (currencyMeta) {
+                currency = currencyMeta.getAttribute('content') || '';
+              } else if (window.gbCommonInfo && window.gbCommonInfo.currency) {
+                currency = window.gbCommonInfo.currency;
+              } else if (window.globalSetting && window.globalSetting.currency && window.globalSetting.currency.cookieValueDefault) {
+                currency = window.globalSetting.currency.cookieValueDefault;
+              }
+              if (currency) currency = currency.toUpperCase().trim();
             }
-            if ((price === "Unknown Price" || !price) && ld && ld.price) { price = ld.price; }
+
+            const priceSelectors = $priceSelectorsJson;
+            let priceNum = "";
+
+            // ── Priority 1: OpenGraph product meta tags (reliable on m.shein.com) ──
+            const priceMeta = document.querySelector(
+              'meta[property="product:price:amount"], meta[name="product:price:amount"],' +
+              'meta[property="og:price:amount"]'
+            );
+            if (priceMeta) {
+              const raw = priceMeta.getAttribute('content') || '';
+              const m = raw.match(/\\d+(?:\\.\\d+)?/);
+              if (m) priceNum = m[0];
+            }
+
+            // ── Priority 2: Shein JS globals ─────────────────────────────────
+            const isShein = window.location.hostname.includes("shein.com");
+            if (isShein && !priceNum) {
+              try {
+                if (window.goodsDetail && window.goodsDetail.salePrice) {
+                  const sp = window.goodsDetail.salePrice;
+                  const raw = sp.amount || sp.price || '';
+                  const m = ('' + raw).match(/\\d+(?:\\.\\d+)?/);
+                  if (m) priceNum = m[0];
+                }
+              } catch(e) {}
+              try {
+                if (!priceNum && window.__pinia) {
+                  const stores = Object.values(window.__pinia.state.value || {});
+                  for (const store of stores) {
+                    const sp = store.salePrice || store.goods_sn_price || (store.productInfo && store.productInfo.salePrice);
+                    if (sp) {
+                      const raw = (typeof sp === 'object') ? (sp.amount || sp.price || '') : sp;
+                      const m = ('' + raw).match(/\\d+(?:\\.\\d+)?/);
+                      if (m) { priceNum = m[0]; break; }
+                    }
+                  }
+                }
+              } catch(e) {}
+              try {
+                if (!priceNum && window.SaPageInfo && window.SaPageInfo.page_param) {
+                  const p = window.SaPageInfo.page_param;
+                  const gp = p.goods_price || p.sale_price || '';
+                  const m = ('' + gp).match(/\\d+(?:\\.\\d+)?/);
+                  if (m) priceNum = m[0];
+                }
+              } catch(e) {}
+            }
+
+            // ── Priority 3: DOM selectors ─────────────────────────────────────
+            if (!priceNum) {
+              for (const selector of priceSelectors) {
+                const elem = document.querySelector(selector);
+                if (elem) {
+                  let text = "";
+                  // aria-label on element itself first (Shein mobile uses this)
+                  if (elem.getAttribute('aria-label')) {
+                    text = elem.getAttribute('aria-label');
+                  } else {
+                    const bffSale = elem.querySelector(
+                      '.detail-product-bff-price__sale, [class*="price__sale"],' +
+                      '[class*="prices-info__current"], .productPrice__main'
+                    );
+                    if (bffSale && bffSale.getAttribute('aria-label')) {
+                      text = bffSale.getAttribute('aria-label');
+                    } else if (bffSale) {
+                      text = bffSale.textContent.trim();
+                    } else {
+                      text = elem.textContent.trim();
+                    }
+                  }
+                  // Strip non-digit/dot chars (handles \ue0e1 icon font prefix)
+                  const cleaned = text.replace(/[^\\d.,]/g, ' ');
+                  const m = cleaned.match(/\\d+(?:[.,]\\d+)?/);
+                  if (m) { priceNum = m[0].replace(',', '.'); break; }
+                }
+              }
+            }
+
+            // ── Priority 4: JSON-LD ───────────────────────────────────────────
+            if (!priceNum && ld && ld.price) {
+              const m = ('' + ld.price).match(/\\d+(?:\\.\\d+)?/);
+              if (m) priceNum = m[0];
+            }
+
+            // ── Priority 5: Last resort – any price-like element ──────────────
+            if (!priceNum) {
+              const anyPrice = document.querySelector(
+                '[class*="sale-price"], [class*="salePrice"], [class*="price-num"],' +
+                '[class*="price__sale"], [data-price], [class*="current-price"],' +
+                '[class*="productPrice"]'
+              );
+              if (anyPrice) {
+                const lbl = anyPrice.getAttribute('aria-label') || anyPrice.getAttribute('data-price') || anyPrice.textContent;
+                const cleaned = (lbl || '').replace(/[^\\d.,]/g, ' ');
+                const m = cleaned.match(/\\d+(?:[.,]\\d+)?/);
+                if (m) priceNum = m[0].replace(',', '.');
+              }
+            }
+            
+            let price = "Unknown Price";
+            if (priceNum) {
+              if (currency) {
+                price = currency + " " + priceNum;
+              } else {
+                price = priceNum;
+              }
+            }
+
             const imageSelectors = $imageSelectorsJson;
             let imageUrl = "";
             for (const selector of imageSelectors) {
-              const elem = document.querySelector(selector);
-              if (elem) {
-                if (elem.src && elem.src.startsWith('http')) { imageUrl = elem.src; }
-                else if (elem.getAttribute("data-a-dynamic-image")) {
-                  try { const dyn = JSON.parse(elem.getAttribute("data-a-dynamic-image")); imageUrl = Object.keys(dyn)[0]; } catch(e2) {}
+              const elements = document.querySelectorAll(selector);
+              for (const elem of elements) {
+                let src = elem.getAttribute("data-before-crop-src") || 
+                          elem.getAttribute("data-src") || 
+                          elem.getAttribute("data-original") || 
+                          elem.src || "";
+                if (src.startsWith('//')) src = window.location.protocol + src;
+                
+                // Filter out logo and layout placeholders
+                if (src && src.startsWith('http') && 
+                    !src.includes('logo') && 
+                    !src.includes('loading') && 
+                    !src.includes('placeholder')) {
+                  imageUrl = src;
+                  break;
                 }
-                if (imageUrl) break;
+                
+                if (elem.getAttribute("data-a-dynamic-image")) {
+                  try {
+                    const dyn = JSON.parse(elem.getAttribute("data-a-dynamic-image"));
+                    const dynUrl = Object.keys(dyn)[0];
+                    if (dynUrl && dynUrl.startsWith('http')) {
+                      imageUrl = dynUrl;
+                      break;
+                    }
+                  } catch(e2) {}
+                }
               }
+              if (imageUrl) break;
             }
             if (!imageUrl && ld && ld.image) { imageUrl = ld.image; }
             return Object.assign({
@@ -508,7 +827,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
         if (!window._scraperIntervalId) {
           window._scraperIntervalId = setInterval(() => {
             const product = extractProduct();
-            if (product) { window.flutter_inappwebview.callHandler('onProductDetected', product); }
+            window.flutter_inappwebview.callHandler('onProductDetected', product);
           }, 1000);
         }
       })();
@@ -524,6 +843,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
     if (name.contains('aliexpress')) return 'aliexpress';
     if (name.contains('alibaba')) return 'alibaba';
     if (name.contains('shein')) return 'shein';
+    if (name.contains('iherb')) return 'iherb';
     return 'internal';
   }
 
@@ -566,6 +886,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
     final authController = Get.find<AuthController>();
     if (!authController.isLoggedIn.value) {
+      // Show branded info snackbar (not error) prompting user to sign in
+      _showInfoSnack('login_required_to_add'.tr(), icon: Icons.login_rounded);
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (!mounted) return;
       final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
       if (result != true) return;
     }
@@ -607,7 +931,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
     if (action == 'cart') {
       final cartController = Get.find<CartController>();
-      final success = await cartController.addToCart(
+      final result = await cartController.addToCart(
         cartType: cartType,
         title: finalTitle,
         price: product['price']?.toString(),
@@ -616,7 +940,18 @@ class _WebViewScreenState extends State<WebViewScreen> {
         siteName: product['site']?.toString() ?? widget.siteName,
         quantity: quantity,
       );
-      _showActionSnack(success, 'added_to_cart'.tr());
+      if (result == AddToCartStatus.success) {
+        _showActionSnack(true, 'added_to_cart'.tr());
+      } else if (result == AddToCartStatus.unauthorized) {
+        if (mounted) {
+          final loginRes = await Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+          if (loginRes == true) {
+            _handleProductAction(action);
+          }
+        }
+      } else {
+        _showActionSnack(false, 'added_to_cart'.tr());
+      }
     } else {
       final wishlistService = WishlistService();
       final res = await wishlistService.addToWishlist(
@@ -707,6 +1042,30 @@ class _WebViewScreenState extends State<WebViewScreen> {
     );
   }
 
+  /// Shows a branded info snackbar (primary color) — used for prompts that are
+  /// not errors, e.g. "Please sign in to add items to your cart".
+  void _showInfoSnack(String message, {IconData icon = Icons.info_outline_rounded}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(icon, color: Colors.white, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(message,
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
+            ),
+          ],
+        ),
+        backgroundColor: AppColors.primary,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
   Future<void> _onAddToCart() => _handleProductAction('cart');
 
   Future<void> _onAddToWishlist() => _handleProductAction('wishlist');
@@ -757,10 +1116,36 @@ class _WebViewScreenState extends State<WebViewScreen> {
   }
 
   // ── HTML dump helpers ────────────────────────────────────────────────────
-  String _dumpFileSlug() {
+  String _dumpSiteFolder() {
     final raw = widget.siteName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_');
-    final cleaned = raw.replaceAll(RegExp(r'^_+|_+$'), '');
-    return cleaned.isEmpty ? 'webview' : cleaned;
+    return raw.replaceAll(RegExp(r'^_+|_+$'), '').isEmpty ? 'webview' : raw.replaceAll(RegExp(r'^_+|_+$'), '');
+  }
+
+  // Counters for disambiguating repeated detail dumps (details_1, details_2…)
+  static final Map<String, int> _dumpCounters = {};
+
+  String _dumpFileNameFor(String url) {
+    final folder = _dumpSiteFolder();
+    final lc = url.toLowerCase();
+    // Detect page type from URL
+    final bool isDetail = lc.contains('/product-detail/') ||
+        lc.contains('/detail/') ||
+        RegExp(r'/item/\d+').hasMatch(lc) ||
+        lc.contains('/dp/') ||
+        lc.contains('/gp/product/') ||
+        lc.contains('-p-') ||
+        lc.contains('/goods-') ||
+        lc.contains('/pd-') ||
+        lc.contains('product') ||
+        lc.contains('item');
+    final String pageType = isDetail ? 'details' : 'home';
+    if (pageType == 'home') {
+      return '${folder}_home';
+    }
+    final counterKey = '${folder}_details';
+    _dumpCounters[counterKey] = (_dumpCounters[counterKey] ?? 0) + 1;
+    final n = _dumpCounters[counterKey]!;
+    return '${folder}_details_$n';
   }
 
   Future<void> _dumpHtml() async {
@@ -772,17 +1157,23 @@ class _WebViewScreenState extends State<WebViewScreen> {
       if (raw == null) return;
       final html = raw is String ? raw : raw.toString();
 
-      Directory? dir;
+      Directory? baseDir;
       if (Platform.isAndroid) {
         // App-scoped external dir: /storage/emulated/0/Android/data/<pkg>/files/
         // Pullable via: adb pull <path> .   (no root, no extra permissions needed)
-        dir = await getExternalStorageDirectory();
+        baseDir = await getExternalStorageDirectory();
       }
-      dir ??= await getApplicationDocumentsDirectory();
+      baseDir ??= await getApplicationDocumentsDirectory();
 
+      // Create site-specific subfolder
+      final siteFolder = _dumpSiteFolder();
+      final dir = Directory('${baseDir.path}/$siteFolder');
+      if (!dir.existsSync()) await dir.create(recursive: true);
+
+      final fileName = _dumpFileNameFor(_currentUrl);
       final header =
           '<!-- Dumped ${DateTime.now().toIso8601String()} from $_currentUrl -->\n';
-      final file = File('${dir.path}/${_dumpFileSlug()}_source.html');
+      final file = File('${dir.path}/$fileName.html');
       await file.writeAsString(header + html, flush: true);
 
       if (!mounted) return;
@@ -813,10 +1204,21 @@ class _WebViewScreenState extends State<WebViewScreen> {
     return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
   }
 
+  /// Absolute Mac path where ADB-pulled dumps should land, per site.
+  /// Matches the `store_source/<site>/` folder structure in the project root.
+  static const String _storeSourceRoot = '/Users/user/project/koon/store_source';
+
   Future<void> _showDumpInfo() async {
     final path = _lastDumpPath;
     final size = _lastDumpBytes;
     final when = _lastDumpAt;
+    // Build the Mac destination: store_source/<site>/<filename>
+    final siteFolder = _dumpSiteFolder();
+    final fileName = path != null ? path.split('/').last : '';
+    final macDest = '$_storeSourceRoot/$siteFolder/$fileName';
+    final adbCommand = path != null
+        ? 'adb pull "$path" "$_storeSourceRoot/$siteFolder/"'
+        : '';
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -860,33 +1262,76 @@ class _WebViewScreenState extends State<WebViewScreen> {
                     style: const TextStyle(fontSize: 12)),
               const SizedBox(height: 12),
               Container(
+                width: double.infinity,
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   color: AppColors.surfaceVariant,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Text(
-                  'Pull to your PC:\nadb pull "<path>" .\n\nReplace <path> with the path above.',
-                  style: TextStyle(fontFamily: 'monospace', fontSize: 11),
+                child: Text(
+                  'Run on your Mac:\n$adbCommand\n\n→ saves to:\nstore_source/$siteFolder/$fileName',
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
                 ),
               ),
             ],
           ],
         ),
         actions: [
-          if (path != null)
+          if (path != null) ...[
+            TextButton.icon(
+              icon: const Icon(Icons.terminal_rounded, size: 16),
+              label: const Text('Copy ADB Pull'),
+              onPressed: () async {
+                await Clipboard.setData(ClipboardData(text: adbCommand));
+                if (ctx.mounted) Navigator.pop(ctx);
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Row(
+                      children: [
+                        const Icon(Icons.terminal_rounded, color: Colors.white, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Copied → store_source/$siteFolder/$fileName',
+                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+                          ),
+                        ),
+                      ],
+                    ),
+                    backgroundColor: AppColors.primary,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    duration: const Duration(seconds: 3),
+                  ),
+                );
+              },
+            ),
             TextButton.icon(
               icon: const Icon(Icons.copy, size: 16),
-              label: const Text('Copy path'),
+              label: const Text('Copy device path'),
               onPressed: () async {
                 await Clipboard.setData(ClipboardData(text: path));
                 if (ctx.mounted) Navigator.pop(ctx);
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Path copied to clipboard')),
+                  const SnackBar(content: Text('Device path copied to clipboard')),
                 );
               },
             ),
+            TextButton.icon(
+              icon: const Icon(Icons.folder_open_rounded, size: 16),
+              label: const Text('Copy Mac dest'),
+              onPressed: () async {
+                await Clipboard.setData(ClipboardData(text: macDest));
+                if (ctx.mounted) Navigator.pop(ctx);
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Mac destination path copied')),
+                );
+              },
+            ),
+          ],
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);
@@ -1082,6 +1527,22 @@ class _WebViewScreenState extends State<WebViewScreen> {
             trigger: ContentBlockerTrigger(urlFilter: '.*wakeup.*'),
             action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
           ),
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*loader~login.*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*login-channel-update.*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*login-join-verify-check.*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*cosmos/.*/msite/.*login.*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
         ],
       ),
       onWebViewCreated: (controller) {
@@ -1090,6 +1551,12 @@ class _WebViewScreenState extends State<WebViewScreen> {
           handlerName: 'onProductDetected',
           callback: (args) {
             if (args.isNotEmpty) {
+              if (args[0] == null) {
+                if (mounted && _currentProduct != null) {
+                  setState(() => _currentProduct = null);
+                }
+                return;
+              }
               final data = Map<String, dynamic>.from(args[0]);
               if (mounted &&
                   (_currentProduct == null ||
@@ -1130,6 +1597,17 @@ class _WebViewScreenState extends State<WebViewScreen> {
         const allowedSchemes = {'http', 'https', 'about', 'data', 'blank'};
         if (!allowedSchemes.contains(scheme)) {
           debugPrint('[webview] blocked app redirect: $uri');
+          return NavigationActionPolicy.CANCEL;
+        }
+        final host = uri.host.toLowerCase();
+        final path = uri.path.toLowerCase();
+        if (host.contains('aliexpress') &&
+            (host.contains('login') ||
+                host.contains('passport') ||
+                path.contains('login') ||
+                path.contains('passport') ||
+                uri.toString().contains('login'))) {
+          debugPrint('[webview] blocked aliexpress login redirect: $uri');
           return NavigationActionPolicy.CANCEL;
         }
         return NavigationActionPolicy.ALLOW;
@@ -1519,12 +1997,20 @@ class _ProductSelectionSheetState extends State<_ProductSelectionSheet> {
   late final Map<String, String> _chosen;
   late int _quantity;
   late final List<Map<String, dynamic>> _activeSelections;
+  late final Map<String, String> _variantImages;
+  String? _currentVariantImage;
 
   @override
   void initState() {
     super.initState();
     _quantity = widget.initialQuantity.clamp(1, 9999);
     _activeSelections = _WebViewScreenState._dedupeSelections(widget.selections);
+    // Extract variant_images map from the product data
+    final rawVariantImages = widget.product['variant_images'];
+    _variantImages = rawVariantImages is Map
+        ? Map<String, String>.from(
+            rawVariantImages.map((k, v) => MapEntry(k.toString(), v.toString())))
+        : {};
     _chosen = {};
     for (final s in _activeSelections) {
       final name = (s['name'] ?? '').toString();
@@ -1537,6 +2023,26 @@ class _ProductSelectionSheetState extends State<_ProductSelectionSheet> {
         _chosen[name] = value;
       }
     }
+    _updateVariantImage();
+  }
+
+  void _updateVariantImage() {
+    // Find the first chosen option that has a variant image
+    for (final entry in _chosen.entries) {
+      final img = _variantImages[entry.value];
+      if (img != null && img.isNotEmpty) {
+        _currentVariantImage = img;
+        return;
+      }
+    }
+    _currentVariantImage = null;
+  }
+
+  void _selectOption(String name, String opt) {
+    setState(() {
+      _chosen[name] = opt;
+      _updateVariantImage();
+    });
   }
 
   List<String> _optionsFor(Map<String, dynamic> sel) {
@@ -1571,6 +2077,10 @@ class _ProductSelectionSheetState extends State<_ProductSelectionSheet> {
   @override
   Widget build(BuildContext context) {
     final isCart = widget.action == 'cart';
+    final mainImg = (widget.product['image_url'] ?? '').toString();
+    final displayImg = (_currentVariantImage?.isNotEmpty == true)
+        ? _currentVariantImage!
+        : mainImg;
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
@@ -1595,16 +2105,55 @@ class _ProductSelectionSheetState extends State<_ProductSelectionSheet> {
                 ),
               ),
             ),
-            Text(
-              'confirm_product_options'.tr(),
-              style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              (widget.product['title'] ?? '').toString(),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary),
+            // Product header: image + title/price row
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  child: ClipRRect(
+                    key: ValueKey(displayImg),
+                    borderRadius: BorderRadius.circular(12),
+                    child: displayImg.isNotEmpty
+                        ? Image.network(
+                            displayImg,
+                            width: 72,
+                            height: 72,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => _sheetImagePlaceholder(),
+                          )
+                        : _sheetImagePlaceholder(),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'confirm_product_options'.tr(),
+                        style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        (widget.product['title'] ?? '').toString(),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        (widget.product['price'] ?? '').toString(),
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
             if (widget.requiresSelection) ...[
               const SizedBox(height: 10),
@@ -1640,15 +2189,66 @@ class _ProductSelectionSheetState extends State<_ProductSelectionSheet> {
                         children: _optionsFor(sel).map((opt) {
                           final name = (sel['name'] ?? '').toString();
                           final selected = _chosen[name] == opt;
-                          return ChoiceChip(
-                            label: Text(opt),
-                            selected: selected,
-                            onSelected: (_) => setState(() => _chosen[name] = opt),
-                            selectedColor: AppColors.primarySurface,
-                            labelStyle: GoogleFonts.inter(
-                              fontSize: 12,
-                              color: selected ? AppColors.primary : AppColors.textPrimary,
-                              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                          final hasVariantImg = _variantImages.containsKey(opt);
+                          return GestureDetector(
+                            onTap: () => _selectOption(name, opt),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              padding: hasVariantImg
+                                  ? const EdgeInsets.all(2)
+                                  : const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: selected ? AppColors.primarySurface : AppColors.surfaceVariant,
+                                borderRadius: BorderRadius.circular(hasVariantImg ? 10 : 20),
+                                border: Border.all(
+                                  color: selected ? AppColors.primary : AppColors.divider,
+                                  width: selected ? 2 : 1,
+                                ),
+                              ),
+                              child: hasVariantImg
+                                  ? Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        ClipRRect(
+                                          borderRadius: BorderRadius.circular(8),
+                                          child: Image.network(
+                                            _variantImages[opt]!,
+                                            width: 48,
+                                            height: 48,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (_, __, ___) => Container(
+                                              width: 48, height: 48,
+                                              color: AppColors.surfaceVariant,
+                                              child: Icon(Icons.image_not_supported_outlined,
+                                                  size: 20, color: AppColors.textHint),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        SizedBox(
+                                          width: 52,
+                                          child: Text(
+                                            opt,
+                                            textAlign: TextAlign.center,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: GoogleFonts.inter(
+                                              fontSize: 10,
+                                              color: selected ? AppColors.primary : AppColors.textSecondary,
+                                              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    )
+                                  : Text(
+                                      opt,
+                                      style: GoogleFonts.inter(
+                                        fontSize: 12,
+                                        color: selected ? AppColors.primary : AppColors.textPrimary,
+                                        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                                      ),
+                                    ),
                             ),
                           );
                         }).toList(),
@@ -1728,11 +2328,24 @@ class _ProductSelectionSheetState extends State<_ProductSelectionSheet> {
       ),
     );
   }
+
+  Widget _sheetImagePlaceholder() {
+    return Container(
+      width: 72,
+      height: 72,
+      decoration: BoxDecoration(
+        color: AppColors.surfaceVariant,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Icon(Icons.shopping_bag_outlined, color: AppColors.textHint, size: 28),
+    );
+  }
 }
 
 class _PulsingDot extends StatefulWidget {
   final Color color;
   const _PulsingDot({required this.color});
+
 
   @override
   State<_PulsingDot> createState() => _PulsingDotState();

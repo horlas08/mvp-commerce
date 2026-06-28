@@ -5,8 +5,10 @@ import 'package:get/get.dart' hide Trans;
 import 'package:google_fonts/google_fonts.dart';
 import '../../app/theme/app_colors.dart';
 import '../../controllers/auth_controller.dart';
+import '../../services/auth_service.dart';
 import 'register_screen.dart';
 import 'forgot_password_screen.dart';
+import 'email_verification_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -31,12 +33,79 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
-    final success = await _authController.login(
-      _emailController.text.trim(),
-      _passwordController.text,
-    );
-    if (success && mounted) {
-      Navigator.pop(context, true);
+    try {
+      final result = await _authController.login(
+        _emailController.text.trim(),
+        _passwordController.text,
+      );
+      if (!mounted) return;
+      if (result == LoginResult.success) {
+        Navigator.pop(context, true);
+      } else if (result == LoginResult.needsVerification) {
+        // Email registered but not yet verified — show branded snackbar then go to verify
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.mark_email_unread_outlined, color: Colors.white, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'verification_code_sent'.tr(),
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: AppColors.primary,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        await Future.delayed(const Duration(milliseconds: 400));
+        if (!mounted) return;
+        final verified = await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const EmailVerificationScreen()),
+        );
+        if (verified == true && mounted) {
+          Navigator.pop(context, true);
+        }
+      }
+    } on UserNotFoundException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.person_add_alt_1_rounded, color: Colors.white, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'no_account_redirect_register'.tr(),
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: AppColors.primary,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      await Future.delayed(const Duration(milliseconds: 400));
+      if (!mounted) return;
+      final result = await Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => RegisterScreen(initialEmail: e.email),
+        ),
+      );
+      if (result == true && mounted) {
+        Navigator.pop(context, true);
+      }
     }
   }
 
@@ -131,10 +200,15 @@ class _LoginScreenState extends State<LoginScreen> {
               Align(
                 alignment: AlignmentDirectional.centerEnd,
                 child: TextButton(
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
-                  ),
+                  onPressed: () async {
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
+                    );
+                    if (result == true && mounted) {
+                      Navigator.pop(context, true);
+                    }
+                  },
                   child: Text(
                     'forgot_password'.tr(),
                     style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600),

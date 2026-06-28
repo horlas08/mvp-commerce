@@ -29,6 +29,7 @@ class _HomeScreenState extends State<HomeScreen> {
     {'name': 'Alibaba', 'logo': '🏭', 'color': Color(0xFFFF6B00), 'url': 'https://www.alibaba.com', 'subtitle': 'Wholesale', 'enabled': true},
     {'name': 'AliExpress', 'logo': '🛒', 'color': Color(0xFFE53935), 'url': 'https://www.aliexpress.com', 'subtitle': '', 'enabled': true},
     {'name': 'SHEIN', 'logo': '👗', 'color': Color(0xFF1A1A2E), 'url': 'https://ar.shein.com', 'subtitle': '', 'enabled': true},
+    {'name': 'iHerb', 'logo': '🌿', 'color': Color(0xFF007943), 'url': 'https://www.iherb.com', 'subtitle': '', 'enabled': true},
     {'name': 'Amazon', 'logo': '📦', 'color': Color(0xFFFFA726), 'url': 'https://www.amazon.sa', 'subtitle': '', 'enabled': true},
   ];
 

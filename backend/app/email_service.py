@@ -21,7 +21,7 @@ from typing import Optional
 SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER = os.getenv("SMTP_USER", "")
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD") or os.getenv("SMTP_PASS", "")
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "admin@koon.com")
 APP_NAME = os.getenv("APP_NAME", "Koon Commerce")
 
@@ -39,9 +39,15 @@ def _send_email_sync(to: str, subject: str, html_body: str) -> None:
     msg.attach(MIMEText(html_body, "html", "utf-8"))
 
     try:
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+        # Port 465 usually requires SSL connection from the start
+        if SMTP_PORT == 465:
+            server = smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT)
+        else:
+            server = smtplib.SMTP(SMTP_HOST, SMTP_PORT)
             server.ehlo()
             server.starttls()
+
+        with server:
             server.login(SMTP_USER, SMTP_PASSWORD)
             server.sendmail(SMTP_USER, to, msg.as_string())
         print(f"[Email] ✅ Sent '{subject}' → {to}")
@@ -228,5 +234,42 @@ async def send_admin_order_notification(
     await send_email(
         to=ADMIN_EMAIL,
         subject=f"[{APP_NAME}] New Order #{order_id} from {user_name}",
+        html_body=html,
+    )
+
+
+async def send_verification_email(to_email: str, name: str, code: str) -> None:
+    """Send a verification code email to the user."""
+    body = f"""
+    <h2>Welcome to {APP_NAME}, {name}!</h2>
+    <p>Thank you for registering. Please use the following 6-digit code to verify your email address:</p>
+    <div style="text-align:center; margin:24px 0;">
+        <span style="font-size:32px; font-weight:800; letter-spacing:6px; color:#FF6B00; background:#FFF0E6; padding:12px 24px; border-radius:8px; display:inline-block;">{code}</span>
+    </div>
+    <p>This code will expire shortly. If you did not request this code, please ignore this email.</p>
+    """
+    html = _base_template("Verify Your Email Address", body)
+    await send_email(
+        to=to_email,
+        subject=f"[{APP_NAME}] Email Verification Code: {code}",
+        html_body=html,
+    )
+
+
+async def send_password_reset_email(to_email: str, name: str, code: str) -> None:
+    """Send a password reset code email to the user."""
+    body = f"""
+    <h2>Password Reset Request</h2>
+    <p>Hello {name},</p>
+    <p>We received a request to reset your password. Please use the following 6-digit verification code to proceed:</p>
+    <div style="text-align:center; margin:24px 0;">
+        <span style="font-size:32px; font-weight:800; letter-spacing:6px; color:#FF6B00; background:#FFF0E6; padding:12px 24px; border-radius:8px; display:inline-block;">{code}</span>
+    </div>
+    <p>This code is valid for a limited time. If you did not request a password reset, please ignore this email.</p>
+    """
+    html = _base_template("Reset Your Password", body)
+    await send_email(
+        to=to_email,
+        subject=f"[{APP_NAME}] Password Reset Code: {code}",
         html_body=html,
     )

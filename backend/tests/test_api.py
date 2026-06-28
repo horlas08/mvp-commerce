@@ -110,18 +110,43 @@ def test_login():
 
 
 def test_login_invalid_credentials():
+    # Nonexistent user should return 404 (Koon custom behavior)
     response = client.post("/api/v1/auth/login", json={
         "email": "nonexistent@koon.com",
         "password": "wrong",
     })
-    assert response.status_code == 401
+    assert response.status_code == 404
+
+    # Existing user with wrong password should return 401
+    client.post("/api/v1/auth/register", json={
+        "email": "wrongpass@koon.com",
+        "password": "password123",
+        "name": "Wrong Pass User",
+    })
+    response2 = client.post("/api/v1/auth/login", json={
+        "email": "wrongpass@koon.com",
+        "password": "wrongpassword",
+    })
+    assert response2.status_code == 401
 
 
 def test_forgot_password():
+    # Register first to ensure the user exists
+    client.post("/api/v1/auth/register", json={
+        "email": "forgot@koon.com",
+        "password": "password123",
+        "name": "Forgot User",
+    })
     response = client.post("/api/v1/auth/forgot-password", json={
-        "email": "any@koon.com",
+        "email": "forgot@koon.com",
     })
     assert response.status_code == 200
+
+    # Nonexistent user should return 404
+    response2 = client.post("/api/v1/auth/forgot-password", json={
+        "email": "nonexistent_forgot@koon.com",
+    })
+    assert response2.status_code == 404
 
 
 def test_refresh_token():
@@ -412,6 +437,13 @@ def test_get_config_shein():
     response = client.get("/api/v1/config?url=https://ar.shein.com/goods-p-12345.html")
     assert response.status_code == 200
     assert response.json()["name"] == "Shein"
+
+
+def test_get_config_iherb():
+    response = client.get("/api/v1/config?url=https://www.iherb.com/pr/california-gold-nutrition-vitamin-c-1-000-mg-240-veggie-capsules/61864")
+    assert response.status_code == 200
+    assert response.json()["name"] == "iHerb"
+
 
 
 def test_get_config_not_found():

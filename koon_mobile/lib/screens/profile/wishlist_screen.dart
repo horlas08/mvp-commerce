@@ -4,10 +4,12 @@ import 'package:get/get.dart' hide Trans;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../app/theme/app_colors.dart';
+import '../../app/utils/app_snackbar.dart';
 import '../../services/wishlist_service.dart';
-import '../../services/cart_service.dart';
+import '../../controllers/cart_controller.dart';
 import '../../controllers/settings_controller.dart';
 import '../product/product_detail_screen.dart';
+import '../auth/login_screen.dart';
 
 class WishlistScreen extends StatefulWidget {
   const WishlistScreen({super.key});
@@ -18,7 +20,7 @@ class WishlistScreen extends StatefulWidget {
 
 class _WishlistScreenState extends State<WishlistScreen> {
   final WishlistService _wishlistService = WishlistService();
-  final CartService _cartService = CartService();
+  final CartController _cartController = Get.find<CartController>();
   final SettingsController _settingsController = Get.find<SettingsController>();
   List<Map<String, dynamic>> _items = [];
   bool _isLoading = true;
@@ -48,17 +50,26 @@ class _WishlistScreenState extends State<WishlistScreen> {
 
   Future<void> _addToCart(Map<String, dynamic> item) async {
     final source = item['source'] ?? 'internal';
-    final success = await _cartService.addToCart(
+    final result = await _cartController.addToCart(
       cartType: source,
       productId: item['product_id'],
       title: item['title'],
-      price: item['price'],
+      price: item['price']?.toString(),
       imageUrl: item['image_url'],
       externalUrl: item['external_url'],
       siteName: source == 'internal' ? 'Internal' : source,
     );
-    if (success != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('added_to_cart'.tr())));
+    if (result == AddToCartStatus.success) {
+      if (mounted) AppSnackbar.success(context, 'added_to_cart'.tr());
+    } else if (result == AddToCartStatus.unauthorized) {
+      if (mounted) {
+        final loginRes = await Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+        if (loginRes == true) {
+          _addToCart(item);
+        }
+      }
+    } else {
+      if (mounted) AppSnackbar.error(context, 'error_occurred'.tr());
     }
   }
 

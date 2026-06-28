@@ -6,8 +6,8 @@ from typing import Optional
 
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "koon-secret-key-change-in-production-2024")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
-REFRESH_TOKEN_EXPIRE_DAYS = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 365 * 10  # 10 years — stays logged in forever
+REFRESH_TOKEN_EXPIRE_DAYS = 365 * 10  # 10 years refresh window
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:

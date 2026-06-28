@@ -571,3 +571,96 @@ async def delete_city_admin(
     await db.delete(city)
     await db.commit()
     return {"message": "City deleted"}
+
+
+# ── Payment Methods ──────────────────────────────────────────────────────────
+
+class PaymentMethodRequest(BaseModel):
+    title_en: str
+    title_ar: str
+    details_en: Optional[str] = None
+    details_ar: Optional[str] = None
+    image_url: Optional[str] = None
+    is_active: bool = True
+    fields: Optional[list] = None  # list of field dicts: [{"key": "...", "label_en": "...", "label_ar": "..."}]
+
+
+@router.get("/payment-methods")
+async def list_payment_methods_admin(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user)
+):
+    from app.models.payment_method import PaymentMethod
+    result = await db.execute(select(PaymentMethod))
+    methods = result.scalars().all()
+    return [m.to_dict("en") for m in methods]
+
+
+@router.post("/payment-methods")
+async def create_payment_method_admin(
+    req: PaymentMethodRequest,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user)
+):
+    from app.models.payment_method import PaymentMethod
+    import json
+    import uuid
+    fields_str = json.dumps(req.fields or [])
+    method = PaymentMethod(
+        id=str(uuid.uuid4()),
+        title_en=req.title_en,
+        title_ar=req.title_ar,
+        details_en=req.details_en,
+        details_ar=req.details_ar,
+        image_url=req.image_url,
+        is_active=req.is_active,
+        fields_json=fields_str
+    )
+    db.add(method)
+    await db.commit()
+    await db.refresh(method)
+    return method.to_dict("en")
+
+
+@router.patch("/payment-methods/{method_id}")
+async def update_payment_method_admin(
+    method_id: str,
+    req: PaymentMethodRequest,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user)
+):
+    from app.models.payment_method import PaymentMethod
+    import json
+    result = await db.execute(select(PaymentMethod).where(PaymentMethod.id == method_id))
+    method = result.scalar_one_or_none()
+    if not method:
+        raise HTTPException(status_code=404, detail="Payment method not found")
+    
+    method.title_en = req.title_en
+    method.title_ar = req.title_ar
+    method.details_en = req.details_en
+    method.details_ar = req.details_ar
+    method.image_url = req.image_url
+    method.is_active = req.is_active
+    if req.fields is not None:
+        method.fields_json = json.dumps(req.fields)
+        
+    await db.commit()
+    await db.refresh(method)
+    return method.to_dict("en")
+
+
+@router.delete("/payment-methods/{method_id}")
+async def delete_payment_method_admin(
+    method_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user)
+):
+    from app.models.payment_method import PaymentMethod
+    result = await db.execute(select(PaymentMethod).where(PaymentMethod.id == method_id))
+    method = result.scalar_one_or_none()
+    if not method:
+        raise HTTPException(status_code=404, detail="Payment method not found")
+    await db.delete(method)
+    await db.commit()
+    return {"message": "Payment method deleted"}

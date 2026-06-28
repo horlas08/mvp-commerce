@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/constants/api_constants.dart';
+import '../../app/utils/app_snackbar.dart';
 import '../../controllers/auth_controller.dart';
 import '../../services/auth_service.dart';
 
@@ -66,11 +67,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
       if (updated != null) {
         _authController.user.value = updated;
-        Get.snackbar('success'.tr(), 'profile_updated_success'.tr(), snackPosition: SnackPosition.BOTTOM);
+        AppSnackbar.success(context, 'profile_updated_success'.tr());
         Navigator.pop(context);
       }
     } catch (e) {
-      Get.snackbar('error'.tr(), e.toString(), snackPosition: SnackPosition.BOTTOM);
+      AppSnackbar.error(context, e.toString());
     } finally {
       setState(() => _isLoading = false);
     }
@@ -92,7 +93,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         _confirmPasswordController.clear();
       }
     } catch (e) {
-      Get.snackbar('error'.tr(), e.toString(), snackPosition: SnackPosition.BOTTOM);
+      AppSnackbar.error(context, e.toString());
     } finally {
       setState(() => _isPasswordLoading = false);
     }
@@ -125,22 +126,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         setState(() {
           _avatarUrl = uploadedUrl;
         });
-        Get.snackbar(
-          'success'.tr(),
-          'avatar_uploaded_success'.tr(),
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.green.withOpacity(0.9),
-          colorText: Colors.white,
-        );
+        AppSnackbar.success(context, 'avatar_uploaded_success'.tr());
       }
     } catch (e) {
-      Get.snackbar(
-        'error'.tr(),
-        e.toString(),
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red.withOpacity(0.9),
-        colorText: Colors.white,
-      );
+      AppSnackbar.error(context, e.toString());
     } finally {
       setState(() {
         _isAvatarUploading = false;

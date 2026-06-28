@@ -4,6 +4,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get/get.dart' hide Trans;
 import 'package:google_fonts/google_fonts.dart';
 import '../../../app/theme/app_colors.dart';
+import '../../../app/utils/app_snackbar.dart';
 import '../../../controllers/checkout_controller.dart';
 import '../../address/address_list_screen.dart';
 
@@ -181,18 +182,7 @@ class _AddressSelectCard extends StatelessWidget {
       return GestureDetector(
         onTap: canSelect
             ? () => ctrl.selectedAddress.value = address
-            : () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('address_not_selectable'.tr()),
-                    behavior: SnackBarBehavior.floating,
-                    backgroundColor: AppColors.warning,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                );
-              },
+            : () => AppSnackbar.warning(context, 'address_not_selectable'.tr()),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           margin: const EdgeInsets.only(bottom: 12),

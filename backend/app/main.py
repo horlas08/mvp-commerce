@@ -26,6 +26,7 @@ from app.routers import (
     admin_router,
     location_router,
     wallet_router,
+    payment_method_router,
 )
 
 # Ensure all models are imported so SQLAlchemy can create their tables
@@ -124,6 +125,7 @@ app.include_router(config_router.router, prefix=API_PREFIX)
 app.include_router(admin_router.router, prefix=API_PREFIX)
 app.include_router(location_router.router, prefix=API_PREFIX)
 app.include_router(wallet_router.router, prefix=API_PREFIX)
+app.include_router(payment_method_router.router, prefix=API_PREFIX)
 
 
 @app.get("/")
@@ -173,6 +175,41 @@ async def _seed_demo_data():
             db.add_all(cities)
             await db.commit()
             print("✅ States and Cities seeded successfully.")
+
+        # Seed Payment Methods if empty
+        from app.models.payment_method import PaymentMethod
+        payment_check = await db.execute(select(PaymentMethod).limit(1))
+        if not payment_check.scalar_one_or_none():
+            cod = PaymentMethod(
+                id="payment-cod",
+                title_en="Cash on Delivery",
+                title_ar="الدفع عند الاستلام",
+                details_en="Pay in cash upon delivery.",
+                details_ar="الدفع نقداً عند الاستلام.",
+                is_active=True,
+                fields_json="[]"
+            )
+            bank = PaymentMethod(
+                id="payment-bank",
+                title_en="Bank Transfer",
+                title_ar="تحويل بنكي",
+                details_en="Please transfer the total amount to our bank account below and upload the proof.",
+                details_ar="يرجى تحويل المبلغ الإجمالي إلى حسابنا البنكي أدناه ورفع ما يثبت ذلك.",
+                is_active=True,
+                fields_json='[{"key": "bank_name", "label_en": "Select Bank", "label_ar": "اختر البنك", "type": "select", "options": ["Al Rajhi Bank", "SNB (Al Ahli)", "Riyad Bank", "Alinma Bank"]}, {"key": "account_name", "label_en": "Your Full Name", "label_ar": "اسمك الكامل", "type": "text"}, {"key": "amount_transferred", "label_en": "Amount Transferred (SAR)", "label_ar": "المبلغ المحول (ريال)", "type": "number"}, {"key": "receipt_proof", "label_en": "Receipt Photo", "label_ar": "صورة الإيصال", "type": "file"}]'
+            )
+            stcpay = PaymentMethod(
+                id="payment-stcpay",
+                title_en="STC Pay Transfer",
+                title_ar="تحويل STC Pay",
+                details_en="Please transfer to our STC Pay wallet (+966 50 000 0000) and fill details.",
+                details_ar="يرجى التحويل إلى محفظة STC Pay الخاصة بنا (+966 50 000 0000) وتعبئة التفاصيل.",
+                is_active=True,
+                fields_json='[{"key": "sender_phone", "label_en": "Sender Phone Number", "label_ar": "رقم هاتف المرسل", "type": "number"}, {"key": "transaction_id", "label_en": "Transaction ID", "label_ar": "رقم العملية", "type": "text"}, {"key": "transfer_proof", "label_en": "Transfer Screenshot", "label_ar": "لقطة شاشة التحويل", "type": "file"}]'
+            )
+            db.add_all([cod, bank, stcpay])
+            await db.commit()
+            print("✅ Default payment methods seeded successfully.")
 
         # Only seed if categories table is empty
         result = await db.execute(select(Category).limit(1))

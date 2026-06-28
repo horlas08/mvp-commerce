@@ -47,6 +47,7 @@ class CheckoutService {
     required String paymentMethodId, // 'wallet' or admin method id
     Map<String, String>? paymentFormData,
     XFile? paymentProofImage,
+    List<dynamic>? paymentFields,
   }) async {
     try {
       FormData formData = FormData.fromMap({
@@ -58,8 +59,27 @@ class CheckoutService {
           'additional_note': additionalNote,
         'allow_team_review': allowTeamReview,
         'payment_method_id': paymentMethodId,
-        if (paymentFormData != null) ...paymentFormData,
       });
+
+      if (paymentFormData != null) {
+        for (var entry in paymentFormData.entries) {
+          final key = entry.key;
+          final value = entry.value;
+
+          final isFileField = paymentFields?.any((f) => f['key'] == key && f['type'] == 'file') ?? false;
+          if (isFileField && value.isNotEmpty) {
+            formData.files.add(MapEntry(
+              key,
+              await MultipartFile.fromFile(
+                value,
+                filename: value.split('/').last,
+              ),
+            ));
+          } else {
+            formData.fields.add(MapEntry(key, value));
+          }
+        }
+      }
 
       if (paymentProofImage != null) {
         formData.files.add(MapEntry(

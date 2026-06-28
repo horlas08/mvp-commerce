@@ -10,6 +10,7 @@ import {
   LogOut,
   Menu,
   MapPin,
+  CreditCard,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { useLang } from "@/lib/lang-context";
@@ -20,8 +21,9 @@ import ProductsPage from "./pages/ProductsPage";
 import OrdersPage from "./pages/OrdersPage";
 import CategoriesPage from "./pages/CategoriesPage";
 import StatesCitiesPage from "./pages/StatesCitiesPage";
+import PaymentMethodsPage from "./pages/PaymentMethodsPage";
 
-type Page = "dashboard" | "users" | "products" | "orders" | "categories" | "statesAndCities";
+type Page = "dashboard" | "users" | "products" | "orders" | "categories" | "statesAndCities" | "paymentMethods";
 
 const NAV_ITEMS = [
   {
@@ -37,6 +39,7 @@ const NAV_ITEMS = [
       { id: "products" as Page, labelKey: "products" as const, icon: Package },
       { id: "categories" as Page, labelKey: "categories" as const, icon: Tag },
       { id: "statesAndCities" as Page, labelKey: "statesAndCities" as const, icon: MapPin },
+      { id: "paymentMethods" as Page, labelKey: "paymentMethods" as const, icon: CreditCard },
       { id: "users" as Page, labelKey: "users" as const, icon: Users },
     ],
   },
@@ -63,6 +66,7 @@ export default function AdminShell() {
       case "orders": return <OrdersPage />;
       case "categories": return <CategoriesPage />;
       case "statesAndCities": return <StatesCitiesPage />;
+      case "paymentMethods": return <PaymentMethodsPage />;
     }
   };
 

@@ -34,6 +34,7 @@
   "aliexpress_cart": "AliExpress Cart",
   "shein_cart": "Shein Cart",
   "alibaba_cart": "Alibaba Cart",
+  "iherb_cart": "iHerb Cart",
   "select_all": "Select All",
   "total_amount": "Total Amount",
   "proceed_to_checkout": "Proceed to checkout",
@@ -251,5 +252,18 @@
   "standard_processing": "Standard Processing",
   "switch_currency": "Switch Currency",
   "insufficient_balance": "Insufficient Balance",
-  "insufficient_balance_desc": "Your wallet balance is insufficient to place this order. Please top up or choose another payment method."
+  "insufficient_balance_desc": "Your wallet balance is insufficient to place this order. Please top up or choose another payment method.",
+  "password_changed_success": "Password changed successfully",
+  "enter_email_reset_code": "Enter your email to receive a 6-digit verification code.",
+  "reset_password_code_sent": "A 6-digit code has been sent to your email.",
+  "enter_6digit_code": "Enter 6-Digit Code",
+  "reset_password_button": "Reset Password",
+  "password_reset_success": "Password has been reset successfully!",
+  "send_code": "Send Code",
+  "no_account_redirect_register": "No account found – taking you to registration",
+  "login_required_to_add": "Please sign in to add items to your cart",
+  "no_account_found_for_email": "No account found with this email. Please register first.",
+  "select_image_source": "Select Image Source",
+  "camera": "Camera",
+  "gallery": "Gallery"
 }

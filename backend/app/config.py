@@ -145,9 +145,25 @@ SITE_CONFIGS: Dict[str, ScraperConfig] = {
             "a[href*='login']",
             "a[href*='register']",
             "a[href*='signup']",
+            # Banners, Bottom Navbar, and Registration Popup for Shein
+            ".journey-contain",
+            "#branch-app",
+            ".index-footer",
+            ".j-index-footer",
+            ".show-register",
+            ".j-show-register",
+            ".show-register-es",
         ],
-        title_selector="h1.goods-title-name, .goods-title-name, h1.product-intro__head-name, .product-intro__head-name, h1, .product-title",
+        title_selector="h1.detail-title-h1, .detail-title-text, h1.goods-title-name, .goods-title-name, h1.product-intro__head-name, .product-intro__head-name, h1, .product-title",
         price_selectors=[
+            # Mobile Shein (m.shein.com) classes
+            ".productPrice__main",
+            ".productPrice",
+            ".floor-price",
+            ".productPriceContainer",
+            # Desktop Shein classes
+            ".detail-product-bff-price__sale",
+            ".detail-product-bff-price",
             ".goods-price-num",
             ".product-intro__head-mainprice",
             ".discount-price",
@@ -158,6 +174,7 @@ SITE_CONFIGS: Dict[str, ScraperConfig] = {
             ".product-intro__head-price"
         ],
         image_selectors=[
+            ".crop-image-container__img",
             ".goods-detail-zoom-img",
             ".product-intro__gallery-img",
             ".main-image img",
@@ -345,6 +362,34 @@ SITE_CONFIGS: Dict[str, ScraperConfig] = {
             ".magic-image img",
             "[class*='main-image'] img",
             "[class*='gallery'] img",
+        ]
+    ),
+    "iherb": ScraperConfig(
+        name="iHerb",
+        domain="iherb.com",
+        hide_selectors=[
+            "button.add-to-cart",
+            "#add-to-cart-button",
+            ".add-to-cart",
+            "button[data-testid='add-to-cart-button']",
+            ".buy-now-button",
+            ".buy-now",
+            "a[href*='/cart']",
+            ".cart-icon",
+            "#header-cart-icon",
+        ],
+        title_selector="h1#name, .product-name, h1",
+        price_selectors=[
+            "#price",
+            ".price",
+            "[itemprop='price']",
+            ".product-price",
+        ],
+        image_selectors=[
+            "#product-image",
+            ".product-image img",
+            "img[itemprop='image']",
+            "#main-image",
         ]
     ),
 }

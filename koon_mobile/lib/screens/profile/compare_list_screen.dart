@@ -256,19 +256,31 @@ class CompareListScreen extends StatelessWidget {
                 onPressed: (product['stock'] ?? 0) > 0
                     ? () async {
                         if (!authController.isLoggedIn.value) {
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
-                          return;
+                          final loginRes = await Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+                          if (loginRes != true) return;
                         }
-                        final success = await cartController.addToCart(
-                          cartType: 'internal',
-                          productId: product['id'],
-                          title: product['title'],
-                          price: '${product['price']}',
-                          imageUrl: imageUrl ?? '',
-                        );
-                        if (success) {
-                          Get.snackbar('Cart', 'Added to your cart!'.tr(), snackPosition: SnackPosition.BOTTOM);
+                        
+                        Future<void> performAdd() async {
+                          final result = await cartController.addToCart(
+                            cartType: 'internal',
+                            productId: product['id'],
+                            title: product['title'],
+                            price: '${product['price']}',
+                            imageUrl: imageUrl ?? '',
+                          );
+                          if (result == AddToCartStatus.success) {
+                            Get.snackbar('Cart', 'Added to your cart!'.tr(), snackPosition: SnackPosition.BOTTOM);
+                          } else if (result == AddToCartStatus.unauthorized) {
+                            final loginRes = await Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+                            if (loginRes == true) {
+                              await performAdd();
+                            }
+                          } else {
+                            Get.snackbar('Error', 'Failed to add to cart'.tr(), snackPosition: SnackPosition.BOTTOM);
+                          }
                         }
+
+                        await performAdd();
                       }
                     : null,
                 style: ElevatedButton.styleFrom(

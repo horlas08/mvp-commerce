@@ -336,6 +336,68 @@ class _PaymentForm extends StatelessWidget {
     required this.ctrl,
   });
 
+  Future<XFile?> _showSourcePicker(BuildContext context) async {
+    final picker = ImagePicker();
+    XFile? result;
+    await showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'select_image_source'.tr(),
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _SourceOption(
+                    icon: Icons.camera_alt_outlined,
+                    label: 'camera'.tr(),
+                    onTap: () async {
+                      try {
+                        result = await picker.pickImage(
+                          source: ImageSource.camera,
+                          imageQuality: 80,
+                        );
+                      } catch (_) {}
+                      Navigator.pop(ctx);
+                    },
+                  ),
+                  _SourceOption(
+                    icon: Icons.photo_library_outlined,
+                    label: 'gallery'.tr(),
+                    onTap: () async {
+                      try {
+                        result = await picker.pickImage(
+                          source: ImageSource.gallery,
+                          imageQuality: 80,
+                        );
+                      } catch (_) {}
+                      Navigator.pop(ctx);
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    return result;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -359,15 +421,177 @@ class _PaymentForm extends StatelessWidget {
           ),
           const SizedBox(height: 12),
 
-          // Dynamic text fields from admin
+          // Dynamic fields from admin
+          // Dynamic fields from admin
           ...fields.map((field) {
             final key = field['key']?.toString() ?? field['label']?.toString() ?? '';
             final label = field['label']?.toString() ?? key;
+            final type = field['type']?.toString() ?? 'text';
+
+            if (type == 'file') {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Obx(() {
+                      final path = ctrl.paymentFormData[key];
+                      final hasFile = path != null && path.isNotEmpty;
+                      return GestureDetector(
+                        onTap: () async {
+                          final img = await _showSourcePicker(context);
+                          if (img != null) {
+                            ctrl.paymentFormData[key] = img.path;
+                          }
+                        },
+                        child: Container(
+                          height: 70,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: hasFile ? AppColors.success : AppColors.border,
+                              width: 1.5,
+                            ),
+                          ),
+                          child: hasFile
+                              ? Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const SizedBox(width: 12),
+                                    const Icon(
+                                      Icons.check_circle,
+                                      color: AppColors.success,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        path.split('/').last,
+                                        style: GoogleFonts.inter(
+                                          fontSize: 12,
+                                          color: AppColors.success,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.clear, size: 18, color: AppColors.textHint),
+                                      onPressed: () {
+                                        ctrl.paymentFormData.remove(key);
+                                      },
+                                    ),
+                                  ],
+                                )
+                              : Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(
+                                      Icons.upload_outlined,
+                                      color: AppColors.textHint,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'upload_proof'.tr(),
+                                      style: GoogleFonts.inter(
+                                        fontSize: 11,
+                                        color: AppColors.textHint,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              );
+            }
+
+            if (type == 'select') {
+              final rawOptions = field['options'];
+              final List<String> options = [];
+              if (rawOptions is List) {
+                options.addAll(rawOptions.map((e) => e.toString()));
+              }
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Obx(() {
+                  final currentValue = ctrl.paymentFormData[key];
+                  final String? selectValue = (currentValue != null && options.contains(currentValue)) ? currentValue : null;
+
+                  return DropdownButtonFormField<String>(
+                    value: selectValue,
+                    hint: Text(
+                      'select_option'.tr(args: [label]),
+                      style: GoogleFonts.inter(fontSize: 13, color: AppColors.textHint),
+                    ),
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      color: AppColors.textPrimary,
+                    ),
+                    decoration: InputDecoration(
+                      labelText: label,
+                      labelStyle: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: AppColors.border),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: AppColors.border),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                          color: AppColors.secondary,
+                          width: 1.5,
+                        ),
+                      ),
+                      filled: true,
+                      fillColor: Colors.white,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
+                    ),
+                    items: options.map((opt) {
+                      return DropdownMenuItem<String>(
+                        value: opt,
+                        child: Text(opt),
+                      );
+                    }).toList(),
+                    onChanged: (v) {
+                      if (v != null) {
+                        ctrl.paymentFormData[key] = v;
+                      }
+                    },
+                  );
+                }),
+              );
+            }
+
             return Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: TextFormField(
                 initialValue: ctrl.paymentFormData[key],
                 onChanged: (v) => ctrl.paymentFormData[key] = v,
+                keyboardType: type == 'number' ? TextInputType.number : TextInputType.text,
                 style: GoogleFonts.inter(
                   fontSize: 14,
                   color: AppColors.textPrimary,
@@ -407,6 +631,7 @@ class _PaymentForm extends StatelessWidget {
           }),
 
           // Payment proof image upload
+          const SizedBox(height: 4),
           Text(
             'upload_proof'.tr(),
             style: GoogleFonts.inter(
@@ -418,11 +643,7 @@ class _PaymentForm extends StatelessWidget {
           const SizedBox(height: 8),
           Obx(() => GestureDetector(
                 onTap: () async {
-                  final picker = ImagePicker();
-                  final img = await picker.pickImage(
-                    source: ImageSource.gallery,
-                    imageQuality: 80,
-                  );
+                  final img = await _showSourcePicker(context);
                   if (img != null) ctrl.paymentProofImage.value = img;
                 },
                 child: Container(
@@ -441,13 +662,14 @@ class _PaymentForm extends StatelessWidget {
                       ? Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
+                            const SizedBox(width: 12),
                             const Icon(
                               Icons.check_circle,
                               color: AppColors.success,
                               size: 20,
                             ),
                             const SizedBox(width: 8),
-                            Flexible(
+                            Expanded(
                               child: Text(
                                 ctrl.paymentProofImage.value!.name,
                                 style: GoogleFonts.inter(
@@ -457,6 +679,12 @@ class _PaymentForm extends StatelessWidget {
                                 ),
                                 overflow: TextOverflow.ellipsis,
                               ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.clear, size: 18, color: AppColors.textHint),
+                              onPressed: () {
+                                ctrl.paymentProofImage.value = null;
+                              },
                             ),
                           ],
                         )
@@ -472,14 +700,56 @@ class _PaymentForm extends StatelessWidget {
                             Text(
                               'upload_proof'.tr(),
                               style: GoogleFonts.inter(
-                                fontSize: 11,
-                                color: AppColors.textHint,
+                                  fontSize: 11,
+                                  color: AppColors.textHint,
                               ),
                             ),
                           ],
                         ),
                 ),
               )),
+        ],
+      ),
+    );
+  }
+}
+
+class _SourceOption extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _SourceOption({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 60,
+            height: 60,
+            decoration: const BoxDecoration(
+              color: AppColors.primarySurface,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: AppColors.primary, size: 28),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+            ),
+          ),
         ],
       ),
     );

@@ -102,6 +102,14 @@ export const adminApi = {
     apiFetch<City>(`/admin/cities/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   deleteCity: (id: string) => apiFetch(`/admin/cities/${id}`, { method: "DELETE" }),
 
+  // Payment Methods
+  listPaymentMethods: () => apiFetch<PaymentMethod[]>("/admin/payment-methods"),
+  createPaymentMethod: (data: Partial<PaymentMethod>) =>
+    apiFetch<PaymentMethod>("/admin/payment-methods", { method: "POST", body: JSON.stringify(data) }),
+  updatePaymentMethod: (id: string, data: Partial<PaymentMethod>) =>
+    apiFetch<PaymentMethod>(`/admin/payment-methods/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  deletePaymentMethod: (id: string) => apiFetch(`/admin/payment-methods/${id}`, { method: "DELETE" }),
+
   uploadImage: (file: File) => {
     const token = typeof window !== "undefined" ? localStorage.getItem("admin_token") : null;
     const formData = new FormData();
@@ -122,6 +130,18 @@ export const adminApi = {
 };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+export interface PaymentMethod {
+  id: string;
+  title_en: string;
+  title_ar: string;
+  details_en?: string | null;
+  details_ar?: string | null;
+  image_url?: string | null;
+  is_active: boolean;
+  fields?: any[];
+  raw_fields?: any[];
+}
+
 export interface AdminUser {
   id: string;
   email: string;

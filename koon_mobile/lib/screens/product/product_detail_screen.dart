@@ -4,6 +4,7 @@ import 'package:get/get.dart' hide Trans;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../app/theme/app_colors.dart';
+import '../../app/utils/app_snackbar.dart';
 import '../../controllers/cart_controller.dart';
 import '../../controllers/compare_controller.dart';
 import '../../controllers/settings_controller.dart';
@@ -67,7 +68,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     if (_isWishlisted && _wishlistItemId != null) {
       final success = await _wishlistService.removeFromWishlist(_wishlistItemId!);
       if (success) {
-        Get.snackbar('Wishlist', 'Removed from Wishlist'.tr(), snackPosition: SnackPosition.BOTTOM);
+        AppSnackbar.info(context, 'removed_from_wishlist'.tr(), icon: Icons.favorite_border_rounded);
         _isWishlisted = false;
         _wishlistItemId = null;
       }
@@ -82,7 +83,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         source: 'internal',
       );
       if (res != null) {
-        Get.snackbar('Wishlist', 'Added to Wishlist'.tr(), snackPosition: SnackPosition.BOTTOM);
+        AppSnackbar.success(context, 'added_to_wishlist'.tr());
         _isWishlisted = true;
         _wishlistItemId = res['id'];
       }
@@ -92,13 +93,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   Future<void> _addToCart() async {
     if (!_authController.isLoggedIn.value) {
-      Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
-      return;
+      final loginRes = await Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+      if (loginRes != true) return;
     }
 
     final images = widget.product['images'] as List? ?? [];
     final imageUrl = images.isNotEmpty ? images[0] : '';
-    final success = await _cartController.addToCart(
+    final result = await _cartController.addToCart(
       cartType: 'internal',
       productId: widget.product['id'],
       title: widget.product['title'],
@@ -106,14 +107,17 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       imageUrl: imageUrl,
     );
 
-    if (success) {
-      Get.snackbar(
-        'Cart',
-        'Added to your cart!'.tr(),
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: AppColors.success,
-        colorText: Colors.white,
-      );
+    if (result == AddToCartStatus.success) {
+      AppSnackbar.success(context, 'added_to_cart'.tr());
+    } else if (result == AddToCartStatus.unauthorized) {
+      if (mounted) {
+        final loginRes = await Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+        if (loginRes == true) {
+          _addToCart();
+        }
+      }
+    } else {
+      AppSnackbar.error(context, 'error_occurred'.tr());
     }
   }
 

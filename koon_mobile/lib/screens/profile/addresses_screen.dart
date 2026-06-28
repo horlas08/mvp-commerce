@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../app/theme/app_colors.dart';
+import '../../app/utils/app_snackbar.dart';
 import '../../services/address_service.dart';
 
 class AddressesScreen extends StatefulWidget {
@@ -34,7 +35,7 @@ class _AddressesScreenState extends State<AddressesScreen> {
   Future<void> _deleteAddress(String id) async {
     final success = await _addressService.deleteAddress(id);
     if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Address deleted'.tr())));
+      AppSnackbar.success(context, 'address_deleted'.tr());
       _loadAddresses();
     }
   }
