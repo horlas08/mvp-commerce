@@ -86,6 +86,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             Expanded(
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 300),
+                alignment: Alignment.topCenter,
                 transitionBuilder: (child, animation) => FadeTransition(
                   opacity: animation,
                   child: SlideTransition(
@@ -188,7 +189,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   children: [
                     Row(
                       children: [
-                        if (index > 0)
+                        if (index == 0)
+                          const Expanded(child: SizedBox())
+                        else
                           Expanded(
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 300),
@@ -218,7 +221,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             boxShadow: isActive
                                 ? [
                                     BoxShadow(
-                                      color: AppColors.primary.withOpacity(0.35),
+                                      color: AppColors.primary.withValues(alpha: 0.35),
                                       blurRadius: 10,
                                       offset: const Offset(0, 3),
                                     )
@@ -241,7 +244,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                   ),
                           ),
                         ),
-                        if (index < _stepKeys.length - 1)
+                        if (index == _stepKeys.length - 1)
+                          const Expanded(child: SizedBox())
+                        else
                           Expanded(
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 300),

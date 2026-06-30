@@ -368,24 +368,40 @@ SITE_CONFIGS: Dict[str, ScraperConfig] = {
         name="iHerb",
         domain="iherb.com",
         hide_selectors=[
+            # --- Add to cart / buy buttons ---
             "button.add-to-cart",
             "#add-to-cart-button",
             ".add-to-cart",
             "button[data-testid='add-to-cart-button']",
             ".buy-now-button",
             ".buy-now",
+            # --- Cart icon in header ---
             "a[href*='/cart']",
             ".cart-icon",
             "#header-cart-icon",
+            "[class*='cart-icon']",
+            "[class*='CartIcon']",
+            # --- Purchasing options block (we use our own bottom sheet) ---
+            "#purchasing-options",
+            ".css-3bhoru-ProductPurchasingOptions",
+            "[class*='ProductPurchasingOptions']",
+            # --- App-download banners ---
+            "[class*='smartBanner']",
+            "[class*='app-banner']",
         ],
-        title_selector="h1#name, .product-name, h1",
+        title_selector="h1[data-testid='product-title'], h1#name, .product-name, h1",
         price_selectors=[
+            # iHerb uses emotion-css generated class names with fixed fragments.
+            # StrikeThroughPrice = the sale price shown in red.
+            "[class*='StrikeThroughPrice']",
+            "[class*='sale-price']",
             "#price",
-            ".price",
             "[itemprop='price']",
-            ".product-price",
+            ".price",
+            "[class*='product-price']",
         ],
         image_selectors=[
+            "img[data-testid='product-image']",
             "#product-image",
             ".product-image img",
             "img[itemprop='image']",

@@ -568,6 +568,67 @@ class _WebViewScreenState extends State<WebViewScreen> {
             }
           } catch(e) {}
 
+          // ── Source 5: iHerb product grouping (pack size / flavor with navigation) ────
+          try {
+            const isIherb = window.location.hostname.includes('iherb.');
+            if (isIherb) {
+              const groupingHeader = document.querySelector('[data-testid="product-grouping-header"]');
+              const groupName = groupingHeader
+                ? groupingHeader.textContent.replace(/[::\u202f]/g, '').trim()
+                : 'الخيار';
+              const groupItems = document.querySelectorAll('[class*="groupingitem-"]');
+              if (groupItems.length > 0) {
+                hasVariants = true;
+                const opts = [];
+                const groupingData = []; // [{label, url, image, price, selected}]
+                let selectedVal = '';
+                const currentHref = window.location.href;
+                const currentPath = window.location.pathname;
+                groupItems.forEach(item => {
+                  const link = item.querySelector('a');
+                  const labelEl = item.querySelector('p');
+                  const label = labelEl ? labelEl.textContent.trim() : '';
+                  if (!label) return;
+                  if (opts.indexOf(label) === -1) opts.push(label);
+                  // href for navigation
+                  const href = link ? (link.getAttribute('href') || '') : '';
+                  const fullUrl = href.startsWith('http') ? href
+                    : (href ? (window.location.origin + href.split('#')[0]) : '');
+                  // Thumbnail image inside the grouping item (for flavor/form products)
+                  const thumbImg = item.querySelector('img');
+                  const thumbSrc = thumbImg ? (thumbImg.src || thumbImg.getAttribute('data-src') || '') : '';
+                  // Price (secondary LineThroughPrice or any price span)
+                  const priceSpan = item.querySelector('[class*="LineThroughPrice"], [class*="StrikeThroughPrice"]');
+                  const priceText = priceSpan ? priceSpan.textContent.trim() : '';
+                  // Is this the currently viewed product?
+                  const idMatch = item.className.match(/groupingitem-(\d+)/);
+                  const isCurrent = idMatch && (currentHref.includes('/' + idMatch[1]) || currentPath.includes('/' + idMatch[1]));
+                  if (isCurrent) selectedVal = label;
+                  groupingData.push({ label, url: fullUrl, image: thumbSrc, price: priceText, selected: !!isCurrent });
+                  if (thumbSrc && label) variantImages[label] = thumbSrc;
+                });
+                // Fallback: use data-testid selected text
+                if (!selectedVal) {
+                  const selectedText = document.querySelector('[data-testid="product-attribute-selected-text"]');
+                  if (selectedText) {
+                    const stxt = selectedText.textContent.trim();
+                    if (opts.includes(stxt)) {
+                      selectedVal = stxt;
+                      const gd = groupingData.find(g => g.label === stxt);
+                      if (gd) gd.selected = true;
+                    }
+                  }
+                }
+                if (!selectedVal && opts.length === 1) { selectedVal = opts[0]; }
+                if (!selectedVal && opts.length > 1) requiresSelection = true;
+                if (groupName) upsertSelection(selections, { name: groupName, value: selectedVal, options: opts });
+                // Attach full grouping data so Dart can navigate on selection
+                if (typeof window.__koonIherbGrouping === 'undefined') window.__koonIherbGrouping = {};
+                window.__koonIherbGrouping = { name: groupName, items: groupingData, selected: selectedVal };
+              }
+            }
+          } catch(e) {}
+
           const finalSelections = finalizeSelections(selections);
           if (finalSelections.length) hasVariants = true;
           finalSelections.forEach(s => {
@@ -711,6 +772,34 @@ class _WebViewScreenState extends State<WebViewScreen> {
               } catch(e) {}
             }
 
+            // ── Priority 2.5: iHerb-specific price extraction ────────────────
+            const isIherbHost = window.location.hostname.includes('iherb.');
+            if (isIherbHost && !priceNum) {
+              // iHerb uses emotion-css dynamic class names. We target by class-fragment.
+              // StrikeThroughPrice = the sale / current price (red text)
+              const iherbPriceEl = document.querySelector(
+                '[class*="StrikeThroughPrice"], #price, [itemprop="price"]'
+              );
+              if (iherbPriceEl) {
+                const raw = iherbPriceEl.getAttribute('content') || iherbPriceEl.textContent || '';
+                const cleaned = raw.replace(/[^\\d.,]/g, ' ');
+                const m = cleaned.match(/\\d+(?:[.,]\\d+)?/);
+                if (m) { priceNum = m[0].replace(',', '.'); currency = 'SAR'; }
+              }
+              // Fallback: any element showing "X ر.س" format
+              if (!priceNum) {
+                const allText = document.querySelectorAll('span, bdi, p');
+                for (const el of allText) {
+                  const t = el.textContent.trim();
+                  if (t.includes('ر.س') || t.includes('SAR')) {
+                    const cleaned = t.replace(/[^\\d.,]/g, ' ');
+                    const m = cleaned.match(/\\d+(?:[.,]\\d+)?/);
+                    if (m && parseFloat(m[0]) > 0) { priceNum = m[0].replace(',', '.'); currency = 'SAR'; break; }
+                  }
+                }
+              }
+            }
+
             // ── Priority 3: DOM selectors ─────────────────────────────────────
             if (!priceNum) {
               for (const selector of priceSelectors) {
@@ -824,6 +913,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
           if (panel) { panel.scrollIntoView({ behavior: 'smooth', block: 'center' }); return true; }
           return false;
         };
+        window.__koonGetIherbGrouping = function() {
+          return window.__koonIherbGrouping || null;
+        };
         if (!window._scraperIntervalId) {
           window._scraperIntervalId = setInterval(() => {
             const product = extractProduct();
@@ -862,6 +954,19 @@ class _WebViewScreenState extends State<WebViewScreen> {
     }
   }
 
+  Future<Map<String, dynamic>?> _fetchIherbGrouping() async {
+    if (_webViewController == null) return null;
+    try {
+      final raw = await _webViewController!.evaluateJavascript(
+        source: 'window.__koonGetIherbGrouping ? window.__koonGetIherbGrouping() : null',
+      );
+      if (raw == null || raw is! Map) return null;
+      return Map<String, dynamic>.from(raw);
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> _openNativeSkuPicker() async {
     await _webViewController?.evaluateJavascript(source: 'window.__koonOpenSkuPicker && window.__koonOpenSkuPicker()');
   }
@@ -895,14 +1000,68 @@ class _WebViewScreenState extends State<WebViewScreen> {
     }
 
     final requiresSelection = product['requires_selection'] == true;
-    final selections = _parseSelections(product['selections']);
+    List<Map<String, dynamic>> selections = _parseSelections(product['selections']);
 
     Map<String, String>? chosen;
     final minQty = (product['min_quantity'] is num) ? (product['min_quantity'] as num).toInt() : 1;
     final pageQty = (product['selected_quantity'] is num) ? (product['selected_quantity'] as num).toInt() : 0;
     int quantity = pageQty > 0 ? pageQty : minQty;
 
-    if (requiresSelection ||
+    // iHerb: fetch navigation-based grouping (each variant = separate product URL).
+    // Inject grouping options into the standard selections list so the same
+    // _ProductSelectionSheet design is used — quantity selector and all.
+    final isIherb = _cartTypeForSite() == 'iherb';
+    // urlMap: option label → iHerb product URL (used for navigation after confirm)
+    final Map<String, String> iherbUrlMap = {};
+
+    if (isIherb) {
+      final grouping = await _fetchIherbGrouping();
+      final rawItems = grouping?['items'];
+      final groupItems = (rawItems is List)
+          ? rawItems.map((e) => Map<String, dynamic>.from(e as Map)).toList()
+          : <Map<String, dynamic>>[];
+
+      if (groupItems.isNotEmpty) {
+        final groupName = (grouping?['name'] ?? '').toString();
+        final currentSelected = (grouping?['selected'] ?? '').toString();
+        final opts = <String>[];
+
+        // Build variant images map from grouping thumbnails
+        final Map<String, String> groupVariantImages =
+            Map<String, String>.from(product['variant_images'] ?? {});
+
+        for (final item in groupItems) {
+          final label = (item['label'] ?? '').toString();
+          final url = (item['url'] ?? '').toString();
+          final img = (item['image'] ?? '').toString();
+          if (label.isEmpty) continue;
+          opts.add(label);
+          if (url.isNotEmpty) iherbUrlMap[label] = url;
+          if (img.isNotEmpty && img.startsWith('http')) {
+            groupVariantImages[label] = img;
+          }
+        }
+
+        if (opts.isNotEmpty) {
+          // Inject into selections — remove any existing grouping entry first
+          selections = selections.where((s) {
+            final n = (s['name'] ?? '').toString();
+            return n != groupName;
+          }).toList();
+          selections.insert(0, {
+            'name': groupName.isNotEmpty ? groupName : 'الخيار',
+            'value': currentSelected,
+            'options': opts,
+          });
+          // Patch variant images back into product so the sheet can show thumbnails
+          product['variant_images'] = groupVariantImages;
+        }
+      }
+    }
+
+    // Always show the sheet for iHerb (or whenever there are real options / qty>1)
+    if (isIherb ||
+        requiresSelection ||
         quantity > 1 ||
         selections.any((s) {
           final opts = s['options'];
@@ -924,6 +1083,20 @@ class _WebViewScreenState extends State<WebViewScreen> {
       if (result == null) return;
       chosen = Map<String, String>.from(result['selections'] as Map? ?? {});
       quantity = (result['quantity'] as num?)?.toInt() ?? quantity;
+
+      // iHerb: if user picked a different pack/flavor option, navigate first
+      if (isIherb && iherbUrlMap.isNotEmpty) {
+        for (final entry in chosen.entries) {
+          final targetUrl = iherbUrlMap[entry.value];
+          if (targetUrl != null && targetUrl.isNotEmpty &&
+              !(_currentUrl.contains(targetUrl) || targetUrl.contains(_currentUrl))) {
+            _webViewController?.loadUrl(urlRequest: URLRequest(url: WebUri(targetUrl)));
+            // Navigation started — the product bar will update on page load.
+            // Don't add to cart for the old product; let the user tap again.
+            return;
+          }
+        }
+      }
     }
 
     final finalTitle = _buildExternalTitle(product, chosen ?? _selectionsToMap(selections));
@@ -1136,6 +1309,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
         lc.contains('-p-') ||
         lc.contains('/goods-') ||
         lc.contains('/pd-') ||
+        lc.contains('/pr/') || // iHerb product URL pattern
         lc.contains('product') ||
         lc.contains('item');
     final String pageType = isDetail ? 'details' : 'home';
@@ -2338,6 +2512,336 @@ class _ProductSelectionSheetState extends State<_ProductSelectionSheet> {
         borderRadius: BorderRadius.circular(12),
       ),
       child: Icon(Icons.shopping_bag_outlined, color: AppColors.textHint, size: 28),
+    );
+  }
+}
+
+// ── iHerb Grouping Sheet ───────────────────────────────────────────────────
+// Shows pack-size / flavor options scraped from iHerb's product-grouping UI.
+// Each option has a URL; tapping it navigates the webview and closes the sheet.
+class _IherbGroupingSheet extends StatefulWidget {
+  final Map<String, dynamic> product;
+  final String groupingName;
+  final List<Map<String, dynamic>> groupItems;
+  final String action;
+  final void Function(String url) onNavigate;
+
+  const _IherbGroupingSheet({
+    required this.product,
+    required this.groupingName,
+    required this.groupItems,
+    required this.action,
+    required this.onNavigate,
+  });
+
+  @override
+  State<_IherbGroupingSheet> createState() => _IherbGroupingSheetState();
+}
+
+class _IherbGroupingSheetState extends State<_IherbGroupingSheet> {
+  late int _selectedIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    // Default to whichever item is marked selected (current URL)
+    _selectedIndex = widget.groupItems.indexWhere((g) => g['selected'] == true);
+    if (_selectedIndex < 0) _selectedIndex = 0;
+  }
+
+  bool get _hasImages => widget.groupItems.any((g) {
+    final img = (g['image'] ?? '').toString();
+    return img.isNotEmpty && img.startsWith('http');
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isCart = widget.action == 'cart';
+    final productImg = (widget.product['image_url'] ?? '').toString();
+    final productTitle = (widget.product['title'] ?? '').toString();
+    final productPrice = (widget.product['price'] ?? '').toString();
+    final selectedItem = widget.groupItems[_selectedIndex];
+    final selectedLabel = (selectedItem['label'] ?? '').toString();
+    final selectedUrl = (selectedItem['url'] ?? '').toString();
+    final selectedImg = (selectedItem['image'] ?? '').toString();
+    final displayImg = (selectedImg.isNotEmpty && selectedImg.startsWith('http'))
+        ? selectedImg
+        : productImg;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Drag handle
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 14),
+                decoration: BoxDecoration(
+                  color: AppColors.divider,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            ),
+            // Product header
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  child: ClipRRect(
+                    key: ValueKey(displayImg),
+                    borderRadius: BorderRadius.circular(12),
+                    child: displayImg.isNotEmpty
+                        ? Image.network(
+                            displayImg,
+                            width: 72,
+                            height: 72,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => _placeholder(),
+                          )
+                        : _placeholder(),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'confirm_product_options'.tr(),
+                        style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        productTitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        productPrice,
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            // Grouping name
+            Text(
+              widget.groupingName.isNotEmpty ? widget.groupingName : 'الخيارات المتاحة',
+              style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 13),
+            ),
+            const SizedBox(height: 10),
+            // Options grid
+            Flexible(
+              child: SingleChildScrollView(
+                child: _hasImages
+                    ? _buildImageGrid()
+                    : _buildTextChips(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            // Confirm + Navigate row
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text('cancel'.tr()),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  flex: 2,
+                  child: ElevatedButton.icon(
+                    onPressed: selectedUrl.isNotEmpty
+                        ? () {
+                            widget.onNavigate(selectedUrl);
+                            Navigator.pop(context, true);
+                          }
+                        : null,
+                    icon: Icon(isCart ? Icons.add_shopping_cart : Icons.favorite, size: 18),
+                    label: Text(
+                      selectedLabel.isNotEmpty
+                          ? (isCart ? 'add_to_cart'.tr() : 'add_to_wishlist'.tr())
+                          : 'select_options_hint'.tr(),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isCart ? AppColors.primary : AppColors.error,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImageGrid() {
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: List.generate(widget.groupItems.length, (i) {
+        final item = widget.groupItems[i];
+        final label = (item['label'] ?? '').toString();
+        final img = (item['image'] ?? '').toString();
+        final price = (item['price'] ?? '').toString();
+        final selected = i == _selectedIndex;
+        return GestureDetector(
+          onTap: () => setState(() => _selectedIndex = i),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            width: 90,
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: selected ? AppColors.primarySurface : AppColors.surfaceVariant,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: selected ? AppColors.primary : AppColors.divider,
+                width: selected ? 2 : 1,
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: (img.isNotEmpty && img.startsWith('http'))
+                      ? Image.network(
+                          img,
+                          width: 60,
+                          height: 60,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            width: 60, height: 60,
+                            color: AppColors.surfaceVariant,
+                            child: Icon(Icons.inventory_2_outlined,
+                                size: 24, color: AppColors.textHint),
+                          ),
+                        )
+                      : Container(
+                          width: 60, height: 60,
+                          color: AppColors.surfaceVariant,
+                          child: Icon(Icons.inventory_2_outlined,
+                              size: 24, color: AppColors.textHint),
+                        ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    color: selected ? AppColors.primary : AppColors.textPrimary,
+                  ),
+                ),
+                if (price.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    price,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                      fontSize: 10,
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      }),
+    );
+  }
+
+  Widget _buildTextChips() {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: List.generate(widget.groupItems.length, (i) {
+        final item = widget.groupItems[i];
+        final label = (item['label'] ?? '').toString();
+        final price = (item['price'] ?? '').toString();
+        final selected = i == _selectedIndex;
+        return GestureDetector(
+          onTap: () => setState(() => _selectedIndex = i),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: selected ? AppColors.primarySurface : AppColors.surfaceVariant,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: selected ? AppColors.primary : AppColors.divider,
+                width: selected ? 2 : 1,
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    color: selected ? AppColors.primary : AppColors.textPrimary,
+                  ),
+                ),
+                if (price.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    price,
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      }),
+    );
+  }
+
+  Widget _placeholder() {
+    return Container(
+      width: 72,
+      height: 72,
+      decoration: BoxDecoration(
+        color: AppColors.surfaceVariant,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Icon(Icons.local_pharmacy_outlined, color: AppColors.textHint, size: 28),
     );
   }
 }
