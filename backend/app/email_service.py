@@ -273,3 +273,26 @@ async def send_password_reset_email(to_email: str, name: str, code: str) -> None
         subject=f"[{APP_NAME}] Password Reset Code: {code}",
         html_body=html,
     )
+
+
+async def send_admin_support_alert(ticket_title: str, ticket_description: str, username: str, user_email: str, is_new: bool = True) -> None:
+    """Notify the admin of a new support ticket or customer reply."""
+    action_text = "New Support Ticket Created" if is_new else "New Reply on Support Ticket"
+    subject = f"[{APP_NAME}] {action_text}: {ticket_title}"
+    body = f"""
+    <h2>{action_text}</h2>
+    <p><strong>User:</strong> {username} ({user_email})</p>
+    <p><strong>Title:</strong> {ticket_title}</p>
+    <p><strong>Message / Description:</strong></p>
+    <blockquote style="border-left:4px solid #FF6B00; padding:12px 24px; color:#555; background:#f9f9f9; margin:16px 0;">
+      {ticket_description}
+    </blockquote>
+    <p>Please log in to the admin dashboard to review and reply to this ticket.</p>
+    """
+    html = _base_template(action_text, body)
+    await send_email(
+        to=ADMIN_EMAIL,
+        subject=subject,
+        html_body=html,
+    )
+

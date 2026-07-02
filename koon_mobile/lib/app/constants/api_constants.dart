@@ -78,4 +78,14 @@ class ApiConstants {
   static String get paymentMethods => '$baseUrl/payment-methods';
   static String get walletBalance => '$baseUrl/wallet/balance';
   static String get placeOrder => '$baseUrl/orders/place';
+
+  // Support
+  static String get supportTickets => '$baseUrl/support/tickets';
+  static String get supportUnread => '$baseUrl/support/unread-count';
+  static String supportMessages(int ticketId) => '$baseUrl/support/tickets/$ticketId/messages';
+
+  // Notifications
+  static String get notifications => '$baseUrl/notifications';
+  static String get notificationsUnread => '$baseUrl/notifications/unread-count';
+  static String notificationRead(int id) => '$baseUrl/notifications/$id/read';
 }

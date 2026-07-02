@@ -313,6 +313,17 @@ async def update_order_status(
         order.status = OrderStatus(req.status)
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Invalid status: {req.status}")
+    
+    # Create notification for user
+    from app.models.notification import Notification
+    notif = Notification(
+        user_id=order.user_id,
+        title="Order Status Updated",
+        message=f"Your order #{order.id} status has been updated to {order.status.value}.",
+        type="order_status"
+    )
+    db.add(notif)
+    
     await db.commit()
     return {"message": "Status updated", "status": order.status.value}
 

@@ -12,6 +12,9 @@ import '../../controllers/settings_controller.dart';
 import '../search/search_screen.dart';
 import '../webview/webview_screen.dart';
 import '../product/product_detail_screen.dart';
+import '../../controllers/support_controller.dart';
+import '../support/support_list_screen.dart';
+import '../support/notification_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -23,6 +26,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final HomeController _homeController = Get.find<HomeController>();
   final SettingsController _settingsController = Get.find<SettingsController>();
+  final SupportController _supportController = Get.find<SupportController>();
   int _bannerIndex = 0;
 
   final List<Map<String, dynamic>> _externalStores = [
@@ -41,7 +45,10 @@ class _HomeScreenState extends State<HomeScreen> {
       body: SafeArea(
         child: RefreshIndicator(
           color: AppColors.primary,
-          onRefresh: () => _homeController.refresh(lang: lang),
+          onRefresh: () async {
+            await _homeController.refresh(lang: lang);
+            await _supportController.refreshCounts();
+          },
           child: CustomScrollView(
             slivers: [
               // App Bar
@@ -64,11 +71,28 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(width: 10),
                       Text('Koon', style: GoogleFonts.poppins(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
                       const Spacer(),
-                      _buildHeaderIcon(Icons.headset_mic_outlined),
+                      _buildHeaderIcon(
+                        Icons.headset_mic_outlined,
+                        () => _showNewTicketBottomSheet(context),
+                      ),
                       const SizedBox(width: 4),
-                      _buildHeaderIcon(Icons.chat_bubble_outline),
+                      Obx(() => _buildHeaderIcon(
+                            Icons.chat_bubble_outline,
+                            () => Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const SupportListScreen()),
+                            ),
+                            badgeCount: _supportController.unreadSupportCount.value,
+                          )),
                       const SizedBox(width: 4),
-                      _buildHeaderIcon(Icons.notifications_none_outlined),
+                      Obx(() => _buildHeaderIcon(
+                            Icons.notifications_none_outlined,
+                            () => Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const NotificationScreen()),
+                            ),
+                            badgeCount: _supportController.unreadNotificationCount.value,
+                          )),
                     ],
                   ),
                 ).animate().fadeIn(duration: 400.ms),
@@ -374,14 +398,175 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildHeaderIcon(IconData icon) {
-    return Container(
-      width: 40, height: 40,
-      decoration: BoxDecoration(
-        color: AppColors.surfaceVariant,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Icon(icon, size: 20, color: AppColors.textSecondary),
+  Widget _buildHeaderIcon(IconData icon, VoidCallback onTap, {int badgeCount = 0}) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        GestureDetector(
+          onTap: onTap,
+          child: Container(
+            width: 40, height: 40,
+            decoration: BoxDecoration(
+              color: AppColors.surfaceVariant,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, size: 20, color: AppColors.textSecondary),
+          ),
+        ),
+        if (badgeCount > 0)
+          Positioned(
+            right: -2,
+            top: -2,
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: const BoxDecoration(
+                color: AppColors.error,
+                shape: BoxShape.circle,
+              ),
+              constraints: const BoxConstraints(
+                minWidth: 16,
+                minHeight: 16,
+              ),
+              child: Center(
+                child: Text(
+                  badgeCount > 9 ? '9+' : '$badgeCount',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 8,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  void _showNewTicketBottomSheet(BuildContext context) {
+    final titleController = TextEditingController();
+    final descController = TextEditingController();
+    final isSubmitting = false.obs;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+            left: 20,
+            right: 20,
+            top: 20,
+          ),
+          decoration: const BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.divider,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  'new_support_ticket'.tr(),
+                  style: GoogleFonts.inter(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                TextField(
+                  controller: titleController,
+                  decoration: InputDecoration(
+                    labelText: 'ticket_title'.tr(),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: descController,
+                  maxLines: 4,
+                  decoration: InputDecoration(
+                    labelText: 'ticket_description'.tr(),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Obx(() => ElevatedButton(
+                      onPressed: isSubmitting.value
+                          ? null
+                          : () async {
+                              final title = titleController.text.trim();
+                              final desc = descController.text.trim();
+                              if (title.isEmpty || desc.isEmpty) {
+                                Get.snackbar(
+                                  'error'.tr(),
+                                  'please_fill_all_fields'.tr(),
+                                  snackPosition: SnackPosition.BOTTOM,
+                                );
+                                return;
+                              }
+                              isSubmitting.value = true;
+                              final success = await _supportController.createTicket(title, desc);
+                              isSubmitting.value = false;
+                              if (success) {
+                                Navigator.pop(context);
+                                Get.snackbar(
+                                  'success'.tr(),
+                                  'ticket_created_success'.tr(),
+                                  snackPosition: SnackPosition.BOTTOM,
+                                );
+                              } else {
+                                Get.snackbar(
+                                  'error'.tr(),
+                                  'failed_to_create_ticket'.tr(),
+                                  snackPosition: SnackPosition.BOTTOM,
+                                );
+                              }
+                            },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: isSubmitting.value
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : Text('submit'.tr()),
+                    )),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 

@@ -112,6 +112,18 @@ async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=403, detail="Account is deactivated")
 
     code = user.verification_code if not user.is_verified else None
+    
+    # Create new login notification
+    from app.models.notification import Notification
+    login_notif = Notification(
+        user_id=user.id,
+        title="New Login Detected",
+        message="A new login was detected on your account.",
+        type="new_login"
+    )
+    db.add(login_notif)
+    await db.commit()
+
     access_token = create_access_token({"sub": user.id})
     refresh_token = create_refresh_token({"sub": user.id})
     return AuthResponse(
@@ -164,6 +176,17 @@ async def google_auth(req: GoogleAuthRequest, db: AsyncSession = Depends(get_db)
         db.add(user)
         await db.commit()
         await db.refresh(user)
+
+    # Create new login notification
+    from app.models.notification import Notification
+    login_notif = Notification(
+        user_id=user.id,
+        title="New Login Detected (Google)",
+        message="A new login via Google was detected on your account.",
+        type="new_login"
+    )
+    db.add(login_notif)
+    await db.commit()
 
     access_token = create_access_token({"sub": user.id})
     refresh_token = create_refresh_token({"sub": user.id})

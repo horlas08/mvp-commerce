@@ -54,6 +54,7 @@ export const translations = {
     signOut: "Sign Out",
     commercePlatform: "Commerce Platform",
     adminBadge: "Admin",
+    support: "Customer Support",
 
     // Dashboard Page
     totalUsers: "Total Users",
@@ -221,6 +222,7 @@ export const translations = {
     signOut: "تسجيل الخروج",
     commercePlatform: "منصة التجارة",
     adminBadge: "مشرف",
+    support: "الدعم الفني",
 
     // Dashboard Page
     totalUsers: "إجمالي المستخدمين",

@@ -11,10 +11,13 @@ from app.models.refund import RefundRequest, RefundStatus
 from app.models.banner import Banner
 from app.models.location import State, City
 from app.models.payment_method import PaymentMethod
+from app.models.support import SupportTicket, SupportMessage
+from app.models.notification import Notification
 
 __all__ = [
     "User", "Product", "Category", "CartItem", "CartType",
     "Order", "OrderItem", "OrderStatus", "Address", "WishlistItem",
     "Coupon", "Seller", "RefundRequest", "RefundStatus", "Banner",
-    "State", "City", "PaymentMethod",
+    "State", "City", "PaymentMethod", "SupportTicket", "SupportMessage",
+    "Notification",
 ]

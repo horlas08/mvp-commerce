@@ -127,6 +127,26 @@ export const adminApi = {
       return res.json() as Promise<{ image_url: string }>;
     });
   },
+
+  // Support
+  listSupportTickets: (status?: string) => {
+    const q = new URLSearchParams();
+    if (status) q.set("status", status);
+    return apiFetch<SupportTicket[]>(`/support/admin/tickets?${q}`);
+  },
+  getSupportMessages: (ticketId: number) =>
+    apiFetch<SupportMessage[]>(`/support/tickets/${ticketId}/messages`),
+  sendSupportReply: (ticketId: number, message: string) =>
+    apiFetch<SupportMessage>(`/support/tickets/${ticketId}/messages`, {
+      method: "POST",
+      body: JSON.stringify({ message }),
+    }),
+  closeSupportTicket: (ticketId: number) =>
+    apiFetch<SupportTicket>(`/support/admin/tickets/${ticketId}/close`, {
+      method: "POST",
+    }),
+  getSupportUnreadCount: () =>
+    apiFetch<{ count: number }>("/support/admin/unread-count"),
 };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -247,3 +267,27 @@ export interface City {
 export interface PaginatedUsers { users: AdminUser[]; total: number; page: number; limit: number; }
 export interface PaginatedProducts { products: Product[]; total: number; page: number; limit: number; }
 export interface PaginatedOrders { orders: Order[]; total: number; page: number; limit: number; }
+
+export interface SupportTicket {
+  id: number;
+  user_id: string;
+  title: string;
+  description: string;
+  status: "open" | "pending" | "closed";
+  user_unread: boolean;
+  admin_unread: boolean;
+  created_at: string;
+  updated_at: string;
+  user?: {
+    name: string;
+    email: string;
+  };
+}
+
+export interface SupportMessage {
+  id: number;
+  ticket_id: number;
+  sender: "user" | "admin";
+  message: string;
+  created_at: string;
+}

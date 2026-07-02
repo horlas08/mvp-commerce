@@ -632,3 +632,120 @@ def test_wallet_endpoints():
     assert response.status_code == 200
     assert response.json()["balance"] == 50.0
 
+
+def test_support_and_notifications():
+    # 1. Register user
+    email = "support_user@koon.com"
+    client.post("/api/v1/auth/register", json={
+        "email": email,
+        "password": "password123",
+        "name": "Support User",
+    })
+    
+    # 2. Login user
+    response = client.post("/api/v1/auth/login", json={
+        "email": email,
+        "password": "password123",
+    })
+    assert response.status_code == 200
+    token = response.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 3. Verify notification feed has at least 1 entry (new login)
+    response = client.get("/api/v1/notifications", headers=headers)
+    assert response.status_code == 200
+    notifs = response.json()
+    assert len(notifs) >= 1
+    assert notifs[0]["type"] == "new_login"
+    notif_id = notifs[0]["id"]
+
+    # 4. Mark notification as read
+    response = client.post(f"/api/v1/notifications/{notif_id}/read", headers=headers)
+    assert response.status_code == 200
+    
+    # Verify unread count is now 0 (or reduced)
+    response = client.get("/api/v1/notifications/unread-count", headers=headers)
+    assert response.status_code == 200
+    assert response.json()["count"] == 0
+
+    # 5. Create support ticket
+    response = client.post(
+        "/api/v1/support/tickets",
+        headers=headers,
+        json={"title": "Broken Item", "description": "My item arrived broken"}
+    )
+    assert response.status_code == 200
+    ticket = response.json()
+    assert ticket["title"] == "Broken Item"
+    assert ticket["status"] == "open"
+    ticket_id = ticket["id"]
+
+    # 6. List tickets
+    response = client.get("/api/v1/support/tickets", headers=headers)
+    assert response.status_code == 200
+    assert len(response.json()) >= 1
+
+    # 7. Get ticket messages
+    response = client.get(f"/api/v1/support/tickets/{ticket_id}/messages", headers=headers)
+    assert response.status_code == 200
+    messages = response.json()
+    assert len(messages) == 1
+    assert messages[0]["message"] == "My item arrived broken"
+
+    # 8. Send reply from user
+    response = client.post(
+        f"/api/v1/support/tickets/{ticket_id}/messages",
+        headers=headers,
+        json={"message": "Can I get a refund?"}
+    )
+    assert response.status_code == 200
+    
+    # 9. Promote a user to admin to test admin endpoints
+    admin_email = "test_admin@koon.com"
+    client.post("/api/v1/auth/register", json={
+        "email": admin_email,
+        "password": "adminpassword",
+        "name": "Test Admin",
+    })
+    
+    from app.database import async_session
+    from app.models.user import User
+    from sqlalchemy import update
+    
+    async def promote_to_admin():
+        async with async_session() as session:
+            await session.execute(
+                update(User).where(User.email == admin_email).values(role="admin")
+            )
+            await session.commit()
+            
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(promote_to_admin())
+
+    # 10. Login as admin
+    response = client.post("/api/v1/auth/login", json={
+        "email": admin_email,
+        "password": "adminpassword",
+    })
+    admin_token = response.json()["access_token"]
+    admin_headers = {"Authorization": f"Bearer {admin_token}"}
+
+    # 11. List all tickets as admin
+    response = client.get("/api/v1/support/admin/tickets", headers=admin_headers)
+    assert response.status_code == 200
+    assert len(response.json()) >= 1
+
+    # 12. Send reply from admin
+    response = client.post(
+        f"/api/v1/support/tickets/{ticket_id}/messages",
+        headers=admin_headers,
+        json={"message": "Yes, please submit a refund request"}
+    )
+    assert response.status_code == 200
+    
+    # 13. Close ticket as admin
+    response = client.post(f"/api/v1/support/admin/tickets/{ticket_id}/close", headers=admin_headers)
+    assert response.status_code == 200
+    assert response.json()["status"] == "closed"
+
+
