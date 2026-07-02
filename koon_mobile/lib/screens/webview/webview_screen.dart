@@ -232,6 +232,33 @@ class _WebViewScreenState extends State<WebViewScreen> {
             document.documentElement.style.setProperty('overflow', 'auto', 'important');
           } catch(e) {}
         }
+        function parsePriceString(text) {
+          if (!text) return "";
+          const match = text.match(/[\\d.,]+/);
+          if (!match) return "";
+          let numStr = match[0];
+          numStr = numStr.replace(/^[.,]+|[.,]+\$/g, "");
+          if (numStr.includes(',') && numStr.includes('.')) {
+            if (numStr.lastIndexOf(',') > numStr.lastIndexOf('.')) {
+              numStr = numStr.replace(/\\./g, '').replace(',', '.');
+            } else {
+              numStr = numStr.replace(/,/g, '');
+            }
+          } else if (numStr.includes(',')) {
+            const parts = numStr.split(',');
+            if (parts.length > 2 || (parts.length === 2 && parts[1].length === 3)) {
+              numStr = numStr.replace(/,/g, '');
+            } else {
+              numStr = numStr.replace(',', '.');
+            }
+          } else if (numStr.includes('.')) {
+            const parts = numStr.split('.');
+            if (parts.length > 2) {
+              numStr = numStr.replace(/\\./g, '');
+            }
+          }
+          return numStr;
+        }
         // Throttle the observer: Alibaba is a heavy SPA that mutates the DOM
         // constantly, so running hideElements() on every mutation pegs the CPU
         // and makes scrolling/loading janky. Coalesce bursts into one run.
@@ -875,9 +902,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
               );
               if (iherbPriceEl) {
                 const raw = iherbPriceEl.getAttribute('content') || iherbPriceEl.textContent || '';
-                const cleaned = raw.replace(/[^\\d.,]/g, ' ');
-                const m = cleaned.match(/\\d+(?:[.,]\\d+)?/);
-                if (m) { priceNum = m[0].replace(',', '.'); currency = 'SAR'; }
+                const pVal = parsePriceString(raw);
+                if (pVal) { priceNum = pVal; currency = 'SAR'; }
               }
               // Fallback: any element showing "X ر.س" format
               if (!priceNum) {
@@ -885,9 +911,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
                 for (const el of allText) {
                   const t = el.textContent.trim();
                   if (t.includes('ر.س') || t.includes('SAR')) {
-                    const cleaned = t.replace(/[^\\d.,]/g, ' ');
-                    const m = cleaned.match(/\\d+(?:[.,]\\d+)?/);
-                    if (m && parseFloat(m[0]) > 0) { priceNum = m[0].replace(',', '.'); currency = 'SAR'; break; }
+                    const pVal = parsePriceString(t);
+                    if (pVal && parseFloat(pVal) > 0) { priceNum = pVal; currency = 'SAR'; break; }
                   }
                 }
               }
@@ -921,10 +946,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
                     currency = currMatch[1].trim();
                   }
 
-                  // Strip non-digit/dot chars (handles \ue0e1 icon font prefix)
-                  const cleaned = text.replace(/[^\\d.,]/g, ' ');
-                  const m = cleaned.match(/\\d+(?:[.,]\\d+)?/);
-                  if (m) { priceNum = m[0].replace(',', '.'); break; }
+                  const pVal = parsePriceString(text);
+                  if (pVal) { priceNum = pVal; break; }
                 }
               }
             }
@@ -948,9 +971,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
                 if (currMatch) {
                   currency = currMatch[1].trim();
                 }
-                const cleaned = lbl.replace(/[^\\d.,]/g, ' ');
-                const m = cleaned.match(/\\d+(?:[.,]\\d+)?/);
-                if (m) priceNum = m[0].replace(',', '.');
+                const pVal = parsePriceString(lbl);
+                if (pVal) priceNum = pVal;
               }
             }
             
@@ -2667,21 +2689,40 @@ class _ProductSelectionSheetState extends State<_ProductSelectionSheet> {
     final match = RegExp(r'([0-9.,]+)').firstMatch(priceRaw);
     if (match == null) return priceRaw;
 
-    final numStr = match.group(1)!;
+    var numStr = match.group(1)!;
     if (numStr.contains('-') || priceRaw.contains('-')) {
       return priceRaw;
+    }
+
+    // Clean leading/trailing dots/commas
+    while (numStr.startsWith('.') || numStr.startsWith(',')) {
+      numStr = numStr.substring(1);
+    }
+    while (numStr.endsWith('.') || numStr.endsWith(',')) {
+      numStr = numStr.substring(0, numStr.length - 1);
     }
 
     try {
       double? val;
       if (numStr.contains(',') && numStr.contains('.')) {
-        val = double.tryParse(numStr.replaceAll(',', ''));
+        if (numStr.lastIndexOf(',') > numStr.lastIndexOf('.')) {
+          val = double.tryParse(numStr.replaceAll('.', '').replaceAll(',', '.'));
+        } else {
+          val = double.tryParse(numStr.replaceAll(',', ''));
+        }
       } else if (numStr.contains(',')) {
         final parts = numStr.split(',');
-        if (parts.last.length == 3) {
+        if (parts.length > 2 || (parts.length == 2 && parts.last.length == 3)) {
           val = double.tryParse(numStr.replaceAll(',', ''));
         } else {
           val = double.tryParse(numStr.replaceAll(',', '.'));
+        }
+      } else if (numStr.contains('.')) {
+        final parts = numStr.split('.');
+        if (parts.length > 2) {
+          val = double.tryParse(numStr.replaceAll('.', ''));
+        } else {
+          val = double.tryParse(numStr);
         }
       } else {
         val = double.tryParse(numStr);
