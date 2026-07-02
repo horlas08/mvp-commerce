@@ -1,6 +1,31 @@
-# Backend VPS Deployment Guide
+# Backend & Admin VPS Deployment Guide
 
-This guide covers deploying the FastAPI backend on a Linux VPS. It includes configuring a production server runner (Gunicorn + Uvicorn), managing the process (via either PM2 or Systemd), setting up Nginx as a reverse proxy, and securing it with SSL.
+This guide covers deploying both the FastAPI backend and the Next.js admin panel on a Linux VPS. 
+
+---
+
+## ⚡ Quick Start: Automated Deployment (Recommended)
+
+If you are using a fresh Ubuntu/Debian VPS with nothing installed, we have provided an automated deployment script in the project root:
+
+1. **Clone the code to your VPS** (usually in `/var/www/koon`):
+   ```bash
+   cd /var/www
+   git clone <your-repo-url> koon
+   cd koon
+   ```
+2. **Run the deployment script:**
+   ```bash
+   sudo ./deploy.sh
+   ```
+3. **Follow the prompts** to enter your domains (e.g. `api.yourdomain.com` and `admin.yourdomain.com`). 
+4. The script will automatically install Node.js, Python, Nginx, Certbot, PNPM, and PM2, compile the code, configure Nginx reverse proxies, and start both applications inside PM2.
+
+---
+
+## Manual Deployment Guide
+
+If you prefer to configure components manually, follow the sections below.
 
 ---
 

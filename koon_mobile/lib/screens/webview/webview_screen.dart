@@ -1771,6 +1771,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
   }
 
   void _openAppCart() {
+    try {
+      final cartController = Get.find<CartController>();
+      cartController.selectedCartType.value = _cartTypeForSite();
+    } catch (_) {}
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const CartScreen(showBackButton: true)),
