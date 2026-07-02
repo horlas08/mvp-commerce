@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -34,7 +35,9 @@ class WebViewScreen extends StatefulWidget {
       final uri = Uri.parse(url);
       final host = uri.host.toLowerCase();
       final cookieManager = CookieManager.instance();
-      final expiresDate = DateTime.now().add(const Duration(days: 365)).millisecondsSinceEpoch;
+      final expiresDate = DateTime.now()
+          .add(const Duration(days: 365))
+          .millisecondsSinceEpoch;
 
       if (host.contains('alibaba.com')) {
         await cookieManager.setCookie(
@@ -53,11 +56,19 @@ class WebViewScreen extends StatefulWidget {
           expiresDate: expiresDate,
           isSecure: true,
         );
+        await cookieManager.setCookie(
+          url: WebUri(url),
+          name: "sc_g_cfg_f",
+          value: "sc_b_currency=SAR&sc_b_locale=ar_SA&sc_b_site=SA",
+          domain: ".alibaba.com",
+          expiresDate: expiresDate,
+          isSecure: true,
+        );
       } else if (host.contains('aliexpress.com')) {
         await cookieManager.setCookie(
           url: WebUri(url),
           name: "aep_usuc_f",
-          value: "site=glo&c_tp=SAR&region=SA&b_locale=en_US",
+          value: "site=glo&c_tp=SAR&region=SA&b_locale=ar_SA",
           domain: ".aliexpress.com",
           expiresDate: expiresDate,
           isSecure: true,
@@ -66,7 +77,8 @@ class WebViewScreen extends StatefulWidget {
         await cookieManager.setCookie(
           url: WebUri(url),
           name: "iher-pref1",
-          value: "accsave=0&city=S1NBUklZ&ifv=1&lan=ar-SA&lchg=1&sccode=SA&scurcode=SAR&storeid=0&wp=2&zct=1782664399666",
+          value:
+              "accsave=0&city=S1NBUklZ&ifv=1&lan=ar-SA&lchg=1&sccode=SA&scurcode=SAR&storeid=0&wp=2&zct=1782664399666",
           domain: ".iherb.com",
           expiresDate: expiresDate,
           isSecure: true,
@@ -167,13 +179,35 @@ class _WebViewScreenState extends State<WebViewScreen> {
     _lastInjectAt = now;
 
     final hideSelectors = List<String>.from(_currentConfig!['hide_selectors']);
+    final urlLower = _currentUrl.toLowerCase();
+    if (urlLower.contains('aliexpress.com') ||
+        urlLower.contains('aliexpress.ru')) {
+      final fallbacks = [
+        '#footer-bar',
+        '.footer-bar',
+        "[class*='footer-bar']",
+        "[class*='footerBar']",
+        "[id*='footer-bar']",
+        "[id*='footerBar']",
+        '#action-bar',
+        '.action-bar',
+        "[class*='action-bar']",
+        "[class*='actionBar']",
+      ];
+      for (final f in fallbacks) {
+        if (!hideSelectors.contains(f)) {
+          hideSelectors.add(f);
+        }
+      }
+    }
     final titleSelector = _currentConfig!['title_selector'];
     final priceSelectorsJson = jsonEncode(_currentConfig!['price_selectors']);
     final imageSelectorsJson = jsonEncode(_currentConfig!['image_selectors']);
     final siteName = _currentConfig!['name'];
     final hideSelectorsJson = jsonEncode(hideSelectors);
 
-    final combinedJs = """
+    final combinedJs =
+        """
       (function() {
         'use strict';
         const SELECTORS = $hideSelectorsJson;
@@ -182,6 +216,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
             try {
               const nodes = document.querySelectorAll(sel);
               nodes.forEach(node => {
+                if (node.tagName && (node.tagName.toLowerCase() === 'body' || node.tagName.toLowerCase() === 'html')) {
+                  return;
+                }
                 node.setAttribute('style',
                   'display:none!important;visibility:hidden!important;' +
                   'pointer-events:none!important;opacity:0!important;' +
@@ -629,6 +666,58 @@ class _WebViewScreenState extends State<WebViewScreen> {
             }
           } catch(e) {}
 
+          // ── Source 6: AliExpress Mobile SKU parsing ──
+          try {
+            document.querySelectorAll('[class*="sku--container"] [class*="sku-ui--property"]').forEach(floor => {
+              const titleEl = floor.querySelector('[class*="sku-ui--title"]');
+              let name = '';
+              if (titleEl) {
+                let text = titleEl.textContent || '';
+                const valEl = titleEl.querySelector('[class*="sku-ui--skuValue"]');
+                if (valEl) {
+                  const valText = valEl.textContent || '';
+                  text = text.replace(valText, '');
+                }
+                name = text.replace(/[:：]/g, '').trim();
+              }
+              if (!name) name = 'الخيار';
+
+              const options = [];
+              let value = '';
+
+              floor.querySelectorAll('[class*="sku-ui--image"], [class*="sku-ui--text"]').forEach(el => {
+                const img = el.querySelector('img');
+                let label = '';
+                if (img) {
+                  label = (img.alt || img.getAttribute('title') || '').trim();
+                } else {
+                  label = el.textContent.trim();
+                }
+                if (!label) return;
+
+                if (options.indexOf(label) === -1) options.push(label);
+
+                const isSelected = el.className.includes('selected') || el.className.includes('dcss-sku-selected') || el.getAttribute('aria-selected') === 'true';
+                if (isSelected) {
+                  value = label;
+                }
+
+                if (img && img.src && img.src.startsWith('http')) {
+                  variantImages[label] = img.src;
+                }
+              });
+
+              if (!value && options.length === 1) value = options[0];
+              if (!value && options.length > 1) requiresSelection = true;
+              if (isPlaceholderValue(value)) requiresSelection = true;
+
+              if (name) {
+                hasVariants = true;
+                upsertSelection(selections, { name: name, value: value, options: options });
+              }
+            });
+          } catch(e) {}
+
           const finalSelections = finalizeSelections(selections);
           if (finalSelections.length) hasVariants = true;
           finalSelections.forEach(s => {
@@ -726,16 +815,20 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
             const priceSelectors = $priceSelectorsJson;
             let priceNum = "";
+            const isAliExpress = window.location.hostname.includes("aliexpress.");
+            const isAlibaba = window.location.hostname.includes("alibaba.com");
 
             // ── Priority 1: OpenGraph product meta tags (reliable on m.shein.com) ──
-            const priceMeta = document.querySelector(
-              'meta[property="product:price:amount"], meta[name="product:price:amount"],' +
-              'meta[property="og:price:amount"]'
-            );
-            if (priceMeta) {
-              const raw = priceMeta.getAttribute('content') || '';
-              const m = raw.match(/\\d+(?:\\.\\d+)?/);
-              if (m) priceNum = m[0];
+            if (!isAliExpress && !isAlibaba) {
+              const priceMeta = document.querySelector(
+                'meta[property="product:price:amount"], meta[name="product:price:amount"],' +
+                'meta[property="og:price:amount"]'
+              );
+              if (priceMeta) {
+                const raw = priceMeta.getAttribute('content') || '';
+                const m = raw.match(/\\d+(?:\\.\\d+)?/);
+                if (m) priceNum = m[0];
+              }
             }
 
             // ── Priority 2: Shein JS globals ─────────────────────────────────
@@ -822,6 +915,12 @@ class _WebViewScreenState extends State<WebViewScreen> {
                       text = elem.textContent.trim();
                     }
                   }
+                  // Extract currency prefix or suffix (any letters or symbols like SAR, NGN, AED, etc.)
+                  const currMatch = text.match(/([a-zA-Z]+|ر\.س)/);
+                  if (currMatch) {
+                    currency = currMatch[1].trim();
+                  }
+
                   // Strip non-digit/dot chars (handles \ue0e1 icon font prefix)
                   const cleaned = text.replace(/[^\\d.,]/g, ' ');
                   const m = cleaned.match(/\\d+(?:[.,]\\d+)?/);
@@ -831,7 +930,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
             }
 
             // ── Priority 4: JSON-LD ───────────────────────────────────────────
-            if (!priceNum && ld && ld.price) {
+            if (!priceNum && !isAliExpress && !isAlibaba && ld && ld.price) {
               const m = ('' + ld.price).match(/\\d+(?:\\.\\d+)?/);
               if (m) priceNum = m[0];
             }
@@ -844,8 +943,12 @@ class _WebViewScreenState extends State<WebViewScreen> {
                 '[class*="productPrice"]'
               );
               if (anyPrice) {
-                const lbl = anyPrice.getAttribute('aria-label') || anyPrice.getAttribute('data-price') || anyPrice.textContent;
-                const cleaned = (lbl || '').replace(/[^\\d.,]/g, ' ');
+                const lbl = anyPrice.getAttribute('aria-label') || anyPrice.getAttribute('data-price') || anyPrice.textContent || '';
+                const currMatch = lbl.match(/([a-zA-Z]+|ر\.س)/);
+                if (currMatch) {
+                  currency = currMatch[1].trim();
+                }
+                const cleaned = lbl.replace(/[^\\d.,]/g, ' ');
                 const m = cleaned.match(/\\d+(?:[.,]\\d+)?/);
                 if (m) priceNum = m[0].replace(',', '.');
               }
@@ -913,6 +1016,61 @@ class _WebViewScreenState extends State<WebViewScreen> {
           if (panel) { panel.scrollIntoView({ behavior: 'smooth', block: 'center' }); return true; }
           return false;
         };
+        window.__koonSelectOption = function(name, value) {
+          try {
+            function simulateClick(el) {
+              if (!el) return;
+              const events = ['mousedown', 'mouseup', 'click'];
+              for (const evName of events) {
+                const e = new MouseEvent(evName, {
+                  bubbles: true,
+                  cancelable: true,
+                  view: window
+                });
+                el.dispatchEvent(e);
+              }
+            }
+
+            const floors = document.querySelectorAll('[class*="sku--container"] [class*="sku-ui--property"]');
+            for (const floor of floors) {
+              const titleEl = floor.querySelector('[class*="sku-ui--title"]');
+              let floorName = '';
+              if (titleEl) {
+                let text = titleEl.textContent || '';
+                const valEl = titleEl.querySelector('[class*="sku-ui--skuValue"]');
+                if (valEl) {
+                  const valText = valEl.textContent || '';
+                  text = text.replace(valText, '');
+                }
+                floorName = text.replace(/[:：]/g, '').trim();
+              }
+              if (!floorName) floorName = 'الخيار';
+
+              if (floorName.toLowerCase() === name.toLowerCase()) {
+                const items = floor.querySelectorAll('[class*="sku-ui--skus"] > div, [data-sku-col], [class*="sku-ui--image"], [class*="sku-ui--text"]');
+                for (const item of items) {
+                  const img = item.querySelector('img');
+                  let label = '';
+                  if (img) {
+                    label = (img.alt || img.getAttribute('title') || '').trim();
+                  } else {
+                    label = item.textContent.trim();
+                  }
+                  if (label === value) {
+                    const isSelected = item.className.includes('selected') || item.className.includes('dcss-sku-selected') || item.getAttribute('aria-selected') === 'true';
+                    if (!isSelected) {
+                      simulateClick(item);
+                      const inner = item.querySelector('img, span, p');
+                      if (inner) simulateClick(inner);
+                      return true;
+                    }
+                  }
+                }
+              }
+            }
+          } catch(e) {}
+          return false;
+        };
         window.__koonGetIherbGrouping = function() {
           return window.__koonIherbGrouping || null;
         };
@@ -943,7 +1101,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
     if (_webViewController == null) return _currentProduct;
     try {
       final raw = await _webViewController!.evaluateJavascript(
-        source: 'window.__koonExtractProduct ? window.__koonExtractProduct() : null',
+        source:
+            'window.__koonExtractProduct ? window.__koonExtractProduct() : null',
       );
       if (raw == null) return _currentProduct;
       final data = Map<String, dynamic>.from(raw as Map);
@@ -958,7 +1117,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
     if (_webViewController == null) return null;
     try {
       final raw = await _webViewController!.evaluateJavascript(
-        source: 'window.__koonGetIherbGrouping ? window.__koonGetIherbGrouping() : null',
+        source:
+            'window.__koonGetIherbGrouping ? window.__koonGetIherbGrouping() : null',
       );
       if (raw == null || raw is! Map) return null;
       return Map<String, dynamic>.from(raw);
@@ -968,10 +1128,33 @@ class _WebViewScreenState extends State<WebViewScreen> {
   }
 
   Future<void> _openNativeSkuPicker() async {
-    await _webViewController?.evaluateJavascript(source: 'window.__koonOpenSkuPicker && window.__koonOpenSkuPicker()');
+    await _webViewController?.evaluateJavascript(
+      source: 'window.__koonOpenSkuPicker && window.__koonOpenSkuPicker()',
+    );
   }
 
-  String _buildExternalTitle(Map<String, dynamic> product, Map<String, String> chosenSelections) {
+  Future<Map<String, dynamic>?> _onSkuOptionSelected(
+    String name,
+    String value,
+  ) async {
+    if (_webViewController == null) return null;
+    try {
+      final js =
+          'window.__koonSelectOption ? window.__koonSelectOption(${jsonEncode(name)}, ${jsonEncode(value)}) : false';
+      await _webViewController!.evaluateJavascript(source: js);
+      // Wait for DOM transition/network to update the price/image
+      await Future.delayed(const Duration(milliseconds: 300));
+      // Re-scrape the product metadata from the page
+      return await _fetchProductFromPage();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _buildExternalTitle(
+    Map<String, dynamic> product,
+    Map<String, String> chosenSelections,
+  ) {
     final base = (product['title'] ?? '').toString();
     final parts = chosenSelections.entries
         .where((e) => e.value.trim().isNotEmpty)
@@ -995,16 +1178,25 @@ class _WebViewScreenState extends State<WebViewScreen> {
       _showInfoSnack('login_required_to_add'.tr(), icon: Icons.login_rounded);
       await Future.delayed(const Duration(milliseconds: 500));
       if (!mounted) return;
-      final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+      final result = await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+      );
       if (result != true) return;
     }
 
     final requiresSelection = product['requires_selection'] == true;
-    List<Map<String, dynamic>> selections = _parseSelections(product['selections']);
+    List<Map<String, dynamic>> selections = _parseSelections(
+      product['selections'],
+    );
 
     Map<String, String>? chosen;
-    final minQty = (product['min_quantity'] is num) ? (product['min_quantity'] as num).toInt() : 1;
-    final pageQty = (product['selected_quantity'] is num) ? (product['selected_quantity'] as num).toInt() : 0;
+    final minQty = (product['min_quantity'] is num)
+        ? (product['min_quantity'] as num).toInt()
+        : 1;
+    final pageQty = (product['selected_quantity'] is num)
+        ? (product['selected_quantity'] as num).toInt()
+        : 0;
     int quantity = pageQty > 0 ? pageQty : minQty;
 
     // iHerb: fetch navigation-based grouping (each variant = separate product URL).
@@ -1027,8 +1219,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
         final opts = <String>[];
 
         // Build variant images map from grouping thumbnails
-        final Map<String, String> groupVariantImages =
-            Map<String, String>.from(product['variant_images'] ?? {});
+        final Map<String, String> groupVariantImages = Map<String, String>.from(
+          product['variant_images'] ?? {},
+        );
 
         for (final item in groupItems) {
           final label = (item['label'] ?? '').toString();
@@ -1078,6 +1271,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
           requiresSelection: requiresSelection,
           action: action,
           onOpenNativePicker: _openNativeSkuPicker,
+          onSelectOption: _onSkuOptionSelected,
         ),
       );
       if (result == null) return;
@@ -1088,9 +1282,13 @@ class _WebViewScreenState extends State<WebViewScreen> {
       if (isIherb && iherbUrlMap.isNotEmpty) {
         for (final entry in chosen.entries) {
           final targetUrl = iherbUrlMap[entry.value];
-          if (targetUrl != null && targetUrl.isNotEmpty &&
-              !(_currentUrl.contains(targetUrl) || targetUrl.contains(_currentUrl))) {
-            _webViewController?.loadUrl(urlRequest: URLRequest(url: WebUri(targetUrl)));
+          if (targetUrl != null &&
+              targetUrl.isNotEmpty &&
+              !(_currentUrl.contains(targetUrl) ||
+                  targetUrl.contains(_currentUrl))) {
+            _webViewController?.loadUrl(
+              urlRequest: URLRequest(url: WebUri(targetUrl)),
+            );
             // Navigation started — the product bar will update on page load.
             // Don't add to cart for the old product; let the user tap again.
             return;
@@ -1099,7 +1297,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
       }
     }
 
-    final finalTitle = _buildExternalTitle(product, chosen ?? _selectionsToMap(selections));
+    final finalTitle = _buildExternalTitle(
+      product,
+      chosen ?? _selectionsToMap(selections),
+    );
     final cartType = _cartTypeForSite();
 
     if (action == 'cart') {
@@ -1117,7 +1318,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
         _showActionSnack(true, 'added_to_cart'.tr());
       } else if (result == AddToCartStatus.unauthorized) {
         if (mounted) {
-          final loginRes = await Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+          final loginRes = await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const LoginScreen()),
+          );
           if (loginRes == true) {
             _handleProductAction(action);
           }
@@ -1140,14 +1344,21 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   List<Map<String, dynamic>> _parseSelections(dynamic raw) {
     if (raw is! List) return [];
-    return _dedupeSelections(raw.map((e) => Map<String, dynamic>.from(e as Map)).toList());
+    return _dedupeSelections(
+      raw.map((e) => Map<String, dynamic>.from(e as Map)).toList(),
+    );
   }
 
   static String _normAttrName(String name) {
-    return name.trim().replaceAll(RegExp(r'\(\d+\)$'), '').replaceAll(RegExp(r'[:：]\s*$'), '');
+    return name
+        .trim()
+        .replaceAll(RegExp(r'\(\d+\)$'), '')
+        .replaceAll(RegExp(r'[:：]\s*$'), '');
   }
 
-  static List<Map<String, dynamic>> _dedupeSelections(List<Map<String, dynamic>> raw) {
+  static List<Map<String, dynamic>> _dedupeSelections(
+    List<Map<String, dynamic>> raw,
+  ) {
     final merged = <String, Map<String, dynamic>>{};
     for (final s in raw) {
       final name = _normAttrName((s['name'] ?? '').toString());
@@ -1172,17 +1383,20 @@ class _WebViewScreenState extends State<WebViewScreen> {
       final value = (s['value'] ?? '').toString().trim();
       if (value.isNotEmpty) target['value'] = value;
     }
-    return merged.values.where((s) {
-      final opts = s['options'] as List<String>;
-      final value = (s['value'] ?? '').toString().trim();
-      return opts.isNotEmpty || value.isNotEmpty;
-    }).map((s) {
-      final opts = s['options'] as List<String>;
-      if ((s['value'] ?? '').toString().isEmpty && opts.length == 1) {
-        s['value'] = opts.first;
-      }
-      return s;
-    }).toList();
+    return merged.values
+        .where((s) {
+          final opts = s['options'] as List<String>;
+          final value = (s['value'] ?? '').toString().trim();
+          return opts.isNotEmpty || value.isNotEmpty;
+        })
+        .map((s) {
+          final opts = s['options'] as List<String>;
+          if ((s['value'] ?? '').toString().isEmpty && opts.length == 1) {
+            s['value'] = opts.first;
+          }
+          return s;
+        })
+        .toList();
   }
 
   Map<String, String> _selectionsToMap(List<Map<String, dynamic>> selections) {
@@ -1201,10 +1415,15 @@ class _WebViewScreenState extends State<WebViewScreen> {
       SnackBar(
         content: Row(
           children: [
-            Icon(success ? Icons.check_circle : Icons.error, color: Colors.white),
+            Icon(
+              success ? Icons.check_circle : Icons.error,
+              color: Colors.white,
+            ),
             const SizedBox(width: 10),
-            Text(success ? message : 'error_occurred'.tr(),
-                style: const TextStyle(fontWeight: FontWeight.bold)),
+            Text(
+              success ? message : 'error_occurred'.tr(),
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
           ],
         ),
         backgroundColor: success ? AppColors.success : AppColors.error,
@@ -1217,7 +1436,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   /// Shows a branded info snackbar (primary color) — used for prompts that are
   /// not errors, e.g. "Please sign in to add items to your cart".
-  void _showInfoSnack(String message, {IconData icon = Icons.info_outline_rounded}) {
+  void _showInfoSnack(
+    String message, {
+    IconData icon = Icons.info_outline_rounded,
+  }) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -1226,8 +1448,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
             Icon(icon, color: Colors.white, size: 20),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(message,
-                  style: const TextStyle(fontWeight: FontWeight.w600)),
+              child: Text(
+                message,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
             ),
           ],
         ),
@@ -1248,7 +1472,11 @@ class _WebViewScreenState extends State<WebViewScreen> {
     if (_webViewController == null) return;
     final back = await _webViewController!.canGoBack();
     final forward = await _webViewController!.canGoForward();
-    if (mounted) setState(() { _canGoBack = back; _canGoForward = forward; });
+    if (mounted)
+      setState(() {
+        _canGoBack = back;
+        _canGoForward = forward;
+      });
   }
 
   void _navigateToUrl(String input) {
@@ -1257,7 +1485,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
     final looksLikeUrl = target.contains('.') && !target.contains(' ');
     if (!looksLikeUrl) {
       target = 'https://www.google.com/search?q=${Uri.encodeComponent(target)}';
-    } else if (!target.startsWith('http://') && !target.startsWith('https://')) {
+    } else if (!target.startsWith('http://') &&
+        !target.startsWith('https://')) {
       target = 'https://$target';
     }
     _webViewController?.loadUrl(urlRequest: URLRequest(url: WebUri(target)));
@@ -1273,7 +1502,12 @@ class _WebViewScreenState extends State<WebViewScreen> {
           children: [
             const Icon(Icons.link, color: Colors.white, size: 18),
             const SizedBox(width: 10),
-            Expanded(child: Text('link_copied'.tr(), style: const TextStyle(fontWeight: FontWeight.w600))),
+            Expanded(
+              child: Text(
+                'link_copied'.tr(),
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
           ],
         ),
         backgroundColor: AppColors.primary,
@@ -1285,13 +1519,21 @@ class _WebViewScreenState extends State<WebViewScreen> {
   }
 
   void _openAppCart() {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => const CartScreen(showBackButton: true)));
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const CartScreen(showBackButton: true)),
+    );
   }
 
   // ── HTML dump helpers ────────────────────────────────────────────────────
   String _dumpSiteFolder() {
-    final raw = widget.siteName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_');
-    return raw.replaceAll(RegExp(r'^_+|_+$'), '').isEmpty ? 'webview' : raw.replaceAll(RegExp(r'^_+|_+$'), '');
+    final raw = widget.siteName.toLowerCase().replaceAll(
+      RegExp(r'[^a-z0-9]+'),
+      '_',
+    );
+    return raw.replaceAll(RegExp(r'^_+|_+$'), '').isEmpty
+        ? 'webview'
+        : raw.replaceAll(RegExp(r'^_+|_+$'), '');
   }
 
   // Counters for disambiguating repeated detail dumps (details_1, details_2…)
@@ -1301,7 +1543,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
     final folder = _dumpSiteFolder();
     final lc = url.toLowerCase();
     // Detect page type from URL
-    final bool isDetail = lc.contains('/product-detail/') ||
+    final bool isDetail =
+        lc.contains('/product-detail/') ||
         lc.contains('/detail/') ||
         RegExp(r'/item/\d+').hasMatch(lc) ||
         lc.contains('/dp/') ||
@@ -1326,8 +1569,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
     if (!_dumpEnabled || _webViewController == null) return;
     try {
       // Pull the full DOM (including <html>/<head>/<body>) as a JSON-safe string.
-      final raw = await _webViewController!
-          .evaluateJavascript(source: "document.documentElement.outerHTML");
+      final raw = await _webViewController!.evaluateJavascript(
+        source: "document.documentElement.outerHTML",
+      );
       if (raw == null) return;
       final html = raw is String ? raw : raw.toString();
 
@@ -1380,7 +1624,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   /// Absolute Mac path where ADB-pulled dumps should land, per site.
   /// Matches the `store_source/<site>/` folder structure in the project root.
-  static const String _storeSourceRoot = '/Users/user/project/koon/store_source';
+  static const String _storeSourceRoot =
+      '/Users/user/project/koon/store_source';
 
   Future<void> _showDumpInfo() async {
     final path = _lastDumpPath;
@@ -1424,16 +1669,29 @@ class _WebViewScreenState extends State<WebViewScreen> {
             ),
             const Divider(),
             if (path == null)
-              const Text('No dump yet. Reload the page to capture the current DOM.')
+              const Text(
+                'No dump yet. Reload the page to capture the current DOM.',
+              )
             else ...[
-              const Text('Path:', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+              const Text(
+                'Path:',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+              ),
               const SizedBox(height: 4),
-              SelectableText(path, style: const TextStyle(fontFamily: 'monospace', fontSize: 11)),
+              SelectableText(
+                path,
+                style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
+              ),
               const SizedBox(height: 8),
-              Text('Size: ${_humanSize(size)}', style: const TextStyle(fontSize: 12)),
+              Text(
+                'Size: ${_humanSize(size)}',
+                style: const TextStyle(fontSize: 12),
+              ),
               if (when != null)
-                Text('Last update: ${when.toLocal().toString().split('.').first}',
-                    style: const TextStyle(fontSize: 12)),
+                Text(
+                  'Last update: ${when.toLocal().toString().split('.').first}',
+                  style: const TextStyle(fontSize: 12),
+                ),
               const SizedBox(height: 12),
               Container(
                 width: double.infinity,
@@ -1463,19 +1721,28 @@ class _WebViewScreenState extends State<WebViewScreen> {
                   SnackBar(
                     content: Row(
                       children: [
-                        const Icon(Icons.terminal_rounded, color: Colors.white, size: 18),
+                        const Icon(
+                          Icons.terminal_rounded,
+                          color: Colors.white,
+                          size: 18,
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             'Copied → store_source/$siteFolder/$fileName',
-                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
+                            ),
                           ),
                         ),
                       ],
                     ),
                     backgroundColor: AppColors.primary,
                     behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                     duration: const Duration(seconds: 3),
                   ),
                 );
@@ -1489,7 +1756,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
                 if (ctx.mounted) Navigator.pop(ctx);
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Device path copied to clipboard')),
+                  const SnackBar(
+                    content: Text('Device path copied to clipboard'),
+                  ),
                 );
               },
             ),
@@ -1533,13 +1802,13 @@ class _WebViewScreenState extends State<WebViewScreen> {
     if (result != null && result.isNotEmpty) _navigateToUrl(result);
   }
 
-
   // ── UI ───────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
       onWillPop: () async {
-        if (_webViewController != null && await _webViewController!.canGoBack()) {
+        if (_webViewController != null &&
+            await _webViewController!.canGoBack()) {
           _webViewController!.goBack();
           return false;
         }
@@ -1557,10 +1826,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
         ),
         bottomNavigationBar: Column(
           mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildLoadingBar(),
-            _buildBottomNavBar(),
-          ],
+          children: [_buildLoadingBar(), _buildBottomNavBar()],
         ),
       ),
     );
@@ -1586,16 +1852,32 @@ class _WebViewScreenState extends State<WebViewScreen> {
         ),
       ),
       actions: [
-        _appBarIcon(icon: Icons.code, onTap: _showDumpInfo, tooltip: 'HTML source dump'),
-        _appBarIcon(icon: Icons.share_outlined, onTap: _shareCurrentUrl, tooltip: 'share'.tr()),
-        _appBarIcon(icon: Icons.travel_explore, onTap: _openLinkSheet, tooltip: 'search_by_link'.tr()),
+        _appBarIcon(
+          icon: Icons.code,
+          onTap: _showDumpInfo,
+          tooltip: 'HTML source dump',
+        ),
+        _appBarIcon(
+          icon: Icons.share_outlined,
+          onTap: _shareCurrentUrl,
+          tooltip: 'share'.tr(),
+        ),
+        _appBarIcon(
+          icon: Icons.travel_explore,
+          onTap: _openLinkSheet,
+          tooltip: 'search_by_link'.tr(),
+        ),
         _buildCartIconWithBadge(),
         const SizedBox(width: 6),
       ],
     );
   }
 
-  Widget _appBarIcon({required IconData icon, required VoidCallback onTap, required String tooltip}) {
+  Widget _appBarIcon({
+    required IconData icon,
+    required VoidCallback onTap,
+    required String tooltip,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
       child: Material(
@@ -1639,23 +1921,40 @@ class _WebViewScreenState extends State<WebViewScreen> {
                     color: AppColors.primarySurface,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(Icons.shopping_basket_outlined, size: 18, color: AppColors.primary),
+                  child: Icon(
+                    Icons.shopping_basket_outlined,
+                    size: 18,
+                    color: AppColors.primary,
+                  ),
                 ),
                 if (count > 0)
                   Positioned(
                     right: -4,
                     top: -4,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 5,
+                        vertical: 1,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.primary,
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppColors.surface, width: 1.5),
+                        border: Border.all(
+                          color: AppColors.surface,
+                          width: 1.5,
+                        ),
                       ),
-                      constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                      constraints: const BoxConstraints(
+                        minWidth: 18,
+                        minHeight: 18,
+                      ),
                       child: Text(
                         count > 99 ? '99+' : '$count',
-                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                        ),
                         textAlign: TextAlign.center,
                       ),
                     ),
@@ -1670,7 +1969,106 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   Widget _buildWebView() {
     return InAppWebView(
-      initialUrlRequest: URLRequest(url: WebUri(widget.initialUrl)),
+      initialUrlRequest: null,
+      initialUserScripts: UnmodifiableListView<UserScript>([
+        UserScript(
+          source: """
+            (function() {
+              'use strict';
+
+              // 1. Force Arabic & SAR on document.cookie
+              try {
+                function forceArabicAndSar(cookieStr) {
+                  if (!cookieStr || typeof cookieStr !== 'string') return cookieStr;
+                  if (cookieStr.includes('aep_usuc_f=')) {
+                    cookieStr = cookieStr.replace(/b_locale=[a-zA-Z_]+/g, 'b_locale=ar_SA');
+                    cookieStr = cookieStr.replace(/c_tp=[a-zA-Z]+/g, 'c_tp=SAR');
+                    cookieStr = cookieStr.replace(/region=[a-zA-Z]+/g, 'region=SA');
+                  }
+                  if (cookieStr.includes('sc_g_cfg_f=')) {
+                    cookieStr = cookieStr.replace(/sc_b_locale=[a-zA-Z_]+/g, 'sc_b_locale=ar_SA');
+                    cookieStr = cookieStr.replace(/sc_b_currency=[a-zA-Z]+/g, 'sc_b_currency=SAR');
+                  }
+                  return cookieStr;
+                }
+                const proto = Document.prototype;
+                const desc = Object.getOwnPropertyDescriptor(proto, 'cookie') ||
+                             Object.getOwnPropertyDescriptor(HTMLDocument.prototype, 'cookie');
+                if (desc && desc.configurable) {
+                  Object.defineProperty(document, 'cookie', {
+                    get() {
+                      return forceArabicAndSar(desc.get.call(document));
+                    },
+                    set(val) {
+                      desc.set.call(document, forceArabicAndSar(val));
+                    },
+                    configurable: true
+                  });
+                }
+              } catch(e) {}
+
+              // 2. Intercept new shopper welcome/leave configurations
+              function sanitizeTheme(theme) {
+                if (theme) {
+                  if (theme.welcomeNeedShow !== undefined) theme.welcomeNeedShow = "false";
+                  if (theme.leaveNeedShow !== undefined) theme.leaveNeedShow = "false";
+                }
+              }
+              function sanitizeData(data) {
+                if (data && typeof data === 'object') {
+                  for (const key in data) {
+                    const item = data[key];
+                    if (item && item.fields && item.fields.theme) {
+                      sanitizeTheme(item.fields.theme);
+                    }
+                    if (item && item.theme) {
+                      sanitizeTheme(item.theme);
+                    }
+                  }
+                }
+              }
+
+              // Intercept __STREAMING_DATA__
+              let rawStreamingData = {};
+              const streamingHandler = {
+                set(target, prop, value) {
+                  if (value && typeof value === 'object') {
+                    sanitizeTheme(value.theme);
+                  }
+                  target[prop] = value;
+                  return true;
+                }
+              };
+              const streamingProxy = new Proxy(rawStreamingData, streamingHandler);
+              Object.defineProperty(window, '__STREAMING_DATA__', {
+                get() { return streamingProxy; },
+                set(val) {
+                  if (val && typeof val === 'object') {
+                    for (const k in val) {
+                      streamingProxy[k] = val[k];
+                    }
+                  }
+                },
+                configurable: true
+              });
+
+              // Intercept __INIT_DATA__
+              let rawInitData = null;
+              Object.defineProperty(window, '__INIT_DATA__', {
+                get() { return rawInitData; },
+                set(val) {
+                  if (val && typeof val === 'object') {
+                    sanitizeData(val.data);
+                  }
+                  rawInitData = val;
+                },
+                configurable: true
+              });
+            })();
+          """,
+          injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+        )
+      ]),
       initialSettings: InAppWebViewSettings(
         javaScriptEnabled: true,
         domStorageEnabled: true,
@@ -1701,25 +2099,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
             trigger: ContentBlockerTrigger(urlFilter: '.*wakeup.*'),
             action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
           ),
-          ContentBlocker(
-            trigger: ContentBlockerTrigger(urlFilter: '.*loader~login.*'),
-            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
-          ),
-          ContentBlocker(
-            trigger: ContentBlockerTrigger(urlFilter: '.*login-channel-update.*'),
-            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
-          ),
-          ContentBlocker(
-            trigger: ContentBlockerTrigger(urlFilter: '.*login-join-verify-check.*'),
-            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
-          ),
-          ContentBlocker(
-            trigger: ContentBlockerTrigger(urlFilter: '.*cosmos/.*/msite/.*login.*'),
-            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
-          ),
         ],
       ),
-      onWebViewCreated: (controller) {
+      onWebViewCreated: (controller) async {
         _webViewController = controller;
         controller.addJavaScriptHandler(
           handlerName: 'onProductDetected',
@@ -1736,12 +2118,16 @@ class _WebViewScreenState extends State<WebViewScreen> {
                   (_currentProduct == null ||
                       _currentProduct!['title'] != data['title'] ||
                       _currentProduct!['price'] != data['price'] ||
-                      _currentProduct!['selection_summary'] != data['selection_summary'])) {
+                      _currentProduct!['selection_summary'] !=
+                          data['selection_summary'])) {
                 setState(() => _currentProduct = data);
               }
             }
           },
         );
+        // Load initial cookies and then initial URL
+        await WebViewScreen.setupCurrencyCookies(widget.initialUrl);
+        await controller.loadUrl(urlRequest: URLRequest(url: WebUri(widget.initialUrl)));
       },
       // Some sites (Alibaba, AliExpress, Amazon) open product links in a new
       // window via target="_blank" or window.open(). Capture that here and
@@ -1773,17 +2159,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
           debugPrint('[webview] blocked app redirect: $uri');
           return NavigationActionPolicy.CANCEL;
         }
-        final host = uri.host.toLowerCase();
-        final path = uri.path.toLowerCase();
-        if (host.contains('aliexpress') &&
-            (host.contains('login') ||
-                host.contains('passport') ||
-                path.contains('login') ||
-                path.contains('passport') ||
-                uri.toString().contains('login'))) {
-          debugPrint('[webview] blocked aliexpress login redirect: $uri');
-          return NavigationActionPolicy.CANCEL;
-        }
         return NavigationActionPolicy.ALLOW;
       },
       onLoadStart: (_, url) {
@@ -1803,7 +2178,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
           WebViewScreen.setupCurrencyCookies(urlStr);
 
           final currentDomain = _currentConfig?['domain'] as String?;
-          if (currentDomain == null || !urlStr.toLowerCase().contains(currentDomain.toLowerCase())) {
+          if (currentDomain == null ||
+              !urlStr.toLowerCase().contains(currentDomain.toLowerCase())) {
             _loadConfigForUrl(urlStr);
           }
         }
@@ -1828,7 +2204,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
           _loadError = error.description;
           _isLoading = false;
         });
-        debugPrint('[webview] load error: ${error.type} ${error.description} ${request.url}');
+        debugPrint(
+          '[webview] load error: ${error.type} ${error.description} ${request.url}',
+        );
       },
       onProgressChanged: (_, progress) {
         if (mounted) setState(() => _progress = progress / 100);
@@ -1844,7 +2222,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
   }
 
   Widget _buildLoadErrorOverlay() {
-    final isDnsError = _loadError != null &&
+    final isDnsError =
+        _loadError != null &&
         (_loadError!.contains('ERR_NAME_NOT_RESOLVED') ||
             _loadError!.toLowerCase().contains('name not resolved'));
     return Container(
@@ -1858,7 +2237,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
             const SizedBox(height: 16),
             Text(
               'error_occurred'.tr(),
-              style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700),
+              style: GoogleFonts.inter(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
@@ -1866,7 +2248,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
               isDnsError
                   ? 'Check your internet connection. On Android emulators, DNS often breaks — try Cold Boot Now in AVD Manager, or test on a real device.'
                   : (_loadError ?? ''),
-              style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary),
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: AppColors.textSecondary,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 20),
@@ -1880,7 +2265,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
               ),
             ),
           ],
@@ -1907,7 +2295,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
                   // Animated progress strip
                   Stack(
                     children: [
-                      Container(height: 3, color: AppColors.primary.withOpacity(0.12)),
+                      Container(
+                        height: 3,
+                        color: AppColors.primary.withOpacity(0.12),
+                      ),
                       TweenAnimationBuilder<double>(
                         tween: Tween(begin: 0, end: _progress.clamp(0.0, 1.0)),
                         duration: const Duration(milliseconds: 350),
@@ -1939,7 +2330,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
                   ),
                   // Status row: dot pulse + "Loading … 42%"
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 6,
+                    ),
                     child: Row(
                       children: [
                         _PulsingDot(color: AppColors.primary),
@@ -2007,7 +2401,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
           _bottomNavButton(
             icon: Icons.home_rounded,
             enabled: true,
-            onTap: () => _webViewController?.loadUrl(urlRequest: URLRequest(url: WebUri(widget.initialUrl))),
+            onTap: () => _webViewController?.loadUrl(
+              urlRequest: URLRequest(url: WebUri(widget.initialUrl)),
+            ),
             tooltip: 'home'.tr(),
           ),
         ],
@@ -2033,7 +2429,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
             child: Icon(
               icon,
               size: 24,
-              color: enabled ? AppColors.textPrimary : AppColors.textHint.withOpacity(0.5),
+              color: enabled
+                  ? AppColors.textPrimary
+                  : AppColors.textHint.withOpacity(0.5),
             ),
           ),
         ),
@@ -2044,7 +2442,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
   // Floating detected-product card with "Add to Cart"
   Widget _buildProductBar() {
     final img = (_currentProduct!['image_url'] ?? '').toString();
-    final selectionSummary = (_currentProduct!['selection_summary'] ?? '').toString();
+    final selectionSummary = (_currentProduct!['selection_summary'] ?? '')
+        .toString();
     final hasVariants = _currentProduct!['has_variants'] == true;
     return Positioned(
       bottom: 16,
@@ -2055,7 +2454,13 @@ class _WebViewScreenState extends State<WebViewScreen> {
         decoration: BoxDecoration(
           color: AppColors.surface,
           borderRadius: BorderRadius.circular(18),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 16, offset: const Offset(0, 6))],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.12),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
           border: Border.all(color: AppColors.primary.withOpacity(0.25)),
         ),
         child: Row(
@@ -2063,8 +2468,13 @@ class _WebViewScreenState extends State<WebViewScreen> {
             ClipRRect(
               borderRadius: BorderRadius.circular(10),
               child: img.isNotEmpty
-                  ? Image.network(img, width: 52, height: 52, fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _imagePlaceholder())
+                  ? Image.network(
+                      img,
+                      width: 52,
+                      height: 52,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => _imagePlaceholder(),
+                    )
                   : _imagePlaceholder(),
             ),
             const SizedBox(width: 12),
@@ -2077,29 +2487,46 @@ class _WebViewScreenState extends State<WebViewScreen> {
                     _currentProduct!['title'] ?? '',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 13, color: AppColors.textPrimary),
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                      color: AppColors.textPrimary,
+                    ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     _currentProduct!['price'] ?? '',
-                    style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.primary),
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15,
+                      color: AppColors.primary,
+                    ),
                   ),
                   if (selectionSummary.isNotEmpty)
                     Text(
                       selectionSummary,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(fontSize: 10, color: AppColors.textSecondary),
+                      style: GoogleFonts.inter(
+                        fontSize: 10,
+                        color: AppColors.textSecondary,
+                      ),
                     )
                   else if (hasVariants)
                     Text(
                       'select_options_hint'.tr(),
-                      style: GoogleFonts.inter(fontSize: 10, color: AppColors.warning),
+                      style: GoogleFonts.inter(
+                        fontSize: 10,
+                        color: AppColors.warning,
+                      ),
                     )
                   else
                     Text(
                       '${'from'.tr()} ${_currentProduct!['site'] ?? widget.siteName}',
-                      style: GoogleFonts.inter(fontSize: 10, color: AppColors.textSecondary),
+                      style: GoogleFonts.inter(
+                        fontSize: 10,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                 ],
               ),
@@ -2107,7 +2534,11 @@ class _WebViewScreenState extends State<WebViewScreen> {
             const SizedBox(width: 6),
             IconButton(
               onPressed: _onAddToWishlist,
-              icon: Icon(Icons.favorite_border, color: AppColors.error, size: 22),
+              icon: Icon(
+                Icons.favorite_border,
+                color: AppColors.error,
+                size: 22,
+              ),
               tooltip: 'add_to_wishlist'.tr(),
               visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,
@@ -2119,13 +2550,20 @@ class _WebViewScreenState extends State<WebViewScreen> {
               child: ElevatedButton.icon(
                 onPressed: _onAddToCart,
                 icon: const Icon(Icons.add_shopping_cart, size: 16),
-                label: Text('add_to_cart'.tr(),
-                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+                label: Text(
+                  'add_to_cart'.tr(),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(horizontal: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   elevation: 0,
                 ),
               ),
@@ -2141,7 +2579,11 @@ class _WebViewScreenState extends State<WebViewScreen> {
       width: 52,
       height: 52,
       color: AppColors.surfaceVariant,
-      child: Icon(Icons.shopping_bag_outlined, color: AppColors.textHint, size: 22),
+      child: Icon(
+        Icons.shopping_bag_outlined,
+        color: AppColors.textHint,
+        size: 22,
+      ),
     );
   }
 }
@@ -2153,6 +2595,8 @@ class _ProductSelectionSheet extends StatefulWidget {
   final bool requiresSelection;
   final String action;
   final Future<void> Function() onOpenNativePicker;
+  final Future<Map<String, dynamic>?> Function(String name, String value)
+  onSelectOption;
 
   const _ProductSelectionSheet({
     required this.product,
@@ -2161,6 +2605,7 @@ class _ProductSelectionSheet extends StatefulWidget {
     required this.requiresSelection,
     required this.action,
     required this.onOpenNativePicker,
+    required this.onSelectOption,
   });
 
   @override
@@ -2178,12 +2623,17 @@ class _ProductSelectionSheetState extends State<_ProductSelectionSheet> {
   void initState() {
     super.initState();
     _quantity = widget.initialQuantity.clamp(1, 9999);
-    _activeSelections = _WebViewScreenState._dedupeSelections(widget.selections);
+    _activeSelections = _WebViewScreenState._dedupeSelections(
+      widget.selections,
+    );
     // Extract variant_images map from the product data
     final rawVariantImages = widget.product['variant_images'];
     _variantImages = rawVariantImages is Map
         ? Map<String, String>.from(
-            rawVariantImages.map((k, v) => MapEntry(k.toString(), v.toString())))
+            rawVariantImages.map(
+              (k, v) => MapEntry(k.toString(), v.toString()),
+            ),
+          )
         : {};
     _chosen = {};
     for (final s in _activeSelections) {
@@ -2212,11 +2662,90 @@ class _ProductSelectionSheetState extends State<_ProductSelectionSheet> {
     _currentVariantImage = null;
   }
 
-  void _selectOption(String name, String opt) {
+  String _getUpdatedPriceString(String priceRaw, int quantity) {
+    if (priceRaw.isEmpty) return '';
+    final match = RegExp(r'([0-9.,]+)').firstMatch(priceRaw);
+    if (match == null) return priceRaw;
+
+    final numStr = match.group(1)!;
+    if (numStr.contains('-') || priceRaw.contains('-')) {
+      return priceRaw;
+    }
+
+    try {
+      double? val;
+      if (numStr.contains(',') && numStr.contains('.')) {
+        val = double.tryParse(numStr.replaceAll(',', ''));
+      } else if (numStr.contains(',')) {
+        final parts = numStr.split(',');
+        if (parts.last.length == 3) {
+          val = double.tryParse(numStr.replaceAll(',', ''));
+        } else {
+          val = double.tryParse(numStr.replaceAll(',', '.'));
+        }
+      } else {
+        val = double.tryParse(numStr);
+      }
+
+      if (val != null) {
+        final total = val * quantity;
+        final prefix = priceRaw.substring(0, match.start);
+        final suffix = priceRaw.substring(match.end);
+
+        String formattedVal;
+        if (numStr.contains('.')) {
+          final decimalPlaces = numStr.split('.').last.length;
+          formattedVal = total.toStringAsFixed(decimalPlaces);
+        } else if (numStr.contains(',')) {
+          final decimalPlaces = numStr.split(',').last.length;
+          formattedVal = total
+              .toStringAsFixed(decimalPlaces)
+              .replaceAll('.', ',');
+        } else {
+          formattedVal = total.toStringAsFixed(0);
+        }
+
+        if (numStr.contains(',') && numStr.contains('.')) {
+          final parts = formattedVal.split('.');
+          final whole = parts[0];
+          final decimal = parts.length > 1 ? '.' + parts[1] : '';
+          final sb = StringBuffer();
+          for (var i = 0; i < whole.length; i++) {
+            if (i > 0 && (whole.length - i) % 3 == 0) {
+              sb.write(',');
+            }
+            sb.write(whole[i]);
+          }
+          formattedVal = sb.toString() + decimal;
+        }
+
+        return '$prefix$formattedVal$suffix';
+      }
+    } catch (_) {}
+    return priceRaw;
+  }
+
+  void _selectOption(String name, String opt) async {
     setState(() {
       _chosen[name] = opt;
       _updateVariantImage();
     });
+    final updatedProduct = await widget.onSelectOption(name, opt);
+    if (updatedProduct != null && mounted) {
+      setState(() {
+        if (updatedProduct['price'] != null) {
+          widget.product['price'] = updatedProduct['price'];
+        }
+        if (updatedProduct['title'] != null) {
+          widget.product['title'] = updatedProduct['title'];
+        }
+        final imgUrl = updatedProduct['image_url']?.toString();
+        if (imgUrl != null && imgUrl.isNotEmpty) {
+          widget.product['image_url'] = imgUrl;
+          _currentVariantImage = imgUrl;
+        }
+      });
+    }
   }
 
   List<String> _optionsFor(Map<String, dynamic> sel) {
@@ -2256,9 +2785,13 @@ class _ProductSelectionSheetState extends State<_ProductSelectionSheet> {
         ? _currentVariantImage!
         : mainImg;
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
       child: Container(
-        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.82),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.82,
+        ),
         decoration: BoxDecoration(
           color: AppColors.surface,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
@@ -2294,7 +2827,8 @@ class _ProductSelectionSheetState extends State<_ProductSelectionSheet> {
                             width: 72,
                             height: 72,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => _sheetImagePlaceholder(),
+                            errorBuilder: (_, __, ___) =>
+                                _sheetImagePlaceholder(),
                           )
                         : _sheetImagePlaceholder(),
                   ),
@@ -2306,18 +2840,27 @@ class _ProductSelectionSheetState extends State<_ProductSelectionSheet> {
                     children: [
                       Text(
                         'confirm_product_options'.tr(),
-                        style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700),
+                        style: GoogleFonts.inter(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         (widget.product['title'] ?? '').toString(),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary),
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        (widget.product['price'] ?? '').toString(),
+                        _getUpdatedPriceString(
+                          (widget.product['price'] ?? '').toString(),
+                          _quantity,
+                        ),
                         style: GoogleFonts.inter(
                           fontSize: 14,
                           fontWeight: FontWeight.w800,
@@ -2337,11 +2880,16 @@ class _ProductSelectionSheetState extends State<_ProductSelectionSheet> {
                 decoration: BoxDecoration(
                   color: AppColors.warning.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppColors.warning.withOpacity(0.35)),
+                  border: Border.all(
+                    color: AppColors.warning.withOpacity(0.35),
+                  ),
                 ),
                 child: Text(
                   'select_options_on_page_hint'.tr(),
-                  style: GoogleFonts.inter(fontSize: 12, color: AppColors.textPrimary),
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: AppColors.textPrimary,
+                  ),
                 ),
               ),
             ],
@@ -2354,7 +2902,10 @@ class _ProductSelectionSheetState extends State<_ProductSelectionSheet> {
                     for (final sel in _displaySelections) ...[
                       Text(
                         (sel['name'] ?? '').toString(),
-                        style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 13),
+                        style: GoogleFonts.inter(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
                       ),
                       const SizedBox(height: 8),
                       Wrap(
@@ -2370,12 +2921,21 @@ class _ProductSelectionSheetState extends State<_ProductSelectionSheet> {
                               duration: const Duration(milliseconds: 200),
                               padding: hasVariantImg
                                   ? const EdgeInsets.all(2)
-                                  : const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  : const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 8,
+                                    ),
                               decoration: BoxDecoration(
-                                color: selected ? AppColors.primarySurface : AppColors.surfaceVariant,
-                                borderRadius: BorderRadius.circular(hasVariantImg ? 10 : 20),
+                                color: selected
+                                    ? AppColors.primarySurface
+                                    : AppColors.surfaceVariant,
+                                borderRadius: BorderRadius.circular(
+                                  hasVariantImg ? 10 : 20,
+                                ),
                                 border: Border.all(
-                                  color: selected ? AppColors.primary : AppColors.divider,
+                                  color: selected
+                                      ? AppColors.primary
+                                      : AppColors.divider,
                                   width: selected ? 2 : 1,
                                 ),
                               ),
@@ -2384,17 +2944,24 @@ class _ProductSelectionSheetState extends State<_ProductSelectionSheet> {
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         ClipRRect(
-                                          borderRadius: BorderRadius.circular(8),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
                                           child: Image.network(
                                             _variantImages[opt]!,
                                             width: 48,
                                             height: 48,
                                             fit: BoxFit.cover,
                                             errorBuilder: (_, __, ___) => Container(
-                                              width: 48, height: 48,
+                                              width: 48,
+                                              height: 48,
                                               color: AppColors.surfaceVariant,
-                                              child: Icon(Icons.image_not_supported_outlined,
-                                                  size: 20, color: AppColors.textHint),
+                                              child: Icon(
+                                                Icons
+                                                    .image_not_supported_outlined,
+                                                size: 20,
+                                                color: AppColors.textHint,
+                                              ),
                                             ),
                                           ),
                                         ),
@@ -2408,8 +2975,12 @@ class _ProductSelectionSheetState extends State<_ProductSelectionSheet> {
                                             overflow: TextOverflow.ellipsis,
                                             style: GoogleFonts.inter(
                                               fontSize: 10,
-                                              color: selected ? AppColors.primary : AppColors.textSecondary,
-                                              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                                              color: selected
+                                                  ? AppColors.primary
+                                                  : AppColors.textSecondary,
+                                              fontWeight: selected
+                                                  ? FontWeight.w700
+                                                  : FontWeight.w500,
                                             ),
                                           ),
                                         ),
@@ -2419,8 +2990,12 @@ class _ProductSelectionSheetState extends State<_ProductSelectionSheet> {
                                       opt,
                                       style: GoogleFonts.inter(
                                         fontSize: 12,
-                                        color: selected ? AppColors.primary : AppColors.textPrimary,
-                                        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                                        color: selected
+                                            ? AppColors.primary
+                                            : AppColors.textPrimary,
+                                        fontWeight: selected
+                                            ? FontWeight.w700
+                                            : FontWeight.w500,
                                       ),
                                     ),
                             ),
@@ -2429,15 +3004,29 @@ class _ProductSelectionSheetState extends State<_ProductSelectionSheet> {
                       ),
                       const SizedBox(height: 14),
                     ],
-                    Text('quantity'.tr(), style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 13)),
+                    Text(
+                      'quantity'.tr(),
+                      style: GoogleFonts.inter(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
+                    ),
                     const SizedBox(height: 8),
                     Row(
                       children: [
                         IconButton(
-                          onPressed: _quantity > 1 ? () => setState(() => _quantity--) : null,
+                          onPressed: _quantity > 1
+                              ? () => setState(() => _quantity--)
+                              : null,
                           icon: const Icon(Icons.remove_circle_outline),
                         ),
-                        Text('$_quantity', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700)),
+                        Text(
+                          '$_quantity',
+                          style: GoogleFonts.inter(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                         IconButton(
                           onPressed: () => setState(() => _quantity++),
                           icon: const Icon(Icons.add_circle_outline),
@@ -2446,7 +3035,10 @@ class _ProductSelectionSheetState extends State<_ProductSelectionSheet> {
                           const SizedBox(width: 8),
                           Text(
                             '${'min_order'.tr()}: ${widget.initialQuantity}',
-                            style: GoogleFonts.inter(fontSize: 11, color: AppColors.textSecondary),
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              color: AppColors.textSecondary,
+                            ),
                           ),
                         ],
                       ],
@@ -2483,14 +3075,21 @@ class _ProductSelectionSheetState extends State<_ProductSelectionSheet> {
                   child: ElevatedButton.icon(
                     onPressed: _canConfirm
                         ? () => Navigator.pop(context, {
-                              'selections': _chosen,
-                              'quantity': _quantity,
-                            })
+                            'selections': _chosen,
+                            'quantity': _quantity,
+                          })
                         : null,
-                    icon: Icon(isCart ? Icons.add_shopping_cart : Icons.favorite, size: 18),
-                    label: Text(isCart ? 'add_to_cart'.tr() : 'add_to_wishlist'.tr()),
+                    icon: Icon(
+                      isCart ? Icons.add_shopping_cart : Icons.favorite,
+                      size: 18,
+                    ),
+                    label: Text(
+                      isCart ? 'add_to_cart'.tr() : 'add_to_wishlist'.tr(),
+                    ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: isCart ? AppColors.primary : AppColors.error,
+                      backgroundColor: isCart
+                          ? AppColors.primary
+                          : AppColors.error,
                       foregroundColor: Colors.white,
                     ),
                   ),
@@ -2511,7 +3110,11 @@ class _ProductSelectionSheetState extends State<_ProductSelectionSheet> {
         color: AppColors.surfaceVariant,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Icon(Icons.shopping_bag_outlined, color: AppColors.textHint, size: 28),
+      child: Icon(
+        Icons.shopping_bag_outlined,
+        color: AppColors.textHint,
+        size: 28,
+      ),
     );
   }
 }
@@ -2564,14 +3167,19 @@ class _IherbGroupingSheetState extends State<_IherbGroupingSheet> {
     final selectedLabel = (selectedItem['label'] ?? '').toString();
     final selectedUrl = (selectedItem['url'] ?? '').toString();
     final selectedImg = (selectedItem['image'] ?? '').toString();
-    final displayImg = (selectedImg.isNotEmpty && selectedImg.startsWith('http'))
+    final displayImg =
+        (selectedImg.isNotEmpty && selectedImg.startsWith('http'))
         ? selectedImg
         : productImg;
 
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
       child: Container(
-        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.85,
+        ),
         decoration: BoxDecoration(
           color: AppColors.surface,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
@@ -2620,14 +3228,20 @@ class _IherbGroupingSheetState extends State<_IherbGroupingSheet> {
                     children: [
                       Text(
                         'confirm_product_options'.tr(),
-                        style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700),
+                        style: GoogleFonts.inter(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         productTitle,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary),
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                       const SizedBox(height: 2),
                       Text(
@@ -2646,16 +3260,19 @@ class _IherbGroupingSheetState extends State<_IherbGroupingSheet> {
             const SizedBox(height: 16),
             // Grouping name
             Text(
-              widget.groupingName.isNotEmpty ? widget.groupingName : 'الخيارات المتاحة',
-              style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 13),
+              widget.groupingName.isNotEmpty
+                  ? widget.groupingName
+                  : 'الخيارات المتاحة',
+              style: GoogleFonts.inter(
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+              ),
             ),
             const SizedBox(height: 10),
             // Options grid
             Flexible(
               child: SingleChildScrollView(
-                child: _hasImages
-                    ? _buildImageGrid()
-                    : _buildTextChips(),
+                child: _hasImages ? _buildImageGrid() : _buildTextChips(),
               ),
             ),
             const SizedBox(height: 16),
@@ -2678,14 +3295,21 @@ class _IherbGroupingSheetState extends State<_IherbGroupingSheet> {
                             Navigator.pop(context, true);
                           }
                         : null,
-                    icon: Icon(isCart ? Icons.add_shopping_cart : Icons.favorite, size: 18),
+                    icon: Icon(
+                      isCart ? Icons.add_shopping_cart : Icons.favorite,
+                      size: 18,
+                    ),
                     label: Text(
                       selectedLabel.isNotEmpty
-                          ? (isCart ? 'add_to_cart'.tr() : 'add_to_wishlist'.tr())
+                          ? (isCart
+                                ? 'add_to_cart'.tr()
+                                : 'add_to_wishlist'.tr())
                           : 'select_options_hint'.tr(),
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: isCart ? AppColors.primary : AppColors.error,
+                      backgroundColor: isCart
+                          ? AppColors.primary
+                          : AppColors.error,
                       foregroundColor: Colors.white,
                     ),
                   ),
@@ -2715,7 +3339,9 @@ class _IherbGroupingSheetState extends State<_IherbGroupingSheet> {
             width: 90,
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: selected ? AppColors.primarySurface : AppColors.surfaceVariant,
+              color: selected
+                  ? AppColors.primarySurface
+                  : AppColors.surfaceVariant,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: selected ? AppColors.primary : AppColors.divider,
@@ -2734,17 +3360,25 @@ class _IherbGroupingSheetState extends State<_IherbGroupingSheet> {
                           height: 60,
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => Container(
-                            width: 60, height: 60,
+                            width: 60,
+                            height: 60,
                             color: AppColors.surfaceVariant,
-                            child: Icon(Icons.inventory_2_outlined,
-                                size: 24, color: AppColors.textHint),
+                            child: Icon(
+                              Icons.inventory_2_outlined,
+                              size: 24,
+                              color: AppColors.textHint,
+                            ),
                           ),
                         )
                       : Container(
-                          width: 60, height: 60,
+                          width: 60,
+                          height: 60,
                           color: AppColors.surfaceVariant,
-                          child: Icon(Icons.inventory_2_outlined,
-                              size: 24, color: AppColors.textHint),
+                          child: Icon(
+                            Icons.inventory_2_outlined,
+                            size: 24,
+                            color: AppColors.textHint,
+                          ),
                         ),
                 ),
                 const SizedBox(height: 6),
@@ -2796,7 +3430,9 @@ class _IherbGroupingSheetState extends State<_IherbGroupingSheet> {
             duration: const Duration(milliseconds: 180),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
-              color: selected ? AppColors.primarySurface : AppColors.surfaceVariant,
+              color: selected
+                  ? AppColors.primarySurface
+                  : AppColors.surfaceVariant,
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
                 color: selected ? AppColors.primary : AppColors.divider,
@@ -2841,7 +3477,11 @@ class _IherbGroupingSheetState extends State<_IherbGroupingSheet> {
         color: AppColors.surfaceVariant,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Icon(Icons.local_pharmacy_outlined, color: AppColors.textHint, size: 28),
+      child: Icon(
+        Icons.local_pharmacy_outlined,
+        color: AppColors.textHint,
+        size: 28,
+      ),
     );
   }
 }
@@ -2850,18 +3490,21 @@ class _PulsingDot extends StatefulWidget {
   final Color color;
   const _PulsingDot({required this.color});
 
-
   @override
   State<_PulsingDot> createState() => _PulsingDotState();
 }
 
-class _PulsingDotState extends State<_PulsingDot> with SingleTickerProviderStateMixin {
+class _PulsingDotState extends State<_PulsingDot>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat(reverse: true);
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
   }
 
   @override
@@ -2940,7 +3583,9 @@ class _LinkSheetState extends State<_LinkSheet> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
       child: Container(
         decoration: BoxDecoration(
           color: AppColors.surface,
@@ -2970,7 +3615,11 @@ class _LinkSheetState extends State<_LinkSheet> {
                     color: AppColors.primarySurface,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(Icons.travel_explore, color: AppColors.primary, size: 20),
+                  child: Icon(
+                    Icons.travel_explore,
+                    color: AppColors.primary,
+                    size: 20,
+                  ),
                 ),
                 const SizedBox(width: 10),
                 Text(
@@ -2988,7 +3637,10 @@ class _LinkSheetState extends State<_LinkSheet> {
               padding: const EdgeInsets.only(left: 2),
               child: Text(
                 'search_by_link_desc'.tr(),
-                style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary),
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                ),
               ),
             ),
             const SizedBox(height: 14),
@@ -3010,13 +3662,21 @@ class _LinkSheetState extends State<_LinkSheet> {
                       keyboardType: TextInputType.url,
                       textInputAction: TextInputAction.go,
                       autocorrect: false,
-                      style: GoogleFonts.inter(fontSize: 13, color: AppColors.textPrimary),
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: AppColors.textPrimary,
+                      ),
                       decoration: InputDecoration(
                         border: InputBorder.none,
                         isCollapsed: true,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 14,
+                        ),
                         hintText: 'paste_link'.tr(),
-                        hintStyle: GoogleFonts.inter(fontSize: 13, color: AppColors.textHint),
+                        hintStyle: GoogleFonts.inter(
+                          fontSize: 13,
+                          color: AppColors.textHint,
+                        ),
                       ),
                       onChanged: (_) => setState(() {}),
                       onSubmitted: (_) => _confirm(),
@@ -3024,7 +3684,11 @@ class _LinkSheetState extends State<_LinkSheet> {
                   ),
                   if (_controller.text.isNotEmpty)
                     IconButton(
-                      icon: Icon(Icons.cancel, size: 18, color: AppColors.textHint),
+                      icon: Icon(
+                        Icons.cancel,
+                        size: 18,
+                        color: AppColors.textHint,
+                      ),
                       splashRadius: 18,
                       onPressed: () {
                         setState(() => _controller.clear());
@@ -3055,7 +3719,9 @@ class _LinkSheetState extends State<_LinkSheet> {
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       side: BorderSide(color: AppColors.divider),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                     child: Text(
                       'cancel'.tr(),
@@ -3070,14 +3736,20 @@ class _LinkSheetState extends State<_LinkSheet> {
                 Expanded(
                   flex: 2,
                   child: ElevatedButton(
-                    onPressed: _controller.text.trim().isEmpty ? null : _confirm,
+                    onPressed: _controller.text.trim().isEmpty
+                        ? null
+                        : _confirm,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
-                      disabledBackgroundColor: AppColors.primary.withOpacity(0.4),
+                      disabledBackgroundColor: AppColors.primary.withOpacity(
+                        0.4,
+                      ),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                     child: Text(
                       'go'.tr(),
@@ -3099,7 +3771,11 @@ class _ChipAction extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
 
-  const _ChipAction({required this.icon, required this.label, required this.onTap});
+  const _ChipAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -3132,4 +3808,3 @@ class _ChipAction extends StatelessWidget {
     );
   }
 }
-

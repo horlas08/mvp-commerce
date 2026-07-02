@@ -12,6 +12,8 @@ class PaymentMethod(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     title_en: Mapped[str] = mapped_column(String(255), nullable=False)
     title_ar: Mapped[str] = mapped_column(String(255), nullable=False)
+    description_en: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description_ar: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     details_en: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     details_ar: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     image_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -43,6 +45,9 @@ class PaymentMethod(Base):
             "title": self.title_en if lang == "en" else self.title_ar,
             "title_en": self.title_en,
             "title_ar": self.title_ar,
+            "description": self.description_en if lang == "en" else self.description_ar,
+            "description_en": self.description_en,
+            "description_ar": self.description_ar,
             "details": self.details_en if lang == "en" else self.details_ar,
             "details_en": self.details_en,
             "details_ar": self.details_ar,

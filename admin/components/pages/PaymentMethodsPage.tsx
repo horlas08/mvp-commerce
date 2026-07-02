@@ -24,6 +24,8 @@ export default function PaymentMethodsPage() {
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null);
   const [titleEn, setTitleEn] = useState("");
   const [titleAr, setTitleAr] = useState("");
+  const [descriptionEn, setDescriptionEn] = useState("");
+  const [descriptionAr, setDescriptionAr] = useState("");
   const [detailsEn, setDetailsEn] = useState("");
   const [detailsAr, setDetailsAr] = useState("");
   const [imageUrl, setImageUrl] = useState("");
@@ -60,6 +62,8 @@ export default function PaymentMethodsPage() {
     setSelectedMethod(null);
     setTitleEn("");
     setTitleAr("");
+    setDescriptionEn("");
+    setDescriptionAr("");
     setDetailsEn("");
     setDetailsAr("");
     setImageUrl("");
@@ -73,6 +77,8 @@ export default function PaymentMethodsPage() {
     setSelectedMethod(method);
     setTitleEn(method.title_en);
     setTitleAr(method.title_ar);
+    setDescriptionEn(method.description_en || "");
+    setDescriptionAr(method.description_ar || "");
     setDetailsEn(method.details_en || "");
     setDetailsAr(method.details_ar || "");
     setImageUrl(method.image_url || "");
@@ -188,11 +194,13 @@ export default function PaymentMethodsPage() {
 
     setSaving(true);
     const payload = {
-      title_en: titleEn.trim(),
-      title_ar: titleAr.trim(),
-      details_en: detailsEn.trim() || null,
-      details_ar: detailsAr.trim() || null,
-      image_url: imageUrl.trim() || null,
+      title_en: titleEn,
+      title_ar: titleAr,
+      description_en: descriptionEn || null,
+      description_ar: descriptionAr || null,
+      details_en: detailsEn || null,
+      details_ar: detailsAr || null,
+      image_url: imageUrl || null,
       is_active: isActive,
       fields: dynamicFields,
     };
@@ -240,8 +248,8 @@ export default function PaymentMethodsPage() {
             <thead>
               <tr>
                 <th>{t("paymentMethods")}</th>
-                <th>{t("detailsEn")}</th>
-                <th>{t("detailsAr")}</th>
+                <th>Description (EN)</th>
+                <th>Description (AR)</th>
                 <th>{t("status")}</th>
                 <th>{t("actions")}</th>
               </tr>
@@ -276,10 +284,10 @@ export default function PaymentMethodsPage() {
                       </div>
                     </td>
                     <td style={{ maxWidth: 200, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {method.details_en || "—"}
+                      {method.description_en || "—"}
                     </td>
                     <td style={{ maxWidth: 200, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {method.details_ar || "—"}
+                      {method.description_ar || "—"}
                     </td>
                     <td>
                       <span className={`badge ${method.is_active ? "badge-active" : "badge-inactive"}`}>
@@ -352,6 +360,26 @@ export default function PaymentMethodsPage() {
                       required
                     />
                   </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Description (EN) - Short</label>
+                  <input
+                    id="method-description-en"
+                    className="input"
+                    value={descriptionEn}
+                    onChange={e => setDescriptionEn(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Description (AR) - Short</label>
+                  <input
+                    id="method-description-ar"
+                    className="input"
+                    value={descriptionAr}
+                    onChange={e => setDescriptionAr(e.target.value)}
+                  />
                 </div>
 
                 <div className="form-group">

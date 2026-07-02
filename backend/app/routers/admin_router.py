@@ -578,6 +578,8 @@ async def delete_city_admin(
 class PaymentMethodRequest(BaseModel):
     title_en: str
     title_ar: str
+    description_en: Optional[str] = None
+    description_ar: Optional[str] = None
     details_en: Optional[str] = None
     details_ar: Optional[str] = None
     image_url: Optional[str] = None
@@ -610,6 +612,8 @@ async def create_payment_method_admin(
         id=str(uuid.uuid4()),
         title_en=req.title_en,
         title_ar=req.title_ar,
+        description_en=req.description_en,
+        description_ar=req.description_ar,
         details_en=req.details_en,
         details_ar=req.details_ar,
         image_url=req.image_url,
@@ -638,6 +642,8 @@ async def update_payment_method_admin(
     
     method.title_en = req.title_en
     method.title_ar = req.title_ar
+    method.description_en = req.description_en
+    method.description_ar = req.description_ar
     method.details_en = req.details_en
     method.details_ar = req.details_ar
     method.image_url = req.image_url

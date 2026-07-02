@@ -86,7 +86,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             Expanded(
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 300),
-                alignment: Alignment.topCenter,
+                layoutBuilder: (currentChild, previousChildren) {
+                  return Stack(
+                    alignment: Alignment.topCenter,
+                    children: <Widget>[
+                      ...previousChildren,
+                      if (currentChild != null) currentChild,
+                    ],
+                  );
+                },
                 transitionBuilder: (child, animation) => FadeTransition(
                   opacity: animation,
                   child: SlideTransition(
@@ -340,7 +348,67 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               onPressed: canProceed && !_ctrl.isPlacingOrder.value
                   ? () {
                       if (isLastStep) {
-                        _ctrl.placeOrder();
+                        final method = _ctrl.selectedPaymentMethod.value;
+                        if (method != null && method['id'] != 'wallet') {
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (ctx) => Padding(
+                              padding: EdgeInsets.only(
+                                bottom: MediaQuery.of(ctx).viewInsets.bottom,
+                              ),
+                              child: Container(
+                                decoration: const BoxDecoration(
+                                  color: AppColors.surface,
+                                  borderRadius: BorderRadius.vertical(
+                                    top: Radius.circular(24),
+                                  ),
+                                ),
+                                padding: const EdgeInsets.all(20),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    PaymentFormSheet(
+                                      method: method,
+                                      fields: List<Map<String, dynamic>>.from(
+                                          method['fields'] ?? []),
+                                      ctrl: _ctrl,
+                                    ),
+                                    const SizedBox(height: 12),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      height: 52,
+                                      child: ElevatedButton(
+                                        onPressed: () {
+                                          Navigator.pop(ctx);
+                                          _ctrl.placeOrder();
+                                        },
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: AppColors.primary,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(16),
+                                          ),
+                                        ),
+                                        child: Text(
+                                          'confirm_payment'.tr(),
+                                          style: GoogleFonts.inter(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w700,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        } else {
+                          _ctrl.placeOrder();
+                        }
                       } else {
                         _ctrl.nextStep();
                       }

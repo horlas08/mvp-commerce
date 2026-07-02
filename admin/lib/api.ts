@@ -134,6 +134,8 @@ export interface PaymentMethod {
   id: string;
   title_en: string;
   title_ar: string;
+  description_en?: string | null;
+  description_ar?: string | null;
   details_en?: string | null;
   details_ar?: string | null;
   image_url?: string | null;

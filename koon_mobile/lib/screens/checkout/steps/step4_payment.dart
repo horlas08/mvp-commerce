@@ -277,10 +277,10 @@ class _AdminPaymentCard extends StatelessWidget {
                                 : AppColors.textPrimary,
                           ),
                         ),
-                        if (method['details'] != null) ...[
+                        if (method['description'] != null) ...[
                           const SizedBox(height: 2),
                           Text(
-                            method['details'].toString(),
+                            method['description'].toString(),
                             style: GoogleFonts.inter(
                               fontSize: 11,
                               color: AppColors.textSecondary,
@@ -313,24 +313,19 @@ class _AdminPaymentCard extends StatelessWidget {
             ),
           ),
 
-          // Expanded form when selected
-          if (selected && (fields.isNotEmpty || true))
-            _PaymentForm(method: method, fields: fields, ctrl: ctrl)
-                .animate()
-                .fadeIn(duration: 250.ms)
-                .slideY(begin: -0.1),
+          // (PaymentForm has been moved to a modal triggered on Place Order)
         ],
       );
     });
   }
 }
 
-class _PaymentForm extends StatelessWidget {
+class PaymentFormSheet extends StatelessWidget {
   final Map<String, dynamic> method;
   final List<Map<String, dynamic>> fields;
   final CheckoutController ctrl;
 
-  const _PaymentForm({
+  const PaymentFormSheet({
     required this.method,
     required this.fields,
     required this.ctrl,
@@ -400,26 +395,62 @@ class _PaymentForm extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasFileField = fields.any((f) => (f['type']?.toString() ?? 'text') == 'file');
+
     return Container(
+      width: double.infinity,
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.secondarySurface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.secondary.withOpacity(0.2)),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(24),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'payment_details'.tr(),
-            style: GoogleFonts.inter(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: AppColors.secondary,
-            ),
-          ),
-          const SizedBox(height: 12),
+          Row(
+            children: [
+              const Icon(Icons.receipt_long_outlined, color: AppColors.secondary, size: 22),
+              const SizedBox(width: 8),
+              Text(
+                'payment_details'.tr(),
+                style: GoogleFonts.inter(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.secondary,
+                ),
+              ),
+            ],
+          ).animate().fadeIn().slideX(begin: -0.1),
+          if (method['details'] != null && method['details'].toString().isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.secondarySurface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.secondary.withOpacity(0.2)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.info_outline, color: AppColors.secondary, size: 18),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      method['details'].toString(),
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: AppColors.textPrimary,
+                        height: 1.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ).animate().fadeIn(delay: 100.ms).slideY(begin: 0.1),
+          ],
+          const SizedBox(height: 20),
 
           // Dynamic fields from admin
           // Dynamic fields from admin
@@ -446,76 +477,22 @@ class _PaymentForm extends StatelessWidget {
                     Obx(() {
                       final path = ctrl.paymentFormData[key];
                       final hasFile = path != null && path.isNotEmpty;
-                      return GestureDetector(
+                      return _UploadDropzone(
+                        hasFile: hasFile,
+                        fileName: path?.split('/').last,
                         onTap: () async {
                           final img = await _showSourcePicker(context);
                           if (img != null) {
                             ctrl.paymentFormData[key] = img.path;
                           }
                         },
-                        child: Container(
-                          height: 70,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: hasFile ? AppColors.success : AppColors.border,
-                              width: 1.5,
-                            ),
-                          ),
-                          child: hasFile
-                              ? Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const SizedBox(width: 12),
-                                    const Icon(
-                                      Icons.check_circle,
-                                      color: AppColors.success,
-                                      size: 20,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        path.split('/').last,
-                                        style: GoogleFonts.inter(
-                                          fontSize: 12,
-                                          color: AppColors.success,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.clear, size: 18, color: AppColors.textHint),
-                                      onPressed: () {
-                                        ctrl.paymentFormData.remove(key);
-                                      },
-                                    ),
-                                  ],
-                                )
-                              : Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const Icon(
-                                      Icons.upload_outlined,
-                                      color: AppColors.textHint,
-                                      size: 20,
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      'upload_proof'.tr(),
-                                      style: GoogleFonts.inter(
-                                        fontSize: 11,
-                                        color: AppColors.textHint,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                        ),
+                        onClear: () {
+                          ctrl.paymentFormData.remove(key);
+                        },
                       );
                     }),
                   ],
-                ),
+                ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.1),
               );
             }
 
@@ -582,7 +559,7 @@ class _PaymentForm extends StatelessWidget {
                       }
                     },
                   );
-                }),
+                }).animate().fadeIn(delay: 200.ms).slideY(begin: 0.1),
               );
             }
 
@@ -627,88 +604,148 @@ class _PaymentForm extends StatelessWidget {
                   ),
                 ),
               ),
-            );
+            ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.1);
           }),
 
-          // Payment proof image upload
-          const SizedBox(height: 4),
-          Text(
-            'upload_proof'.tr(),
+          // Payment proof image upload (only if no dynamic file field)
+          if (!hasFileField) ...[
+            const SizedBox(height: 8),
+            Text(
+              'upload_proof'.tr(),
             style: GoogleFonts.inter(
               fontSize: 12,
               fontWeight: FontWeight.w600,
               color: AppColors.textSecondary,
             ),
-          ),
+          ).animate().fadeIn(delay: 300.ms),
           const SizedBox(height: 8),
-          Obx(() => GestureDetector(
+          Obx(() => _UploadDropzone(
+                hasFile: ctrl.paymentProofImage.value != null,
+                fileName: ctrl.paymentProofImage.value?.name,
                 onTap: () async {
                   final img = await _showSourcePicker(context);
                   if (img != null) ctrl.paymentProofImage.value = img;
                 },
-                child: Container(
-                  height: 80,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: ctrl.paymentProofImage.value != null
-                          ? AppColors.success
-                          : AppColors.border,
-                      width: 1.5,
+                onClear: () {
+                  ctrl.paymentProofImage.value = null;
+                },
+              )).animate().fadeIn(delay: 300.ms).slideY(begin: 0.1),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _UploadDropzone extends StatelessWidget {
+  final bool hasFile;
+  final String? fileName;
+  final VoidCallback onTap;
+  final VoidCallback onClear;
+
+  const _UploadDropzone({
+    required this.hasFile,
+    required this.fileName,
+    required this.onTap,
+    required this.onClear,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        width: double.infinity,
+        height: 120,
+        decoration: BoxDecoration(
+          color: hasFile ? AppColors.success.withOpacity(0.05) : AppColors.surfaceVariant.withOpacity(0.5),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: hasFile ? AppColors.success : AppColors.border,
+            width: hasFile ? 2 : 1.5,
+          ),
+        ),
+        child: hasFile
+            ? Stack(
+                children: [
+                  Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppColors.success.withOpacity(0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.check_circle,
+                            color: AppColors.success,
+                            size: 28,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Text(
+                            fileName ?? '',
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              color: AppColors.success,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  child: ctrl.paymentProofImage.value != null
-                      ? Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const SizedBox(width: 12),
-                            const Icon(
-                              Icons.check_circle,
-                              color: AppColors.success,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                ctrl.paymentProofImage.value!.name,
-                                style: GoogleFonts.inter(
-                                  fontSize: 12,
-                                  color: AppColors.success,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.clear, size: 18, color: AppColors.textHint),
-                              onPressed: () {
-                                ctrl.paymentProofImage.value = null;
-                              },
-                            ),
-                          ],
-                        )
-                      : Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(
-                              Icons.upload_outlined,
-                              color: AppColors.textHint,
-                              size: 24,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'upload_proof'.tr(),
-                              style: GoogleFonts.inter(
-                                  fontSize: 11,
-                                  color: AppColors.textHint,
-                              ),
-                            ),
-                          ],
-                        ),
-                ),
-              )),
-        ],
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: IconButton(
+                      icon: const Icon(Icons.close, color: AppColors.textHint, size: 20),
+                      onPressed: onClear,
+                    ),
+                  ),
+                ],
+              )
+            : Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.primarySurface,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.cloud_upload_outlined,
+                      color: AppColors.primary,
+                      size: 28,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'tap_to_upload'.tr(),
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'supported_formats'.tr(),
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      color: AppColors.textHint,
+                    ),
+                  ),
+                ],
+              ),
       ),
     );
   }
