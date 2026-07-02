@@ -83,6 +83,23 @@ class WebViewScreen extends StatefulWidget {
           expiresDate: expiresDate,
           isSecure: true,
         );
+      } else if (host.contains('amazon.sa')) {
+        await cookieManager.setCookie(
+          url: WebUri(url),
+          name: "lc-acbsa",
+          value: "ar_AE",
+          domain: ".amazon.sa",
+          expiresDate: expiresDate,
+          isSecure: true,
+        );
+        await cookieManager.setCookie(
+          url: WebUri(url),
+          name: "i18n-prefs",
+          value: "SAR",
+          domain: ".amazon.sa",
+          expiresDate: expiresDate,
+          isSecure: true,
+        );
       }
     } catch (e) {
       debugPrint('[webview] Cookie setup failed: $e');
@@ -634,7 +651,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
           // ── Source 5: iHerb product grouping (pack size / flavor with navigation) ────
           try {
-            const isIherb = window.location.hostname.includes('iherb.');
+            const isIherb = window.location.hostname.includes('iherb.') || window.location.href.includes('iherb');
             if (isIherb) {
               const groupingHeader = document.querySelector('[data-testid="product-grouping-header"]');
               const groupName = groupingHeader
@@ -745,6 +762,62 @@ class _WebViewScreenState extends State<WebViewScreen> {
             });
           } catch(e) {}
 
+          // ── Source 7: Amazon Mobile Inline Twister SKU parsing ──
+          try {
+            document.querySelectorAll('.inline-twister-row, [id^="inline-twister-row-"]').forEach(floor => {
+              let name = '';
+              const headerEl = floor.querySelector('.dimension-heading, [id^="inline-twister-dim-title-"]');
+              if (headerEl) {
+                name = headerEl.textContent.trim().split(':')[0].trim();
+              }
+              if (!name) return;
+
+              let value = '';
+              const selectedValueEl = floor.querySelector('[id^="inline-twister-expanded-dimension-text-"], [id^="inline-twister-collapsed-dimension-text-"]');
+              if (selectedValueEl) {
+                value = selectedValueEl.textContent.trim();
+              }
+
+              const options = [];
+              floor.querySelectorAll('.inline-twister-swatch').forEach(swatch => {
+                const input = swatch.querySelector('input');
+                let label = '';
+                if (input && input.getAttribute('aria-label')) {
+                  label = input.getAttribute('aria-label').split(',')[0].trim();
+                }
+                if (!label) {
+                  const textDisplay = swatch.querySelector('.swatch-title-text-display');
+                  if (textDisplay) label = textDisplay.textContent.trim();
+                }
+                if (!label) {
+                  const img = swatch.querySelector('img');
+                  if (img) label = (img.alt || '').trim();
+                }
+                if (!label) return;
+
+                if (options.indexOf(label) === -1) options.push(label);
+
+                const isSelected = swatch.querySelector('.a-button-selected, .a-button-active');
+                if (isSelected && !value) {
+                  value = label;
+                }
+
+                const swatchImg = swatch.querySelector('img');
+                if (swatchImg && swatchImg.src && swatchImg.src.startsWith('http')) {
+                  variantImages[label] = swatchImg.src;
+                }
+              });
+
+              if (!value && options.length === 1) value = options[0];
+              if (!value && options.length > 1) requiresSelection = true;
+
+              if (name) {
+                hasVariants = true;
+                upsertSelection(selections, { name: name, value: value, options: options });
+              }
+            });
+          } catch(e) {}
+
           const finalSelections = finalizeSelections(selections);
           if (finalSelections.length) hasVariants = true;
           finalSelections.forEach(s => {
@@ -842,8 +915,125 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
             const priceSelectors = $priceSelectorsJson;
             let priceNum = "";
-            const isAliExpress = window.location.hostname.includes("aliexpress.");
-            const isAlibaba = window.location.hostname.includes("alibaba.com");
+            const isAliExpress = window.location.hostname.includes("aliexpress.") || window.location.href.includes("aliexpress");
+            const isAlibaba = window.location.hostname.includes("alibaba.com") || window.location.href.includes("alibaba");
+
+            // ── Priority 0.5: Amazon SA Price – robust multi-source extraction ──
+            const isAmazonHost = window.location.hostname.includes("amazon.") || window.location.href.includes("amazon");
+            if (isAmazonHost) {
+              // Helper: given a text string that may contain an Arabic/Latin price,
+              // extract the numeric part. Handles RTL marks, NBSP, Arabic "ريال" etc.
+              function pickAmazonNum(text) {
+                if (!text) return '';
+                const t = text.trim();
+                // Match first digit sequence that looks like a price (e.g. 639.00, 1,234.56)
+                const m = t.match(/\\d[\\d,]*\\.?\\d*/);
+                if (!m) return '';
+                const raw = m[0].replace(/,/g, ''); // strip thousands separator
+                return raw;
+              }
+
+              let extracted = '';
+
+              // Source A: apex-pricetopay-accessibility-label — clean readable text
+              // e.g. "‏639.00 ريال مع توفير بنسبة 5" — we only take the number part
+              const accLabel = document.querySelector('.apex-pricetopay-accessibility-label, [class*="pricetopay-accessibility"]');
+              if (accLabel) {
+                // Extract first number from the text, ignore anything after "مع" or "with"
+                const raw = (accLabel.textContent || '').split(/مع|with/i)[0];
+                extracted = pickAmazonNum(raw);
+              }
+
+              // Source B: .priceToPay span — the large price displayed on page
+              if (!extracted) {
+                const paySpan = document.querySelector('.priceToPay, .apex-pricetopay-value');
+                if (paySpan) {
+                  // Try offscreen first
+                  const off = paySpan.querySelector('.a-offscreen');
+                  if (off) extracted = pickAmazonNum(off.textContent);
+                  // Fallback: manually combine whole + fraction digits
+                  if (!extracted) {
+                    const w = paySpan.querySelector('.a-price-whole');
+                    const f = paySpan.querySelector('.a-price-fraction');
+                    if (w) {
+                      const wd = (w.textContent || '').replace(/[^\\d]/g, '');
+                      const fd = f ? (f.textContent || '').replace(/[^\\d]/g, '') : '';
+                      if (wd) extracted = fd ? (wd + '.' + fd) : wd;
+                    }
+                  }
+                }
+              }
+
+              // Source C: #tp_price_block_total_price_ww — static bottom-sheet price
+              if (!extracted) {
+                const tpBlock = document.querySelector('#tp_price_block_total_price_ww, #tp-bottom-sheet-subtotal-price-value');
+                if (tpBlock) {
+                  const off = tpBlock.querySelector('.a-offscreen');
+                  if (off) extracted = pickAmazonNum(off.textContent);
+                  if (!extracted) {
+                    const w = tpBlock.querySelector('.a-price-whole');
+                    const f = tpBlock.querySelector('.a-price-fraction');
+                    if (w) {
+                      const wd = (w.textContent || '').replace(/[^\\d]/g, '');
+                      const fd = f ? (f.textContent || '').replace(/[^\\d]/g, '') : '';
+                      if (wd) extracted = fd ? (wd + '.' + fd) : wd;
+                    }
+                  }
+                }
+              }
+
+              // Source D: corePriceDisplay_mobile or _desktop
+              if (!extracted) {
+                const coreBlock = document.querySelector(
+                  '#corePriceDisplay_mobile_feature_div, #corePriceDisplay_desktop_feature_div, #corePrice_feature_div'
+                );
+                if (coreBlock) {
+                  // Prefer non-strike-through price
+                  const priceEl = coreBlock.querySelector('.a-price:not([data-a-strike="true"])');
+                  if (priceEl) {
+                    const off = priceEl.querySelector('.a-offscreen');
+                    if (off) extracted = pickAmazonNum(off.textContent);
+                    if (!extracted) {
+                      const w = priceEl.querySelector('.a-price-whole');
+                      const f = priceEl.querySelector('.a-price-fraction');
+                      if (w) {
+                        const wd = (w.textContent || '').replace(/[^\\d]/g, '');
+                        const fd = f ? (f.textContent || '').replace(/[^\\d]/g, '') : '';
+                        if (wd) extracted = fd ? (wd + '.' + fd) : wd;
+                      }
+                    }
+                  }
+                }
+              }
+
+              // Source E: failsafe — scan all .a-offscreen spans in the main content area
+              // This catches live Amazon SA pages with different/dynamic price block IDs
+              if (!extracted) {
+                const contentArea = document.querySelector('#dp-container, #centerCol, #ppd, body');
+                if (contentArea) {
+                  const offscreens = contentArea.querySelectorAll('.a-offscreen');
+                  for (const off of offscreens) {
+                    const txt = (off.textContent || '').trim();
+                    // Must contain SAR or Arabic ريال and have decimal digits
+                    const hasCurrency = txt.includes('SAR') || txt.includes('ريال') || txt.includes('ر.س');
+                    const num = txt.match(/\\d[\\d,]*\\.\\d+/);
+                    if (hasCurrency && num) {
+                      const candidate = num[0].replace(/,/g, '');
+                      // Sanity check: ignore tiny numbers like 4, 5 (discount %)
+                      if (parseFloat(candidate) > 10) {
+                        extracted = candidate;
+                        break;
+                      }
+                    }
+                  }
+                }
+              }
+
+              if (extracted && parseFloat(extracted) > 0) {
+                priceNum = extracted;
+                currency = 'SAR';
+              }
+            }
 
             // ── Priority 1: OpenGraph product meta tags (reliable on m.shein.com) ──
             if (!isAliExpress && !isAlibaba) {
@@ -859,7 +1049,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
             }
 
             // ── Priority 2: Shein JS globals ─────────────────────────────────
-            const isShein = window.location.hostname.includes("shein.com");
+            const isShein = window.location.hostname.includes("shein.com") || window.location.href.includes("shein");
             if (isShein && !priceNum) {
               try {
                 if (window.goodsDetail && window.goodsDetail.salePrice) {
@@ -893,7 +1083,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
             }
 
             // ── Priority 2.5: iHerb-specific price extraction ────────────────
-            const isIherbHost = window.location.hostname.includes('iherb.');
+            const isIherbHost = window.location.hostname.includes('iherb.') || window.location.href.includes('iherb');
             if (isIherbHost && !priceNum) {
               // iHerb uses emotion-css dynamic class names. We target by class-fragment.
               // StrikeThroughPrice = the sale / current price (red text)
@@ -919,7 +1109,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
             }
 
             // ── Priority 3: DOM selectors ─────────────────────────────────────
-            if (!priceNum) {
+            // Skip for Amazon — Priority 0.5 combiner already handled it
+            if (!priceNum && !isAmazonHost) {
               for (const selector of priceSelectors) {
                 const elem = document.querySelector(selector);
                 if (elem) {
@@ -941,7 +1132,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
                     }
                   }
                   // Extract currency prefix or suffix (any letters or symbols like SAR, NGN, AED, etc.)
-                  const currMatch = text.match(/([a-zA-Z]+|ر\.س)/);
+                  const currMatch = text.match(/(\\b(SAR|AED|USD|NGN|EUR|GBP|EGP|QAR|BHD|OMR|KWD)\\b|ر\\.س|ريال سعودي|ريال|درهم)/);
                   if (currMatch) {
                     currency = currMatch[1].trim();
                   }
@@ -953,13 +1144,15 @@ class _WebViewScreenState extends State<WebViewScreen> {
             }
 
             // ── Priority 4: JSON-LD ───────────────────────────────────────────
-            if (!priceNum && !isAliExpress && !isAlibaba && ld && ld.price) {
+            // Skip for Amazon — Priority 0.5 combiner already handled it
+            if (!priceNum && !isAliExpress && !isAlibaba && !isAmazonHost && ld && ld.price) {
               const m = ('' + ld.price).match(/\\d+(?:\\.\\d+)?/);
               if (m) priceNum = m[0];
             }
 
             // ── Priority 5: Last resort – any price-like element ──────────────
-            if (!priceNum) {
+            // Skip for Amazon — Priority 0.5 combiner already handled it
+            if (!priceNum && !isAmazonHost) {
               const anyPrice = document.querySelector(
                 '[class*="sale-price"], [class*="salePrice"], [class*="price-num"],' +
                 '[class*="price__sale"], [data-price], [class*="current-price"],' +
@@ -967,7 +1160,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
               );
               if (anyPrice) {
                 const lbl = anyPrice.getAttribute('aria-label') || anyPrice.getAttribute('data-price') || anyPrice.textContent || '';
-                const currMatch = lbl.match(/([a-zA-Z]+|ر\.س)/);
+                const currMatch = lbl.match(/(\\b(SAR|AED|USD|NGN|EUR|GBP|EGP|QAR|BHD|OMR|KWD)\\b|ر\\.س|ريال سعودي|ريال|درهم)/);
                 if (currMatch) {
                   currency = currMatch[1].trim();
                 }
@@ -1090,6 +1283,42 @@ class _WebViewScreenState extends State<WebViewScreen> {
                 }
               }
             }
+
+            // Amazon variation click simulation
+            const amazonRows = document.querySelectorAll('.inline-twister-row, [id^="inline-twister-row-"]');
+            for (const floor of amazonRows) {
+              let floorName = '';
+              const headerEl = floor.querySelector('.dimension-heading, [id^="inline-twister-dim-title-"]');
+              if (headerEl) {
+                floorName = headerEl.textContent.trim().split(':')[0].trim();
+              }
+              if (floorName.toLowerCase() === name.toLowerCase()) {
+                const swatches = floor.querySelectorAll('.inline-twister-swatch');
+                for (const swatch of swatches) {
+                  const input = swatch.querySelector('input');
+                  let label = '';
+                  if (input && input.getAttribute('aria-label')) {
+                    label = input.getAttribute('aria-label').split(',')[0].trim();
+                  }
+                  if (!label) {
+                    const textDisplay = swatch.querySelector('.swatch-title-text-display');
+                    if (textDisplay) label = textDisplay.textContent.trim();
+                  }
+                  if (!label) {
+                    const img = swatch.querySelector('img');
+                    if (img) label = (img.alt || '').trim();
+                  }
+                  if (label && label.toLowerCase() === value.toLowerCase()) {
+                    const isSelected = swatch.querySelector('.a-button-selected, .a-button-active');
+                    if (!isSelected) {
+                      const btn = swatch.querySelector('.a-button, input');
+                      simulateClick(btn || swatch);
+                      return true;
+                    }
+                  }
+                }
+              }
+            }
           } catch(e) {}
           return false;
         };
@@ -1165,7 +1394,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
           'window.__koonSelectOption ? window.__koonSelectOption(${jsonEncode(name)}, ${jsonEncode(value)}) : false';
       await _webViewController!.evaluateJavascript(source: js);
       // Wait for DOM transition/network to update the price/image
-      await Future.delayed(const Duration(milliseconds: 300));
+      // Amazon needs ~600-700ms for its JS to update the live price block
+      await Future.delayed(const Duration(milliseconds: 700));
       // Re-scrape the product metadata from the page
       return await _fetchProductFromPage();
     } catch (_) {
@@ -2010,6 +2240,18 @@ class _WebViewScreenState extends State<WebViewScreen> {
                   if (cookieStr.includes('sc_g_cfg_f=')) {
                     cookieStr = cookieStr.replace(/sc_b_locale=[a-zA-Z_]+/g, 'sc_b_locale=ar_SA');
                     cookieStr = cookieStr.replace(/sc_b_currency=[a-zA-Z]+/g, 'sc_b_currency=SAR');
+                  }
+                  if (window.location.hostname.includes('amazon.sa') || window.location.href.includes('amazon')) {
+                    if (cookieStr.includes('lc-acbsa=')) {
+                      cookieStr = cookieStr.replace(/lc-acbsa=[a-zA-Z_]+/g, 'lc-acbsa=ar_AE');
+                    } else {
+                      cookieStr += '; lc-acbsa=ar_AE';
+                    }
+                    if (cookieStr.includes('i18n-prefs=')) {
+                      cookieStr = cookieStr.replace(/i18n-prefs=[a-zA-Z]+/g, 'i18n-prefs=SAR');
+                    } else {
+                      cookieStr += '; i18n-prefs=SAR';
+                    }
                   }
                   return cookieStr;
                 }

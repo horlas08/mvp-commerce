@@ -15,6 +15,8 @@ SITE_CONFIGS: Dict[str, ScraperConfig] = {
         name="Amazon SA",
         domain="amazon.sa",
         hide_selectors=[
+            # --- App banner ---
+            "#nav-app-banner-container",
             # --- Buy box buttons ---
             "#add-to-cart-button",
             "#buy-now-button",
@@ -79,13 +81,14 @@ SITE_CONFIGS: Dict[str, ScraperConfig] = {
         ],
         title_selector="#productTitle, #title, span#title, #title-section h1",
         price_selectors=[
-            ".a-price .a-offscreen",
-            "#corePrice_feature_div .a-price",
-            "#corePriceDisplay_desktop_feature_div .a-price",
-            "#price_inside_buybox",
+            # Amazon uses a custom JS-level price combiner (Priority 0.5) in the
+            # webview so these selectors act as fallback only.
+            # Avoid .a-color-price (matches savings percentage like -5%)
+            # Avoid .a-price-whole (no decimal fraction)
+            "#tp_price_block_total_price_ww .a-offscreen",
+            "#tp-bottom-sheet-subtotal-price-value .a-offscreen",
             "#priceblock_ourprice",
-            ".a-color-price",
-            ".a-price-whole"
+            "#price_inside_buybox",
         ],
         image_selectors=[
             "#main-image",
