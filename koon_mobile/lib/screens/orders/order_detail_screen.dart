@@ -9,6 +9,7 @@ import 'package:printing/printing.dart';
 import '../../app/theme/app_colors.dart';
 import '../../controllers/order_controller.dart';
 import '../webview/webview_screen.dart';
+import '../../app/constants/api_constants.dart';
 
 class OrderDetailScreen extends StatefulWidget {
   final Map<String, dynamic> order;
@@ -403,7 +404,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       ClipRRect(
                         borderRadius: BorderRadius.circular(12),
                         child: Image.network(
-                          paymentProofUrl.startsWith('http') ? paymentProofUrl : 'http://localhost:8000$paymentProofUrl',
+                          paymentProofUrl.startsWith('http') ? paymentProofUrl : '${ApiConstants.baseHost}$paymentProofUrl',
                           height: 180, width: double.infinity, fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => Container(
                             height: 80, color: AppColors.surfaceVariant,
