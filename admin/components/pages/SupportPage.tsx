@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Send, CheckCircle2, MessageSquare, Clock, RefreshCw, Eye } from "lucide-react";
+import { Send, CheckCircle2, MessageSquare, Clock, RefreshCw } from "lucide-react";
 import { adminApi, SupportTicket, SupportMessage } from "@/lib/api";
 import { useLang } from "@/lib/lang-context";
 
 export default function SupportPage() {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
   const [messages, setMessages] = useState<SupportMessage[]>([]);
@@ -31,11 +31,11 @@ export default function SupportPage() {
         if (updated) setSelectedTicket(updated);
       }
     } catch (e: any) {
-      setError(e.message || "Failed to load support tickets");
+      setError(e.message || t("failedToLoad"));
     } finally {
       setLoadingList(false);
     }
-  }, [statusFilter, selectedTicket]);
+  }, [statusFilter, selectedTicket, t]);
 
   useEffect(() => {
     loadTickets();
@@ -50,7 +50,7 @@ export default function SupportPage() {
       // Mark read locally
       setTickets(prev => prev.map(t => t.id === ticket.id ? { ...t, admin_unread: false } : t));
     } catch (e: any) {
-      setError(e.message || "Failed to load messages");
+      setError(e.message || t("failedToLoad"));
     } finally {
       setLoadingChat(false);
     }
@@ -83,7 +83,7 @@ export default function SupportPage() {
 
   const handleCloseTicket = async () => {
     if (!selectedTicket) return;
-    if (!confirm("Are you sure you want to close this ticket? No more replies can be sent once closed.")) return;
+    if (!confirm(t("closeTicketConfirm"))) return;
 
     try {
       const updated = await adminApi.closeSupportTicket(selectedTicket.id);
@@ -104,7 +104,7 @@ export default function SupportPage() {
         width: 320,
         background: "var(--bg-card)",
         border: "1px solid var(--border)",
-        borderRadius: 12,
+        borderRadius: 14,
         display: "flex",
         flexDirection: "column",
         overflow: "hidden"
@@ -112,52 +112,39 @@ export default function SupportPage() {
         {/* Header and filters */}
         <div style={{ padding: 16, borderBottom: "1px solid var(--border)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Support Tickets</h3>
-            <button className="btn btn-ghost btn-icon" onClick={loadTickets} disabled={loadingList}>
-              <RefreshCw size={14} className={loadingList ? "animate-spin" : ""} />
+            <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: "var(--text-primary)" }}>{t("supportTickets")}</h3>
+            <button className="btn btn-ghost btn-icon btn-sm" onClick={loadTickets} disabled={loadingList}>
+              <RefreshCw size={14} className={loadingList ? "spinner" : ""} />
             </button>
           </div>
           <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4 }}>
-            <button
-              onClick={() => setStatusFilter("")}
-              style={{
-                padding: "4px 10px", fontSize: 11, borderRadius: 20, border: "none", cursor: "pointer",
-                background: statusFilter === "" ? "var(--primary)" : "var(--bg-surface)",
-                color: statusFilter === "" ? "#fff" : "var(--text-secondary)"
-              }}
-            >
-              All
-            </button>
-            <button
-              onClick={() => setStatusFilter("open")}
-              style={{
-                padding: "4px 10px", fontSize: 11, borderRadius: 20, border: "none", cursor: "pointer",
-                background: statusFilter === "open" ? "var(--primary)" : "var(--bg-surface)",
-                color: statusFilter === "open" ? "#fff" : "var(--text-secondary)"
-              }}
-            >
-              Open
-            </button>
-            <button
-              onClick={() => setStatusFilter("pending")}
-              style={{
-                padding: "4px 10px", fontSize: 11, borderRadius: 20, border: "none", cursor: "pointer",
-                background: statusFilter === "pending" ? "var(--primary)" : "var(--bg-surface)",
-                color: statusFilter === "pending" ? "#fff" : "var(--text-secondary)"
-              }}
-            >
-              Pending
-            </button>
-            <button
-              onClick={() => setStatusFilter("closed")}
-              style={{
-                padding: "4px 10px", fontSize: 11, borderRadius: 20, border: "none", cursor: "pointer",
-                background: statusFilter === "closed" ? "var(--primary)" : "var(--bg-surface)",
-                color: statusFilter === "closed" ? "#fff" : "var(--text-secondary)"
-              }}
-            >
-              Closed
-            </button>
+            {(["", "open", "pending", "closed"] as const).map(s => {
+              const isActive = statusFilter === s;
+              let label = t("all");
+              if (s === "open") label = t("open");
+              if (s === "pending") label = t("pending");
+              if (s === "closed") label = t("closed");
+
+              return (
+                <button
+                  key={s}
+                  onClick={() => setStatusFilter(s)}
+                  style={{
+                    padding: "4px 12px",
+                    fontSize: 11,
+                    borderRadius: 20,
+                    border: "none",
+                    cursor: "pointer",
+                    background: isActive ? "var(--accent)" : "var(--bg-secondary)",
+                    color: isActive ? "#fff" : "var(--text-secondary)",
+                    fontWeight: 600,
+                    transition: "all 0.15s"
+                  }}
+                >
+                  {label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -165,55 +152,61 @@ export default function SupportPage() {
         <div style={{ flex: 1, overflowY: "auto", padding: 8 }}>
           {loadingList ? (
             <div style={{ textAlign: "center", padding: 24, color: "var(--text-muted)", fontSize: 13 }}>
-              Loading tickets...
+              {t("loadingTickets")}
             </div>
           ) : tickets.length === 0 ? (
             <div style={{ textAlign: "center", padding: 24, color: "var(--text-muted)", fontSize: 13 }}>
-              No tickets found
+              {t("noTicketsFound")}
             </div>
           ) : (
-            tickets.map(t => (
-              <div
-                key={t.id}
-                onClick={() => loadMessages(t)}
-                style={{
-                  padding: 12,
-                  borderRadius: 8,
-                  marginBottom: 6,
-                  cursor: "pointer",
-                  border: selectedTicket?.id === t.id ? "1px solid var(--primary)" : "1px solid transparent",
-                  background: selectedTicket?.id === t.id ? "var(--primary-light)" : "transparent",
-                  transition: "all 0.2s"
-                }}
-                className="ticket-item-hover"
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
-                  <span style={{
-                    fontSize: 13, fontWeight: t.admin_unread ? 700 : 600,
-                    color: t.admin_unread ? "var(--text-primary)" : "var(--text-secondary)",
-                    textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap", width: 180
-                  }}>
-                    {t.title}
-                  </span>
-                  <span style={{
-                    fontSize: 10, padding: "2px 6px", borderRadius: 4, fontWeight: 600,
-                    background: t.status === "open" ? "#E3F2FD" : t.status === "pending" ? "#FFF3E0" : "#E8F5E9",
-                    color: t.status === "open" ? "#1E88E5" : t.status === "pending" ? "#FB8C00" : "#43A047"
-                  }}>
-                    {t.status.toUpperCase()}
-                  </span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, color: "var(--text-muted)" }}>
-                  <span>{t.user?.name || "Customer"}</span>
-                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    {t.admin_unread && (
-                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--primary)" }} />
-                    )}
-                    <span>#{t.id}</span>
+            tickets.map(tItem => {
+              const isSelected = selectedTicket?.id === tItem.id;
+              let statusBadge = "badge-pending";
+              if (tItem.status === "open") statusBadge = "badge-active";
+              if (tItem.status === "closed") statusBadge = "badge-inactive";
+
+              return (
+                <div
+                  key={tItem.id}
+                  onClick={() => loadMessages(tItem)}
+                  style={{
+                    padding: 12,
+                    borderRadius: 8,
+                    marginBottom: 6,
+                    cursor: "pointer",
+                    border: isSelected ? "1px solid var(--accent)" : "1px solid transparent",
+                    background: isSelected ? "rgba(124, 90, 240, 0.15)" : "transparent",
+                    transition: "all 0.2s"
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
+                    <span style={{
+                      fontSize: 13,
+                      fontWeight: tItem.admin_unread ? 700 : 600,
+                      color: isSelected ? "var(--accent-light)" : (tItem.admin_unread ? "var(--text-primary)" : "var(--text-secondary)"),
+                      textOverflow: "ellipsis",
+                      overflow: "hidden",
+                      whiteSpace: "nowrap",
+                      width: 170
+                    }}>
+                      {tItem.title}
+                    </span>
+                    <span className={`badge ${statusBadge}`} style={{ fontSize: 9, padding: "2px 6px" }}>
+                      {t(tItem.status as any).toUpperCase()}
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, color: "var(--text-muted)" }}>
+                    <span>{tItem.user?.name || "Customer"}</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      {tItem.admin_unread && (
+                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--accent)" }} />
+                      )}
+                      <span>#{tItem.id}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
@@ -223,7 +216,7 @@ export default function SupportPage() {
         flex: 1,
         background: "var(--bg-card)",
         border: "1px solid var(--border)",
-        borderRadius: 12,
+        borderRadius: 14,
         display: "flex",
         flexDirection: "column",
         overflow: "hidden"
@@ -240,45 +233,53 @@ export default function SupportPage() {
             }}>
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <h4 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>{selectedTicket.title}</h4>
+                  <h4 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: "var(--text-primary)" }}>{selectedTicket.title}</h4>
                   <span style={{ fontSize: 11, color: "var(--text-muted)" }}>#{selectedTicket.id}</span>
                 </div>
-                <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>
-                  Customer: <strong>{selectedTicket.user?.name}</strong> ({selectedTicket.user?.email})
+                <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 4 }}>
+                  {lang === "ar" ? "العميل:" : "Customer:"} <strong>{selectedTicket.user?.name}</strong> ({selectedTicket.user?.email})
                 </div>
               </div>
 
               {selectedTicket.status !== "closed" && (
                 <button
                   onClick={handleCloseTicket}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 6, padding: "6px 12px",
-                    borderRadius: 8, border: "1px solid var(--danger)", background: "transparent",
-                    color: "var(--danger)", fontSize: 12, fontWeight: 600, cursor: "pointer"
-                  }}
+                  className="btn btn-danger btn-sm"
                 >
                   <CheckCircle2 size={14} />
-                  Close Ticket
+                  <span>{t("closeTicket")}</span>
                 </button>
               )}
             </div>
 
-            {/* Chat message feed */}
-            <div style={{ flex: 1, padding: 16, overflowY: "auto", background: "#f8f9fa" }}>
+            {/* Chat message feed (No hardcoded white bg - fits dark theme & potential light mode) */}
+            <div style={{
+              flex: 1,
+              padding: 16,
+              overflowY: "auto",
+              background: "var(--bg-secondary)",
+            }}>
+              {/* Initial description block */}
               <div style={{
-                background: "#fff", border: "1px solid #e9ecef", borderRadius: 8,
-                padding: 12, marginBottom: 20, fontSize: 13, color: "var(--text-secondary)"
+                background: "var(--bg-card)",
+                border: "1px solid var(--border)",
+                borderRadius: 10,
+                padding: 14,
+                marginBottom: 20,
+                fontSize: 13,
+                color: "var(--text-secondary)",
+                lineHeight: 1.5,
               }}>
-                <div style={{ fontWeight: 600, marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
-                  <MessageSquare size={14} color="var(--primary)" />
-                  Initial Description:
+                <div style={{ fontWeight: 700, marginBottom: 6, display: "flex", alignItems: "center", gap: 6, color: "var(--text-primary)" }}>
+                  <MessageSquare size={14} style={{ color: "var(--accent-light)" }} />
+                  {t("initialDescription")}
                 </div>
-                {selectedTicket.description}
+                <div style={{ whiteSpace: "pre-wrap" }}>{selectedTicket.description}</div>
               </div>
 
               {loadingChat ? (
                 <div style={{ textAlign: "center", padding: 32, color: "var(--text-muted)" }}>
-                  Loading conversation...
+                  {t("loadingConversation")}
                 </div>
               ) : (
                 messages.map(m => {
@@ -293,14 +294,17 @@ export default function SupportPage() {
                       }}
                     >
                       <div style={{
-                        maxWidth: "60%",
-                        padding: "10px 14px",
+                        maxWidth: "70%",
+                        padding: "12px 16px",
                         borderRadius: 16,
                         borderTopLeftRadius: !isAdmin ? 2 : 16,
                         borderTopRightRadius: isAdmin ? 2 : 16,
-                        background: isAdmin ? "var(--primary)" : "#fff",
-                        color: isAdmin ? "#fff" : "var(--text-primary)",
-                        boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                        background: isAdmin
+                          ? "linear-gradient(135deg, var(--accent), #a855f7)"
+                          : "var(--bg-card)",
+                        color: isAdmin ? "#ffffff" : "var(--text-primary)",
+                        border: isAdmin ? "none" : "1px solid var(--border)",
+                        boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
                         fontSize: 13,
                         lineHeight: 1.5
                       }}>
@@ -308,7 +312,7 @@ export default function SupportPage() {
                         <div style={{
                           fontSize: 9,
                           textAlign: "right",
-                          marginTop: 4,
+                          marginTop: 6,
                           color: isAdmin ? "rgba(255,255,255,0.7)" : "var(--text-muted)"
                         }}>
                           {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -322,53 +326,41 @@ export default function SupportPage() {
             </div>
 
             {/* Chat footer input */}
-            <div style={{ padding: 16, borderTop: "1px solid var(--border)" }}>
+            <div style={{ padding: 16, borderTop: "1px solid var(--border)", background: "var(--bg-card)" }}>
               {selectedTicket.status === "closed" ? (
                 <div style={{
-                  background: "#e8f5e9", color: "#2e7d32", padding: "10px 14px",
-                  borderRadius: 8, fontSize: 13, textAlign: "center", fontWeight: 600
+                  background: "rgba(239,68,68,0.15)",
+                  color: "#f87171",
+                  border: "1px solid rgba(239,68,68,0.25)",
+                  padding: "10px 14px",
+                  borderRadius: 8,
+                  fontSize: 13,
+                  textAlign: "center",
+                  fontWeight: 600
                 }}>
-                  This ticket has been marked as closed. No further replies can be sent.
+                  {t("ticketClosedWarning")}
                 </div>
               ) : (
                 <form onSubmit={handleSendReply} style={{ display: "flex", gap: 10 }}>
                   <input
                     type="text"
-                    placeholder="Type a reply to the customer..."
+                    placeholder={t("replyPlaceholder")}
                     value={replyText}
                     onChange={(e) => setReplyText(e.target.value)}
                     disabled={sending}
-                    style={{
-                      flex: 1,
-                      padding: "10px 14px",
-                      borderRadius: 8,
-                      border: "1px solid var(--border)",
-                      background: "var(--bg-input)",
-                      color: "var(--text-primary)",
-                      fontSize: 13,
-                      outline: "none"
-                    }}
+                    className="input"
+                    style={{ flex: 1 }}
                   />
                   <button
                     type="submit"
                     disabled={!replyText.trim() || sending}
+                    className="btn btn-primary"
                     style={{
-                      background: "var(--primary)",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: 8,
-                      padding: "0 16px",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      fontSize: 13,
-                      fontWeight: 600,
-                      cursor: replyText.trim() ? "pointer" : "default",
                       opacity: replyText.trim() && !sending ? 1 : 0.6
                     }}
                   >
                     <Send size={14} />
-                    Send
+                    <span>{t("submit")}</span>
                   </button>
                 </form>
               )}
@@ -376,12 +368,16 @@ export default function SupportPage() {
           </>
         ) : (
           <div style={{
-            flex: 1, display: "flex", flexDirection: "column",
-            alignItems: "center", justifyContent: "center", color: "var(--text-muted)"
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "var(--text-muted)"
           }}>
-            <MessageSquare size={48} style={{ strokeWidth: 1, marginBottom: 12 }} />
-            <h4 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>No Ticket Selected</h4>
-            <p style={{ fontSize: 13, marginTop: 4 }}>Select a support ticket from the list to manage and reply.</p>
+            <MessageSquare size={48} style={{ strokeWidth: 1.2, marginBottom: 12, opacity: 0.5 }} />
+            <h4 style={{ fontSize: 16, fontWeight: 600, margin: 0, color: "var(--text-primary)" }}>{t("noTicketSelected")}</h4>
+            <p style={{ fontSize: 13, marginTop: 6 }}>{t("selectTicketDesc")}</p>
           </div>
         )}
       </div>

@@ -435,6 +435,17 @@ export const translations = {
     paymentMethod: "طريقة الدفع",
     submit: "إرسال",
     close: "إغلاق",
+    supportTickets: "تذاكر الدعم الفني",
+    noTicketsFound: "لا توجد تذاكر دعم فني",
+    noTicketSelected: "لم يتم اختيار تذكرة",
+    selectTicketDesc: "اختر تذكرة دعم فني من القائمة للمراجعة والرد عليها.",
+    closeTicket: "إغلاق التذكرة",
+    closeTicketConfirm: "هل أنت متأكد من رغبتك في إغلاق هذه التذكرة؟ لا يمكن إرسال ردود إضافية بعد إغلاقها.",
+    initialDescription: "الوصف الأولي للمشكلة:",
+    loadingConversation: "جاري تحميل المحادثة...",
+    loadingTickets: "جاري تحميل التذاكر...",
+    ticketClosedWarning: "تم إغلاق هذه التذكرة. لا يمكن إرسال المزيد من الردود.",
+    replyPlaceholder: "اكتب رداً للعميل...",
   }
 };
 
