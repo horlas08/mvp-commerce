@@ -315,5 +315,14 @@
   "confirm_cancel_refund": "هل أنت متأكد من إلغاء طلب استرداد الأموال هذا؟",
   "refund_cancelled_success": "تم إلغاء طلب استرداد الأموال بنجاح",
   "failed_to_cancel_refund": "فشل إلغاء طلب استرداد الأموال",
-  "something_went_wrong": "حدث خطأ ما، يرجى المحاولة مرة أخرى"
+  "something_went_wrong": "حدث خطأ ما، يرجى المحاولة مرة أخرى",
+  "order_status": "حالة الطلب",
+  "payment_status_not_required": "غير مطلوب",
+  "payment_status_pending": "قيد الانتظار",
+  "payment_status_approved": "مقبول",
+  "payment_status_rejected": "مرفوض",
+  "payment_status_pending_approval": "قيد الموافقة",
+  "order_id": "رقم الطلب",
+  "shipping_type": "نوع الشحن",
+  "pickup": "الاستلام من المحطة"
 }

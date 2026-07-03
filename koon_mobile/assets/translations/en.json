@@ -315,5 +315,14 @@
   "confirm_cancel_refund": "Are you sure you want to cancel this refund request?",
   "refund_cancelled_success": "Refund request cancelled successfully",
   "failed_to_cancel_refund": "Failed to cancel refund request",
-  "something_went_wrong": "Something went wrong, please try again"
+  "something_went_wrong": "Something went wrong, please try again",
+  "order_status": "Order Status",
+  "payment_status_not_required": "Not Required",
+  "payment_status_pending": "Pending",
+  "payment_status_approved": "Approved",
+  "payment_status_rejected": "Rejected",
+  "payment_status_pending_approval": "Pending Approval",
+  "order_id": "Order ID",
+  "shipping_type": "Shipping Type",
+  "pickup": "Station Pickup"
 }

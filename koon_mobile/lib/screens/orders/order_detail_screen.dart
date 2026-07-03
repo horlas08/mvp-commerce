@@ -201,9 +201,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final dateStr = (_order['created_at'] ?? '').toString().split('T').first;
     final paymentMethodId = _order['payment_method_id'] ?? '';
     final paymentProofUrl = _order['payment_proof_url'];
-    final cartType = _order['cart_type'] ?? 'internal';
-    final allowTeamReview = _order['allow_team_review'] ?? false;
-    final shippingType = _order['shipping_type'] ?? 'home';
+    final String cartType = (_order['cart_type'] ?? 'internal').toString();
+    final bool allowTeamReview = _order['allow_team_review'] ?? false;
+    final String shippingType = (_order['shipping_type'] ?? 'home').toString();
 
     return Scaffold(
       appBar: AppBar(
