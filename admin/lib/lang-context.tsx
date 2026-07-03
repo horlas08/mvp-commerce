@@ -225,6 +225,8 @@ export const translations = {
     loadingTickets: "Loading tickets...",
     ticketClosedWarning: "This ticket has been marked as closed. No further replies can be sent.",
     replyPlaceholder: "Type a reply to the customer...",
+    open: "Open",
+    closed: "Closed",
   },
   ar: {
     // Common / Buttons / Feedback
@@ -446,6 +448,8 @@ export const translations = {
     loadingTickets: "جاري تحميل التذاكر...",
     ticketClosedWarning: "تم إغلاق هذه التذكرة. لا يمكن إرسال المزيد من الردود.",
     replyPlaceholder: "اكتب رداً للعميل...",
+    open: "مفتوح",
+    closed: "مغلق",
   }
 };
 
