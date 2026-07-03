@@ -1,11 +1,25 @@
 const getApiBase = (): string => {
+  let url = "";
   if (typeof window !== "undefined") {
-    if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
-    const hostname = window.location.hostname;
-    // Default to port 8000 on the same host if NEXT_PUBLIC_API_URL is missing
-    return `http://${hostname}:8000/api/v1`;
+    if (process.env.NEXT_PUBLIC_API_URL) {
+      url = process.env.NEXT_PUBLIC_API_URL;
+    } else {
+      const hostname = window.location.hostname;
+      return `http://${hostname}:8000/api/v1`;
+    }
+  } else {
+    url = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api/v1";
   }
-  return process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api/v1";
+
+  // Ensure it ends with /api/v1 if it doesn't already
+  if (url) {
+    const cleanUrl = url.endsWith("/") ? url.slice(0, -1) : url;
+    if (!cleanUrl.endsWith("/api/v1")) {
+      return `${cleanUrl}/api/v1`;
+    }
+    return cleanUrl;
+  }
+  return url;
 };
 
 export const API_BASE = getApiBase();
