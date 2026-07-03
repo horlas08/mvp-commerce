@@ -12,6 +12,8 @@ import {
   MapPin,
   CreditCard,
   MessageSquare,
+  Coins,
+  RotateCcw,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { useLang } from "@/lib/lang-context";
@@ -24,8 +26,10 @@ import CategoriesPage from "./pages/CategoriesPage";
 import StatesCitiesPage from "./pages/StatesCitiesPage";
 import PaymentMethodsPage from "./pages/PaymentMethodsPage";
 import SupportPage from "./pages/SupportPage";
+import PaymentsPage from "./pages/PaymentsPage";
+import RefundsPage from "./pages/RefundsPage";
 
-type Page = "dashboard" | "users" | "products" | "orders" | "categories" | "statesAndCities" | "paymentMethods" | "support";
+type Page = "dashboard" | "users" | "products" | "orders" | "categories" | "statesAndCities" | "paymentMethods" | "support" | "payments" | "refunds";
 
 const NAV_ITEMS = [
   {
@@ -38,6 +42,8 @@ const NAV_ITEMS = [
     sectionKey: "management" as const,
     items: [
       { id: "orders" as Page, labelKey: "orders" as const, icon: ShoppingBag },
+      { id: "payments" as Page, labelKey: "payments" as const, icon: Coins },
+      { id: "refunds" as Page, labelKey: "refunds" as const, icon: RotateCcw },
       { id: "products" as Page, labelKey: "products" as const, icon: Package },
       { id: "categories" as Page, labelKey: "categories" as const, icon: Tag },
       { id: "statesAndCities" as Page, labelKey: "statesAndCities" as const, icon: MapPin },
@@ -71,6 +77,8 @@ export default function AdminShell() {
       case "statesAndCities": return <StatesCitiesPage />;
       case "paymentMethods": return <PaymentMethodsPage />;
       case "support": return <SupportPage />;
+      case "payments": return <PaymentsPage />;
+      case "refunds": return <RefundsPage />;
     }
   };
 

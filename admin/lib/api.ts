@@ -1,5 +1,14 @@
-// API base URL
-export const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+const getApiBase = (): string => {
+  if (typeof window !== "undefined") {
+    if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
+    const hostname = window.location.hostname;
+    // Default to port 8000 on the same host if NEXT_PUBLIC_API_URL is missing
+    return `http://${hostname}:8000/api/v1`;
+  }
+  return process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api/v1";
+};
+
+export const API_BASE = getApiBase();
 
 // Generic fetch helper
 async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -65,15 +74,51 @@ export const adminApi = {
   deleteProduct: (id: string) => apiFetch(`/admin/products/${id}`, { method: "DELETE" }),
 
   // Orders
-  listOrders: (params?: { page?: number; limit?: number; status?: string }) => {
+  listOrders: (params?: { page?: number; limit?: number; status?: string; payment_status?: string; cart_type?: string; search?: string }) => {
     const q = new URLSearchParams();
     if (params?.page) q.set("page", String(params.page));
     if (params?.limit) q.set("limit", String(params.limit));
     if (params?.status) q.set("status", params.status);
+    if (params?.payment_status) q.set("payment_status", params.payment_status);
+    if (params?.cart_type) q.set("cart_type", params.cart_type);
+    if (params?.search) q.set("search", params.search);
     return apiFetch<PaginatedOrders>(`/admin/orders?${q}`);
   },
   updateOrderStatus: (id: string, status: string) =>
     apiFetch(`/admin/orders/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
+  contactUser: (orderId: string, message: string) =>
+    apiFetch(`/admin/orders/${orderId}/contact-user`, { method: "POST", body: JSON.stringify({ message }) }),
+
+  // Manual Payments Approval
+  listPendingPayments: () =>
+    apiFetch<Order[]>("/admin/payments/pending"),
+  approvePayment: (orderId: string) =>
+    apiFetch(`/admin/payments/${orderId}/approve`, { method: "POST" }),
+  rejectPayment: (orderId: string, reason?: string) =>
+    apiFetch(`/admin/payments/${orderId}/reject`, { method: "POST", body: JSON.stringify({ reason }) }),
+
+  // Refunds
+  listRefunds: (params?: { page?: number; limit?: number; status?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.page) q.set("page", String(params.page));
+    if (params?.limit) q.set("limit", String(params.limit));
+    if (params?.status) q.set("status", params.status);
+    return apiFetch<{ refunds: RefundRequest[]; total: number }>(`/admin/refunds?${q}`);
+  },
+  approveRefund: (refundId: string) =>
+    apiFetch(`/admin/refunds/${refundId}/approve`, { method: "POST" }),
+  rejectRefund: (refundId: string, adminNote?: string) =>
+    apiFetch(`/admin/refunds/${refundId}/reject`, { method: "POST", body: JSON.stringify({ admin_note: adminNote }) }),
+
+  // Wallet
+  adjustUserWallet: (userId: string, amount: number, type: "credit" | "debit", reason: string) =>
+    apiFetch<AdminUser>(`/admin/users/${userId}/wallet-adjust`, { method: "POST", body: JSON.stringify({ amount, type, reason }) }),
+  listWalletTransactions: (userId: string, params?: { page?: number; limit?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.page) q.set("page", String(params.page));
+    if (params?.limit) q.set("limit", String(params.limit));
+    return apiFetch<{ transactions: WalletTransaction[]; total: number }>(`/admin/users/${userId}/wallet-transactions?${q}`);
+  },
 
   // Categories
   listCategories: () => apiFetch<Category[]>("/admin/categories"),
@@ -221,6 +266,7 @@ export interface Order {
   user_id: string;
   user_name?: string;
   user_email?: string;
+  user_phone?: string;
   status: string;
   total: number;
   currency: string;
@@ -230,6 +276,15 @@ export interface Order {
   shipping_address?: any;
   created_at: string;
   updated_at: string;
+  cart_type?: string;
+  shipping_type?: string;
+  pickup_station_id?: string;
+  allow_team_review?: boolean;
+  payment_method_id?: string;
+  payment_status?: string;
+  payment_proof_url?: string;
+  payment_fields?: any;
+  notes?: string;
 }
 
 export interface OrderItem {
@@ -240,6 +295,8 @@ export interface OrderItem {
   quantity: number;
   image_url?: string;
   source: string;
+  external_url?: string;
+  variant_info?: any;
 }
 
 export interface Category {
@@ -289,5 +346,32 @@ export interface SupportMessage {
   ticket_id: number;
   sender: "user" | "admin";
   message: string;
+  created_at: string;
+}
+
+export interface RefundRequest {
+  id: string;
+  order_id: string;
+  user_id: string;
+  reason: string;
+  status: "pending" | "approved" | "rejected" | "completed";
+  admin_note?: string | null;
+  created_at: string;
+  updated_at: string;
+  user_name?: string;
+  user_email?: string;
+  order_total?: number;
+  order_cart_type?: string;
+}
+
+export interface WalletTransaction {
+  id: string;
+  user_id: string;
+  amount: number;
+  type: "credit" | "debit";
+  reason: string;
+  reference_id?: string | null;
+  reference_type?: string | null;
+  balance_after: number;
   created_at: string;
 }

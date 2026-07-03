@@ -6,10 +6,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 import os
 import uuid
-import asyncio
+import json
 
 from app.database import get_db
-from app.models.order import Order, OrderItem, OrderStatus
+from app.models.order import Order, OrderItem, OrderStatus, PaymentStatus
 from app.models.cart import CartItem
 from app.models.user import User
 from app.auth.dependencies import get_current_user
@@ -17,12 +17,11 @@ from app.auth.dependencies import get_current_user
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
 
-
 class CreateOrderRequest(BaseModel):
     shipping_address: Optional[dict] = None
     coupon_code: Optional[str] = None
     notes: Optional[str] = None
-    cart_type: Optional[str] = None  # If None, checkout all selected cart items
+    cart_type: Optional[str] = None
 
 
 @router.post("")
@@ -59,14 +58,15 @@ async def create_order(
             price = ci.product.discount_price or ci.product.price
             title = ci.product.title_en
             image = (ci.product.images or [None])[0] if ci.product.images else None
+            ext_url = None
         else:
-            # Parse price string for external products (best effort)
             try:
                 price = float("".join(c for c in (ci.price or "0") if c.isdigit() or c == "."))
             except ValueError:
                 price = 0.0
             title = ci.title or "External Product"
             image = ci.image_url
+            ext_url = ci.external_url
 
         item_total = price * ci.quantity
         total += item_total
@@ -77,6 +77,7 @@ async def create_order(
             quantity=ci.quantity,
             image_url=image,
             source=ci.cart_type.value,
+            external_url=ext_url,
         ))
 
     order = Order(
@@ -94,8 +95,7 @@ async def create_order(
         await db.delete(ci)
 
     await db.commit()
-    
-    # Fetch order again with items loaded to avoid lazy loading in to_dict()
+
     result = await db.execute(
         select(Order).where(Order.id == order.id).options(selectinload(Order.items))
     )
@@ -154,7 +154,6 @@ async def place_order(
     additional_note: Optional[str] = Form(None),
     allow_team_review: bool = Form(False),
     payment_method_id: str = Form(...),
-    # Dynamic payment form fields are submitted as a flat JSON string
     payment_form_data: Optional[str] = Form(None),
     payment_proof: Optional[UploadFile] = File(None),
     user: User = Depends(get_current_user),
@@ -162,12 +161,12 @@ async def place_order(
 ):
     """
     Multipart checkout endpoint called by the Flutter app.
-    Accepts optional payment_proof image, creates order from selected cart
-    items, clears the cart, then sends confirmation emails in the background.
+    - Wallet payments: immediately deduct balance and confirm order.
+    - Manual payments: set payment_status = pending_approval, order stays pending.
     """
     from app.models.cart import CartType as CT
+    from app.models.wallet_transaction import WalletTransaction, WalletTransactionType
 
-    # ── Validate cart_type ────────────────────────────────────────────────
     try:
         ct = CT(cart_type)
     except ValueError:
@@ -205,8 +204,7 @@ async def place_order(
 
         proof_url = f"/static/uploads/proofs/{filename}"
 
-    # ── Parse dynamic payment form fields & files ─────────────────────────
-    import json
+    # ── Parse dynamic payment form fields ─────────────────────────────────
     payment_fields_data = {}
     if payment_form_data:
         try:
@@ -264,6 +262,7 @@ async def place_order(
             price = float(ci.product.discount_price or ci.product.price or 0)
             title = ci.product.title_en
             image = (ci.product.images or [None])[0] if ci.product.images else None
+            ext_url = None
         else:
             try:
                 price = float("".join(c for c in (ci.price or "0") if c.isdigit() or c == "."))
@@ -271,6 +270,7 @@ async def place_order(
                 price = 0.0
             title = ci.title or "External Product"
             image = ci.image_url
+            ext_url = ci.external_url
 
         item_total = price * ci.quantity
         total += item_total
@@ -282,6 +282,7 @@ async def place_order(
                 quantity=ci.quantity,
                 image_url=image,
                 source=ci.cart_type.value,
+                external_url=ext_url,
             )
         )
 
@@ -291,33 +292,53 @@ async def place_order(
 
     total = round(total, 2)
 
-    # ── Process wallet payment if selected ────────────────────────────────
-    if payment_method_id == "wallet":
+    # ── Determine payment status based on method ──────────────────────────
+    is_wallet = payment_method_id == "wallet"
+
+    if is_wallet:
         if user.credit_balance < total:
             raise HTTPException(status_code=400, detail="Insufficient wallet balance")
+        # Deduct wallet
         user.credit_balance = round(user.credit_balance - total, 2)
+        p_status = PaymentStatus.NOT_REQUIRED  # Wallet is auto-approved
+        order_status = OrderStatus.CONFIRMED
+    else:
+        p_status = PaymentStatus.PENDING_APPROVAL
+        order_status = OrderStatus.PENDING
 
     # ── Create order ──────────────────────────────────────────────────────
     order = Order(
         user_id=user.id,
         total=total,
-        shipping_address={"address_id": address_id, "shipping_type": shipping_type,
-                          "pickup_station_id": pickup_station_id},
+        status=order_status,
+        cart_type=cart_type,
+        shipping_address={"address_id": address_id},
+        shipping_type=shipping_type,
+        pickup_station_id=pickup_station_id,
         notes=additional_note,
+        allow_team_review=allow_team_review,
+        payment_method_id=payment_method_id,
+        payment_status=p_status,
+        payment_proof_url=proof_url,
+        payment_fields=payment_fields_data if payment_fields_data else None,
         items=order_items,
     )
-    # Store payment info in notes field (extend Order model later if needed)
-    if payment_method_id:
-        payment_info = f"payment_method={payment_method_id}"
-        if proof_url:
-            payment_info += f" | proof={proof_url}"
-        if payment_fields_data:
-            payment_info += f" | fields={json.dumps(payment_fields_data, ensure_ascii=False)}"
-        if additional_note:
-            payment_info += f" | note={additional_note}"
-        order.notes = payment_info
 
     db.add(order)
+
+    # ── Log wallet transaction ────────────────────────────────────────────
+    if is_wallet:
+        tx = WalletTransaction(
+            user_id=user.id,
+            amount=total,
+            type=WalletTransactionType.DEBIT,
+            reason=f"Order payment",
+            reference_type="order",
+            balance_after=user.credit_balance,
+        )
+        db.add(tx)
+        # Update reference_id after order is committed
+        # We'll do it after commit
 
     # ── Clear purchased cart items ────────────────────────────────────────
     for ci in cart_items:
@@ -325,14 +346,28 @@ async def place_order(
 
     await db.commit()
 
-    # ── Reload order with items for serialisation ─────────────────────────
+    # ── Update wallet tx reference ────────────────────────────────────────
+    if is_wallet:
+        from sqlalchemy import update
+        await db.execute(
+            update(WalletTransaction)
+            .where(
+                WalletTransaction.user_id == user.id,
+                WalletTransaction.reference_id == None,
+                WalletTransaction.reference_type == "order",
+            )
+            .values(reference_id=order.id)
+        )
+        await db.commit()
+
+    # ── Reload order with items ───────────────────────────────────────────
     result = await db.execute(
         select(Order).where(Order.id == order.id).options(selectinload(Order.items))
     )
     order = result.scalar_one()
     order_dict = order.to_dict()
 
-    # ── Fire emails in the background (non-blocking) ──────────────────────
+    # ── Fire emails in background ─────────────────────────────────────────
     from app.email_service import send_order_confirmation, send_admin_order_notification
 
     background_tasks.add_task(
@@ -340,6 +375,7 @@ async def place_order(
         user_email=user.email,
         user_name=user.name or user.email,
         order=order_dict,
+        is_wallet=is_wallet,
     )
     background_tasks.add_task(
         send_admin_order_notification,
@@ -351,5 +387,20 @@ async def place_order(
         additional_note=additional_note,
     )
 
-    return order_dict
+    # ── Notification for user ─────────────────────────────────────────────
+    from app.models.notification import Notification
+    notif_msg = (
+        f"Your order #{order.id[:8].upper()} has been placed and payment confirmed."
+        if is_wallet
+        else f"Your order #{order.id[:8].upper()} is pending payment approval."
+    )
+    notif = Notification(
+        user_id=user.id,
+        title="Order Placed",
+        message=notif_msg,
+        type="order_status",
+    )
+    db.add(notif)
+    await db.commit()
 
+    return order_dict

@@ -51,6 +51,11 @@ dependencies:
   flutter_inappwebview: ^6.1.5
   currency_converter: ^3.0.0
 
+  # PDF Invoice
+  pdf: ^3.11.1
+  printing: ^5.13.2
+  share_plus: ^10.1.4
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

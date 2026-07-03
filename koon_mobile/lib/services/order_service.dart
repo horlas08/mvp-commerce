@@ -32,7 +32,7 @@ class OrderService {
     } catch (_) { return []; }
   }
 
-  Future<Map<String, dynamic>?> getOrder(String orderId) async {
+  Future<Map<String, dynamic>?> getOrderById(String orderId) async {
     try {
       final response = await _dio.get('${ApiConstants.orders}/$orderId');
       return response.data;

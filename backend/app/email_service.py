@@ -125,6 +125,7 @@ async def send_order_confirmation(
     user_email: str,
     user_name: str,
     order: dict,
+    is_wallet: bool = False,
 ) -> None:
     """Send order confirmation email to the customer."""
     order_id = str(order.get("id", ""))[:8].upper()
@@ -132,11 +133,17 @@ async def send_order_confirmation(
     items = order.get("items", [])
     rows = _items_table_html(items)
 
+    if is_wallet:
+        status_msg = "<p style='color:#27ae60;font-weight:600;'>✅ Payment confirmed via Wallet. Your order is being processed.</p>"
+    else:
+        status_msg = "<p style='color:#e67e22;font-weight:600;'>⏳ Your order is pending payment approval by our team. You will be notified once approved.</p>"
+
     body = f"""
-    <h2>Hi {user_name}, your order is confirmed! 🎉</h2>
+    <h2>Hi {user_name}, your order has been placed! 🎉</h2>
     <p>Thank you for shopping with {APP_NAME}. Here's a summary of your order:</p>
 
     <p><strong>Order ID:</strong> <span class="badge">#{order_id}</span></p>
+    {status_msg}
 
     <table>
       <thead>
@@ -164,9 +171,10 @@ async def send_order_confirmation(
     """
 
     html = _base_template("Order Confirmation", body)
+    subject = f"[{APP_NAME}] Order #{order_id} Confirmed ✅" if is_wallet else f"[{APP_NAME}] Order #{order_id} Pending Approval ⏳"
     await send_email(
         to=user_email,
-        subject=f"[{APP_NAME}] Order #{order_id} Confirmed ✅",
+        subject=subject,
         html_body=html,
     )
 
@@ -271,6 +279,87 @@ async def send_password_reset_email(to_email: str, name: str, code: str) -> None
     await send_email(
         to=to_email,
         subject=f"[{APP_NAME}] Password Reset Code: {code}",
+        html_body=html,
+    )
+
+
+async def send_payment_approved_email(user_email: str, user_name: str, order_id: str, total: float) -> None:
+    """Notify user that their manual payment has been approved."""
+    short_id = order_id[:8].upper()
+    body = f"""
+    <h2>✅ Payment Approved — Order #{short_id}</h2>
+    <p>Hi {user_name},</p>
+    <p>Great news! Your payment for order <strong>#{short_id}</strong> (Total: {total:.2f} SAR) has been <strong>approved</strong> by our team.</p>
+    <p>Your order is now being processed. You will receive updates as it progresses.</p>
+    """
+    html = _base_template("Payment Approved", body)
+    await send_email(
+        to=user_email,
+        subject=f"[{APP_NAME}] Payment Approved for Order #{short_id} ✅",
+        html_body=html,
+    )
+
+
+async def send_payment_rejected_email(user_email: str, user_name: str, order_id: str, total: float, reason: Optional[str] = None) -> None:
+    """Notify user that their manual payment has been rejected."""
+    short_id = order_id[:8].upper()
+    reason_section = f"<p><strong>Reason:</strong> {reason}</p>" if reason else ""
+    body = f"""
+    <h2>❌ Payment Rejected — Order #{short_id}</h2>
+    <p>Hi {user_name},</p>
+    <p>We're sorry, but your payment for order <strong>#{short_id}</strong> (Total: {total:.2f} SAR) could not be verified and has been <strong>rejected</strong>.</p>
+    {reason_section}
+    <p>Your order has been cancelled. If you believe this is an error, please contact our support team.</p>
+    """
+    html = _base_template("Payment Rejected", body)
+    await send_email(
+        to=user_email,
+        subject=f"[{APP_NAME}] Payment Rejected for Order #{short_id} ❌",
+        html_body=html,
+    )
+
+
+async def send_refund_status_email(user_email: str, user_name: str, order_id: str, amount: float, approved: bool, admin_note: Optional[str] = None) -> None:
+    """Notify user of refund approval or rejection."""
+    short_id = order_id[:8].upper()
+    if approved:
+        title = f"✅ Refund Approved — Order #{short_id}"
+        msg = f"Your refund of <strong>{amount:.2f} SAR</strong> for order #{short_id} has been <strong>approved</strong> and credited to your wallet."
+    else:
+        title = f"❌ Refund Rejected — Order #{short_id}"
+        msg = f"Your refund request for order #{short_id} has been <strong>rejected</strong>."
+    note_section = f"<p><strong>Admin Note:</strong> {admin_note}</p>" if admin_note else ""
+    body = f"""
+    <h2>{title}</h2>
+    <p>Hi {user_name},</p>
+    <p>{msg}</p>
+    {note_section}
+    <p>If you have questions, please contact our support team.</p>
+    """
+    html = _base_template(title, body)
+    await send_email(
+        to=user_email,
+        subject=f"[{APP_NAME}] {title}",
+        html_body=html,
+    )
+
+
+async def send_admin_contact_to_user_email(user_email: str, user_name: str, order_id: str, admin_message: str) -> None:
+    """Admin-initiated email to user regarding a specific order. Creates a support thread."""
+    short_id = order_id[:8].upper()
+    body = f"""
+    <h2>Message from {APP_NAME} Support — Order #{short_id}</h2>
+    <p>Hi {user_name},</p>
+    <p>Our team has reached out regarding your order <strong>#{short_id}</strong>:</p>
+    <blockquote style="border-left:4px solid #FF6B00; padding:12px 24px; color:#555; background:#f9f9f9; margin:16px 0;">
+      {admin_message}
+    </blockquote>
+    <p>Please log in to the app to reply to this message in the support chat.</p>
+    """
+    html = _base_template(f"Message Regarding Order #{short_id}", body)
+    await send_email(
+        to=user_email,
+        subject=f"[{APP_NAME}] Support Message for Order #{short_id}",
         html_body=html,
     )
 

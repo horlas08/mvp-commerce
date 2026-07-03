@@ -15,7 +15,7 @@ class RefundService {
     return [];
   }
 
-  Future<Map<String, dynamic>?> requestRefund({
+  Future<bool> requestRefund({
     required String orderId,
     required String reason,
   }) async {
@@ -27,10 +27,16 @@ class RefundService {
           'reason': reason,
         },
       );
-      if (response.statusCode == 200) {
-        return response.data;
-      }
+      return response.statusCode == 200 || response.statusCode == 201;
     } catch (_) {}
-    return null;
+    return false;
+  }
+
+  Future<bool> cancelRefund(String refundId) async {
+    try {
+      final response = await _dio.delete('${ApiConstants.refunds}/$refundId');
+      return response.statusCode == 200;
+    } catch (_) {}
+    return false;
   }
 }

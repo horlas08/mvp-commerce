@@ -2,7 +2,7 @@ from app.models.user import User
 from app.models.product import Product
 from app.models.category import Category
 from app.models.cart import CartItem, CartType
-from app.models.order import Order, OrderItem, OrderStatus
+from app.models.order import Order, OrderItem, OrderStatus, PaymentStatus
 from app.models.address import Address
 from app.models.wishlist import WishlistItem
 from app.models.coupon import Coupon
@@ -13,11 +13,12 @@ from app.models.location import State, City
 from app.models.payment_method import PaymentMethod
 from app.models.support import SupportTicket, SupportMessage
 from app.models.notification import Notification
+from app.models.wallet_transaction import WalletTransaction, WalletTransactionType
 
 __all__ = [
     "User", "Product", "Category", "CartItem", "CartType",
-    "Order", "OrderItem", "OrderStatus", "Address", "WishlistItem",
+    "Order", "OrderItem", "OrderStatus", "PaymentStatus", "Address", "WishlistItem",
     "Coupon", "Seller", "RefundRequest", "RefundStatus", "Banner",
     "State", "City", "PaymentMethod", "SupportTicket", "SupportMessage",
-    "Notification",
+    "Notification", "WalletTransaction", "WalletTransactionType",
 ]

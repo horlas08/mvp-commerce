@@ -10,6 +10,7 @@ import '../../controllers/auth_controller.dart';
 import '../../controllers/settings_controller.dart';
 import '../auth/login_screen.dart';
 import '../checkout/checkout_screen.dart';
+import '../webview/webview_screen.dart';
 
 class CartScreen extends StatelessWidget {
   final bool showBackButton;
@@ -217,6 +218,8 @@ class CartScreen extends StatelessWidget {
     final imageUrl = item['image_url'] ?? (item['product']?['images'] as List?)?.firstOrNull?.toString();
     final quantity = item['quantity'] ?? 1;
     final settingsController = Get.find<SettingsController>();
+    final externalUrl = item['external_url'] as String?;
+    final cartType = item['cart_type'] ?? controller.selectedCartType.value;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -232,29 +235,59 @@ class CartScreen extends StatelessWidget {
               activeColor: AppColors.primary,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
             ),
-            // Image
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: imageUrl != null
-                  ? CachedNetworkImage(imageUrl: imageUrl, width: 80, height: 80, fit: BoxFit.cover)
-                  : Container(width: 80, height: 80, color: AppColors.surfaceVariant, child: const Icon(Icons.image, color: AppColors.textHint)),
-            ),
-            const SizedBox(width: 12),
-            // Details
+            // Clickable Image & Info (navigates back to WebView if external url exists)
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, maxLines: 2, overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-                  const SizedBox(height: 6),
-                  Obx(() => Text(
-                        settingsController.formatPrice(priceVal, originalCurrency),
-                        style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.secondary),
-                      )),
-                ],
+              child: GestureDetector(
+                onTap: externalUrl != null && externalUrl.isNotEmpty
+                    ? () {
+                        // Open in WebViewScreen
+                        Get.to(() => WebViewScreen(
+                              initialUrl: externalUrl,
+                              siteName: cartType.toString().toUpperCase(),
+                            ));
+                      }
+                    : null,
+                behavior: HitTestBehavior.opaque,
+                child: Row(
+                  children: [
+                    // Image
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: imageUrl != null
+                          ? CachedNetworkImage(imageUrl: imageUrl, width: 80, height: 80, fit: BoxFit.cover)
+                          : Container(width: 80, height: 80, color: AppColors.surfaceVariant, child: const Icon(Icons.image, color: AppColors.textHint)),
+                    ),
+                    const SizedBox(width: 12),
+                    // Details
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis,
+                                    style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                              ),
+                              if (externalUrl != null && externalUrl.isNotEmpty) ...[
+                                const SizedBox(width: 4),
+                                const Icon(Icons.open_in_new, size: 14, color: AppColors.primary),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Obx(() => Text(
+                                settingsController.formatPrice(priceVal, originalCurrency),
+                                style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.secondary),
+                              )),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
+            const SizedBox(width: 8),
             // Quantity controls
             Column(
               children: [

@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../app/theme/app_colors.dart';
 import '../../controllers/home_controller.dart';
 import '../../controllers/settings_controller.dart';
@@ -28,6 +29,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final SettingsController _settingsController = Get.find<SettingsController>();
   final SupportController _supportController = Get.find<SupportController>();
   int _bannerIndex = 0;
+  bool _globalStoreViewGrid = false; // false = scroll (default), true = grid
 
   final List<Map<String, dynamic>> _externalStores = [
     {'name': 'Alibaba', 'logo': '🏭', 'color': Color(0xFFFF6B00), 'url': 'https://www.alibaba.com', 'subtitle': 'Wholesale', 'enabled': true},
@@ -36,6 +38,24 @@ class _HomeScreenState extends State<HomeScreen> {
     {'name': 'iHerb', 'logo': '🌿', 'color': Color(0xFF007943), 'url': 'https://www.iherb.com', 'subtitle': '', 'enabled': true},
     {'name': 'Amazon', 'logo': '📦', 'color': Color(0xFFFFA726), 'url': 'https://www.amazon.sa/-/language=ar_AE', 'subtitle': '', 'enabled': true},
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStoreViewPreference();
+  }
+
+  Future<void> _loadStoreViewPreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    final isGrid = prefs.getBool('global_store_view_grid') ?? false;
+    if (mounted) setState(() => _globalStoreViewGrid = isGrid);
+  }
+
+  Future<void> _toggleStoreView(bool grid) async {
+    setState(() => _globalStoreViewGrid = grid);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('global_store_view_grid', grid);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -221,82 +241,49 @@ class _HomeScreenState extends State<HomeScreen> {
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-                  child: Text('order_from_global'.tr(),
-                      style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text('order_from_global'.tr(),
+                            style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                      ),
+                      // List toggle
+                      GestureDetector(
+                        onTap: () => _toggleStoreView(false),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: !_globalStoreViewGrid ? AppColors.primary : AppColors.surfaceVariant,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(Icons.view_agenda_outlined, size: 18,
+                              color: !_globalStoreViewGrid ? Colors.white : AppColors.textSecondary),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      // Grid toggle
+                      GestureDetector(
+                        onTap: () => _toggleStoreView(true),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: _globalStoreViewGrid ? AppColors.primary : AppColors.surfaceVariant,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(Icons.grid_view_rounded, size: 18,
+                              color: _globalStoreViewGrid ? Colors.white : AppColors.textSecondary),
+                        ),
+                      ),
+                    ],
+                  ),
                 ).animate(delay: 300.ms).fadeIn(duration: 400.ms),
               ),
               SliverToBoxAdapter(
-                child: SizedBox(
-                  height: 120,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: _externalStores.length,
-                    itemBuilder: (context, index) {
-                      final store = _externalStores[index];
-                      return GestureDetector(
-                        onTap: store['enabled']
-                            ? () async {
-                                await WebViewScreen.setupCurrencyCookies(store['url']);
-                                if (!context.mounted) return;
-                                Navigator.push(context, MaterialPageRoute(
-                                    builder: (_) => WebViewScreen(initialUrl: store['url'], siteName: store['name'])));
-                              }
-                            : null,
-
-                        child: Container(
-                          width: 155,
-                          margin: const EdgeInsets.symmetric(horizontal: 6),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [store['color'], (store['color'] as Color).withOpacity(0.7)],
-                              begin: Alignment.topLeft, end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [BoxShadow(color: (store['color'] as Color).withOpacity(0.2), blurRadius: 10, offset: const Offset(0, 4))],
-                          ),
-                          child: Stack(
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    if (store['subtitle'] != '')
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white.withOpacity(0.2),
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: Text(store['subtitle'], style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600)),
-                                      ),
-                                    const Spacer(),
-                                    Text(store['logo'], style: const TextStyle(fontSize: 28)),
-                                    const SizedBox(height: 4),
-                                    Text(store['name'], style: GoogleFonts.inter(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
-                                  ],
-                                ),
-                              ),
-                              if (!store['enabled'])
-                                Positioned(
-                                  top: 10, right: 10,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.warning,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Text('soon'.tr(), style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700)),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ).animate(delay: Duration(milliseconds: 350 + (index * 80))).fadeIn(duration: 400.ms).slideX(begin: 0.1);
-                    },
-                  ),
-                ),
+                child: _globalStoreViewGrid
+                    ? _buildStoresGrid()
+                    : _buildStoresScrollList(),
               ),
 
               // Featured Categories
@@ -441,6 +428,141 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
       ],
     );
+  }
+
+  Widget _buildStoresScrollList() {
+    return SizedBox(
+      height: 120,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: _externalStores.length,
+        itemBuilder: (context, index) {
+          final store = _externalStores[index];
+          return _buildStoreCard(store, index, isGrid: false);
+        },
+      ),
+    );
+  }
+
+  Widget _buildStoresGrid() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      child: Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        alignment: WrapAlignment.start,
+        children: _externalStores.asMap().entries.map((entry) {
+          final index = entry.key;
+          final store = entry.value;
+          // Calculate width for 2 columns with spacing
+          final width = (MediaQuery.of(context).size.width - 52) / 2;
+          return SizedBox(
+            width: width,
+            height: 110,
+            child: _buildStoreCard(store, index, isGrid: true),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildStoreCard(Map<String, dynamic> store, int index, {required bool isGrid}) {
+    return GestureDetector(
+      onTap: store['enabled']
+          ? () async {
+              await WebViewScreen.setupCurrencyCookies(store['url']);
+              if (!mounted) return;
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => WebViewScreen(
+                    initialUrl: store['url'],
+                    siteName: store['name'],
+                  ),
+                ),
+              );
+            }
+          : null,
+      child: Container(
+        width: isGrid ? null : 155,
+        margin: isGrid ? EdgeInsets.zero : const EdgeInsets.symmetric(horizontal: 6),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [store['color'], (store['color'] as Color).withOpacity(0.7)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: (store['color'] as Color).withOpacity(0.2),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            )
+          ],
+        ),
+        child: Stack(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (store['subtitle'] != '')
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        store['subtitle'],
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  const Spacer(),
+                  Text(store['logo'], style: const TextStyle(fontSize: 28)),
+                  const SizedBox(height: 4),
+                  Text(
+                    store['name'],
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (!store['enabled'])
+              Positioned(
+                top: 10,
+                right: 10,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.warning,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'soon'.tr(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    ).animate(delay: Duration(milliseconds: 350 + (index * 60))).fadeIn(duration: 400.ms).slideX(begin: 0.1);
   }
 
   void _showNewTicketBottomSheet(BuildContext context) {

@@ -34,6 +34,7 @@ class User(Base):
     refund_requests = relationship("RefundRequest", back_populates="user", cascade="all, delete-orphan")
     support_tickets = relationship("SupportTicket", back_populates="user", cascade="all, delete-orphan")
     notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
+    wallet_transactions = relationship("WalletTransaction", back_populates="user", cascade="all, delete-orphan")
 
     def to_dict(self):
         return {
