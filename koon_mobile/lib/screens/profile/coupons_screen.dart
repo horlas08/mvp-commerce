@@ -21,7 +21,9 @@ class _CouponsScreenState extends State<CouponsScreen> {
   @override
   void initState() {
     super.initState();
-    _loadCoupons();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadCoupons();
+    });
   }
 
   Future<void> _loadCoupons() async {

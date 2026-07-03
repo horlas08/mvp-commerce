@@ -31,7 +31,9 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
   @override
   void initState() {
     super.initState();
-    _loadProducts();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadProducts();
+    });
   }
 
   Future<void> _loadProducts() async {

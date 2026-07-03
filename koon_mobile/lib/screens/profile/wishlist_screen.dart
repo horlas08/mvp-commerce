@@ -28,7 +28,9 @@ class _WishlistScreenState extends State<WishlistScreen> {
   @override
   void initState() {
     super.initState();
-    _loadWishlist();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadWishlist();
+    });
   }
 
   Future<void> _loadWishlist() async {
