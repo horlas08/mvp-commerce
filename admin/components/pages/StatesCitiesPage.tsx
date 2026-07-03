@@ -32,6 +32,15 @@ export default function StatesCitiesPage() {
 
   const [error, setError] = useState("");
 
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
   // Load States
   const loadStates = useCallback(async () => {
     setLoadingStates(true);
@@ -209,7 +218,7 @@ export default function StatesCitiesPage() {
       {/* Main Split Grid */}
       <div style={{
         display: "grid",
-        gridTemplateColumns: "1fr 1.2fr",
+        gridTemplateColumns: isMobile ? "1fr" : "1fr 1.2fr",
         gap: 24,
         alignItems: "start",
       }}>
