@@ -21,6 +21,7 @@ class Coupon(Base):
     used_count: Mapped[int] = mapped_column(Integer, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    applicability: Mapped[str] = mapped_column(String(20), default="all")  # all, internal, external
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     def to_dict(self, lang: str = "en"):
@@ -28,10 +29,15 @@ class Coupon(Base):
             "id": self.id,
             "code": self.code,
             "description": self.description_en if lang == "en" else self.description_ar,
+            "description_en": self.description_en,
+            "description_ar": self.description_ar,
             "discount_type": self.discount_type,
             "discount_value": self.discount_value,
             "min_order_amount": self.min_order_amount,
             "max_discount": self.max_discount,
+            "usage_limit": self.usage_limit,
+            "used_count": self.used_count,
             "is_active": self.is_active,
+            "applicability": self.applicability,
             "expires_at": self.expires_at.isoformat() if self.expires_at else None,
         }

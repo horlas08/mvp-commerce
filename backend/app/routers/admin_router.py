@@ -1141,3 +1141,136 @@ async def delete_payment_method_admin(
     await db.delete(method)
     await db.commit()
     return {"message": "Payment method deleted"}
+
+
+# ── Coupon Administration Endpoints ────────────────────────────────────────
+
+class CouponRequest(BaseModel):
+    code: str
+    description_en: Optional[str] = None
+    description_ar: Optional[str] = None
+    discount_type: str = "percentage"  # percentage, fixed
+    discount_value: float
+    min_order_amount: float = 0.0
+    max_discount: Optional[float] = None
+    usage_limit: Optional[int] = None
+    is_active: bool = True
+    expires_at: Optional[str] = None  # ISO format string
+    applicability: str = "all"  # all, internal, external
+
+
+@router.get("/coupons")
+async def list_coupons_admin(
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user)
+):
+    # Total count
+    count_query = select(func.count(Coupon.id))
+    result_count = await db.execute(count_query)
+    total = result_count.scalar() or 0
+
+    query = select(Coupon).order_by(Coupon.created_at.desc()).offset((page - 1) * limit).limit(limit)
+    result = await db.execute(query)
+    coupons = result.scalars().all()
+    return {
+        "total": total,
+        "coupons": [c.to_dict("en") for c in coupons]
+    }
+
+
+@router.post("/coupons")
+async def create_coupon_admin(
+    req: CouponRequest,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user)
+):
+    # Check uniqueness
+    existing = await db.execute(select(Coupon).where(Coupon.code == req.code))
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Coupon code already exists")
+
+    expires = None
+    if req.expires_at:
+        try:
+            expires = datetime.fromisoformat(req.expires_at.replace("Z", "+00:00")).replace(tzinfo=None)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid date format for expires_at")
+
+    coupon = Coupon(
+        code=req.code.upper().strip(),
+        description_en=req.description_en,
+        description_ar=req.description_ar,
+        discount_type=req.discount_type,
+        discount_value=req.discount_value,
+        min_order_amount=req.min_order_amount,
+        max_discount=req.max_discount,
+        usage_limit=req.usage_limit,
+        is_active=req.is_active,
+        expires_at=expires,
+        applicability=req.applicability,
+    )
+    db.add(coupon)
+    await db.commit()
+    await db.refresh(coupon)
+    return coupon.to_dict("en")
+
+
+@router.put("/coupons/{coupon_id}")
+async def update_coupon_admin(
+    coupon_id: str,
+    req: CouponRequest,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user)
+):
+    result = await db.execute(select(Coupon).where(Coupon.id == coupon_id))
+    coupon = result.scalar_one_or_none()
+    if not coupon:
+        raise HTTPException(status_code=404, detail="Coupon not found")
+
+    # Check uniqueness if code is changed
+    if coupon.code != req.code.upper().strip():
+        existing = await db.execute(select(Coupon).where(Coupon.code == req.code.upper().strip()))
+        if existing.scalar_one_or_none():
+            raise HTTPException(status_code=400, detail="Coupon code already exists")
+
+    expires = None
+    if req.expires_at:
+        try:
+            expires = datetime.fromisoformat(req.expires_at.replace("Z", "+00:00")).replace(tzinfo=None)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid date format for expires_at")
+
+    coupon.code = req.code.upper().strip()
+    coupon.description_en = req.description_en
+    coupon.description_ar = req.description_ar
+    coupon.discount_type = req.discount_type
+    coupon.discount_value = req.discount_value
+    coupon.min_order_amount = req.min_order_amount
+    coupon.max_discount = req.max_discount
+    coupon.usage_limit = req.usage_limit
+    coupon.is_active = req.is_active
+    coupon.expires_at = expires
+    coupon.applicability = req.applicability
+
+    await db.commit()
+    await db.refresh(coupon)
+    return coupon.to_dict("en")
+
+
+@router.delete("/coupons/{coupon_id}")
+async def delete_coupon_admin(
+    coupon_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user)
+):
+    result = await db.execute(select(Coupon).where(Coupon.id == coupon_id))
+    coupon = result.scalar_one_or_none()
+    if not coupon:
+        raise HTTPException(status_code=404, detail="Coupon not found")
+
+    await db.delete(coupon)
+    await db.commit()
+    return {"message": "Coupon deleted"}
+

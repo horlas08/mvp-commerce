@@ -192,6 +192,20 @@ export const adminApi = {
     }),
   getSupportUnreadCount: () =>
     apiFetch<{ count: number }>("/support/admin/unread-count"),
+
+  // Coupons
+  listCoupons: (params?: { page?: number; limit?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.page) q.set("page", String(params.page));
+    if (params?.limit) q.set("limit", String(params.limit));
+    return apiFetch<{ total: number; coupons: Coupon[] }>(`/admin/coupons?${q}`);
+  },
+  createCoupon: (data: CreateCouponPayload) =>
+    apiFetch<Coupon>("/admin/coupons", { method: "POST", body: JSON.stringify(data) }),
+  updateCoupon: (id: string, data: CreateCouponPayload) =>
+    apiFetch<Coupon>(`/admin/coupons/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteCoupon: (id: string) =>
+    apiFetch(`/admin/coupons/${id}`, { method: "DELETE" }),
 };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -374,4 +388,35 @@ export interface WalletTransaction {
   reference_type?: string | null;
   balance_after: number;
   created_at: string;
+}
+
+export interface Coupon {
+  id: string;
+  code: string;
+  description?: string;
+  description_en?: string;
+  description_ar?: string;
+  discount_type: "percentage" | "fixed";
+  discount_value: number;
+  min_order_amount: number;
+  max_discount?: number;
+  usage_limit?: number;
+  used_count: number;
+  is_active: boolean;
+  expires_at?: string;
+  applicability: "all" | "internal" | "external";
+}
+
+export interface CreateCouponPayload {
+  code: string;
+  description_en?: string;
+  description_ar?: string;
+  discount_type: string;
+  discount_value: number;
+  min_order_amount?: number;
+  max_discount?: number;
+  usage_limit?: number;
+  is_active?: boolean;
+  expires_at?: string;
+  applicability: string;
 }
