@@ -68,6 +68,26 @@ class _AddressFormBottomSheetState extends State<AddressFormBottomSheet> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_ctrl.selectedState.value == null) {
+      Get.snackbar(
+        'error'.tr(),
+        'select_state'.tr(),
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: AppColors.error,
+        colorText: Colors.white,
+      );
+      return;
+    }
+    if (_ctrl.selectedCity.value == null) {
+      Get.snackbar(
+        'error'.tr(),
+        'select_city'.tr(),
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: AppColors.error,
+        colorText: Colors.white,
+      );
+      return;
+    }
     bool success;
     if (isEditing) {
       success = await _ctrl.updateAddress(
@@ -161,7 +181,7 @@ class _AddressFormBottomSheetState extends State<AddressFormBottomSheet> {
                     children: [
                       _buildField(
                         controller: _labelCtrl,
-                        label: 'address_label'.tr(),
+                        label: '${'address_label'.tr()} *',
                         icon: Icons.label_outline,
                         validator: (v) =>
                             v!.isEmpty ? 'name_is_required'.tr() : null,
@@ -178,7 +198,7 @@ class _AddressFormBottomSheetState extends State<AddressFormBottomSheet> {
                           );
                         }
                         return _buildDropdown(
-                          label: 'select_state'.tr(),
+                          label: '${'select_state'.tr()} *',
                           icon: Icons.map_outlined,
                           value: _ctrl.selectedState.value,
                           items: _ctrl.states,
@@ -198,7 +218,7 @@ class _AddressFormBottomSheetState extends State<AddressFormBottomSheet> {
                           );
                         }
                         return _buildDropdown(
-                          label: 'select_city'.tr(),
+                          label: '${'select_city'.tr()} *',
                           icon: Icons.location_city_outlined,
                           value: _ctrl.selectedCity.value,
                           items: _ctrl.cities,
@@ -213,7 +233,7 @@ class _AddressFormBottomSheetState extends State<AddressFormBottomSheet> {
                       const SizedBox(height: 14),
                       _buildField(
                         controller: _streetCtrl,
-                        label: 'street_address'.tr(),
+                        label: '${'street_address'.tr()} *',
                         icon: Icons.home_outlined,
                         validator: (v) =>
                             v!.isEmpty ? 'name_is_required'.tr() : null,
@@ -221,11 +241,24 @@ class _AddressFormBottomSheetState extends State<AddressFormBottomSheet> {
                       const SizedBox(height: 14),
                       _buildField(
                         controller: _phoneCtrl,
-                        label: 'phone'.tr(),
+                        label: '${'phone'.tr()} *',
                         icon: Icons.phone_outlined,
                         keyboardType: TextInputType.phone,
-                        validator: (v) =>
-                            v!.isEmpty ? 'name_is_required'.tr() : null,
+                        validator: (v) {
+                          if (v == null || v.isEmpty) {
+                            return 'name_is_required'.tr();
+                          }
+                          final numericOnly = v.replaceAll(RegExp(r'\D'), '');
+                          if (numericOnly.length != 9 || v.length != 9) {
+                            return 'phone_validation_error'.tr();
+                          }
+                          final prefix = numericOnly.substring(0, 2);
+                          const allowedPrefixes = {'70', '71', '73', '77', '78'};
+                          if (!allowedPrefixes.contains(prefix)) {
+                            return 'phone_validation_error'.tr();
+                          }
+                          return null;
+                        },
                       ),
                       const SizedBox(height: 24),
                       // Submit

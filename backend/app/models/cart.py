@@ -2,7 +2,7 @@ import uuid
 import enum
 from datetime import datetime, timezone
 from typing import Optional
-from sqlalchemy import String, Float, Integer, Text, DateTime, ForeignKey, Enum
+from sqlalchemy import String, Float, Integer, Text, DateTime, ForeignKey, Enum, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
@@ -33,6 +33,8 @@ class CartItem(Base):
     image_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     external_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     site_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    # JSON-encoded variant selections, e.g. {"Color": "Red", "Size": "XL"}
+    selections_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     quantity: Mapped[int] = mapped_column(Integer, default=1)
     is_selected: Mapped[bool] = mapped_column(default=True)
@@ -59,4 +61,5 @@ class CartItem(Base):
             result["image_url"] = self.image_url
             result["external_url"] = self.external_url
             result["site_name"] = self.site_name
+            result["selections_json"] = self.selections_json
         return result

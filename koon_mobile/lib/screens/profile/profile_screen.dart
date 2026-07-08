@@ -18,6 +18,7 @@ import '../auth/login_screen.dart';
 import 'edit_profile_screen.dart';
 import 'addresses_screen.dart';
 import 'wishlist_screen.dart';
+import 'policy_detail_screen.dart';
 import 'refund_requests_screen.dart';
 import 'coupons_screen.dart';
 import 'become_seller_screen.dart';
@@ -273,6 +274,57 @@ class ProfileScreen extends StatelessWidget {
                       iconColor: Colors.deepPurple,
                       title: 'browse_all_sellers'.tr(),
                       onTap: () => _showSellersDialog(context, sellerService),
+                    ),
+                  ]),
+
+                  const SizedBox(height: 20),
+
+                  // Policies Card
+                  _buildSectionHeader('policies'.tr()),
+                  _buildCardContainer([
+                    _buildSettingsTile(
+                      icon: Icons.local_shipping_outlined,
+                      iconColor: Colors.blue,
+                      title: 'shipping_confirmation'.tr(),
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const PolicyDetailScreen(
+                            policyKey: 'shipping_confirmation',
+                            title: 'Shipping & Confirmation',
+                          ),
+                        ),
+                      ),
+                    ),
+                    _buildDivider(),
+                    _buildSettingsTile(
+                      icon: Icons.find_in_page_outlined,
+                      iconColor: Colors.blue,
+                      title: 'inspection_policy'.tr(),
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const PolicyDetailScreen(
+                            policyKey: 'inspection_policy',
+                            title: 'Inspection Policy',
+                          ),
+                        ),
+                      ),
+                    ),
+                    _buildDivider(),
+                    _buildSettingsTile(
+                      icon: Icons.store_mall_directory_outlined,
+                      iconColor: Colors.blue,
+                      title: 'pickup_delivery'.tr(),
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const PolicyDetailScreen(
+                            policyKey: 'pickup_delivery',
+                            title: 'Pickup & Delivery',
+                          ),
+                        ),
+                      ),
                     ),
                   ]),
 
@@ -541,6 +593,22 @@ class ProfileScreen extends StatelessWidget {
               trailing: settingsController.currentCurrency.value == 'SAR' ? const Icon(Icons.check, color: AppColors.primary) : null,
               onTap: () {
                 settingsController.setCurrency('SAR');
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              title: Text('yemeni_rial_old'.tr()),
+              trailing: settingsController.currentCurrency.value == 'YER_OLD' ? const Icon(Icons.check, color: AppColors.primary) : null,
+              onTap: () {
+                settingsController.setCurrency('YER_OLD');
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              title: Text('yemeni_rial_new'.tr()),
+              trailing: settingsController.currentCurrency.value == 'YER_NEW' ? const Icon(Icons.check, color: AppColors.primary) : null,
+              onTap: () {
+                settingsController.setCurrency('YER_NEW');
                 Navigator.pop(context);
               },
             ),

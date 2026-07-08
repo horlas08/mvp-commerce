@@ -9,7 +9,6 @@ import '../../controllers/cart_controller.dart';
 import '../../controllers/settings_controller.dart';
 import 'steps/step1_address.dart';
 import 'steps/step2_shipping.dart';
-import 'steps/step3_review.dart';
 import 'steps/step4_payment.dart';
 
 class CheckoutScreen extends StatefulWidget {
@@ -35,14 +34,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   static const List<String> _stepKeys = [
     'step_address',
-    'step_shipping',
     'step_review',
     'step_payment',
   ];
 
   static const List<IconData> _stepIcons = [
     Icons.location_on_outlined,
-    Icons.local_shipping_outlined,
     Icons.receipt_long_outlined,
     Icons.payment_outlined,
   ];
@@ -78,9 +75,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           children: [
             // ── Step indicator ──────────────────────────────────────────
             _buildStepIndicator(),
-
-            // ── Currency selector banner/row ────────────────────────────
-            _buildCurrencySelector(),
 
             // ── Step content ────────────────────────────────────────────
             Expanded(
@@ -296,9 +290,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       case 1:
         return const Step2Shipping(key: ValueKey('step2'));
       case 2:
-        return const Step3Review(key: ValueKey('step3'));
-      case 3:
-        return const Step4Payment(key: ValueKey('step4'));
+        return const Step4Payment(key: ValueKey('step3'));
       default:
         return const SizedBox();
     }
@@ -307,7 +299,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   Widget _buildBottomBar() {
     return Obx(() {
       final step = _ctrl.currentStep.value;
-      final isLastStep = step == 3;
+      final isLastStep = step == 2;
 
       bool canProceed;
       switch (step) {
@@ -318,9 +310,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           canProceed = _ctrl.canProceedStep2;
           break;
         case 2:
-          canProceed = true;
-          break;
-        case 3:
           canProceed = _ctrl.selectedPaymentMethod.value != null;
           break;
         default:

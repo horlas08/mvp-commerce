@@ -286,10 +286,57 @@ async def place_order(
             )
         )
 
-    # ── Add team review fee for external carts ────────────────────────────
-    if allow_team_review and cart_type != "internal":
-        total += 5.0
+    # ── Calculate dynamic shipping and commission fees ───────────────────
+    from app.models.address import Address
+    from app.models.location import State, City
 
+    result_addr = await db.execute(select(Address).where(Address.id == address_id, Address.user_id == user.id))
+    addr = result_addr.scalar_one_or_none()
+
+    shipping_fee = 0.0
+    commission = 0.0
+
+    if addr:
+        state_db = None
+        if addr.state:
+            result_state = await db.execute(select(State).where((State.name_en == addr.state) | (State.name_ar == addr.state)))
+            state_db = result_state.scalar_one_or_none()
+
+        city_db = None
+        if addr.city:
+            result_city = await db.execute(select(City).where((City.name_en == addr.city) | (City.name_ar == addr.city)))
+            city_db = result_city.scalar_one_or_none()
+
+        if shipping_type == "home":
+            if city_db and city_db.free_shipping:
+                shipping_fee = 0.0
+            elif state_db and state_db.free_shipping:
+                shipping_fee = 0.0
+            else:
+                if city_db and city_db.shipping_fee > 0:
+                    shipping_fee = city_db.shipping_fee
+                elif state_db and state_db.shipping_fee > 0:
+                    shipping_fee = state_db.shipping_fee
+                else:
+                    shipping_fee = 0.0
+
+        if allow_team_review and cart_type != "internal":
+            if city_db and city_db.no_commission:
+                commission = 0.0
+            elif state_db and state_db.no_commission:
+                commission = 0.0
+            else:
+                if city_db and city_db.commission > 0:
+                    commission = city_db.commission
+                elif state_db and state_db.commission > 0:
+                    commission = state_db.commission
+                else:
+                    commission = 5.0
+    else:
+        if allow_team_review and cart_type != "internal":
+            commission = 5.0
+
+    total += shipping_fee + commission
     total = round(total, 2)
 
     # ── Determine payment status based on method ──────────────────────────

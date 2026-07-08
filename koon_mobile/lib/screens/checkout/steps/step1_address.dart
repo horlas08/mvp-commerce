@@ -34,14 +34,6 @@ class Step1Address extends StatelessWidget {
                         color: AppColors.textPrimary,
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'address_not_selectable'.tr(),
-                      style: GoogleFonts.inter(
-                        fontSize: 11,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
                   ],
                 ),
               ),
@@ -180,9 +172,7 @@ class _AddressSelectCard extends StatelessWidget {
       final canSelect = hasLocation;
 
       return GestureDetector(
-        onTap: canSelect
-            ? () => ctrl.selectedAddress.value = address
-            : () => AppSnackbar.warning(context, 'address_not_selectable'.tr()),
+        onTap: () => ctrl.selectedAddress.value = address,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           margin: const EdgeInsets.only(bottom: 12),

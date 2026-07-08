@@ -5,8 +5,23 @@ import { Plus, Pencil, Trash2, RefreshCw, MapPin, Building } from "lucide-react"
 import { adminApi, State, City } from "@/lib/api";
 import { useLang } from "@/lib/lang-context";
 
-const EMPTY_STATE_FORM = { name_en: "", name_ar: "" };
-const EMPTY_CITY_FORM = { name_en: "", name_ar: "" };
+const EMPTY_STATE_FORM = {
+  name_en: "",
+  name_ar: "",
+  shipping_fee: 0,
+  commission: 0,
+  free_shipping: false,
+  no_commission: false,
+};
+
+const EMPTY_CITY_FORM = {
+  name_en: "",
+  name_ar: "",
+  shipping_fee: 0,
+  commission: 0,
+  free_shipping: false,
+  no_commission: false,
+};
 
 export default function StatesCitiesPage() {
   const { t, lang } = useLang();
@@ -110,6 +125,10 @@ export default function StatesCitiesPage() {
     setStateForm({
       name_en: s.name_en,
       name_ar: s.name_ar,
+      shipping_fee: s.shipping_fee ?? 0,
+      commission: s.commission ?? 0,
+      free_shipping: !!s.free_shipping,
+      no_commission: !!s.no_commission,
     });
     setShowStateModal(true);
   };
@@ -158,6 +177,10 @@ export default function StatesCitiesPage() {
     setCityForm({
       name_en: c.name_en,
       name_ar: c.name_ar,
+      shipping_fee: c.shipping_fee ?? 0,
+      commission: c.commission ?? 0,
+      free_shipping: !!c.free_shipping,
+      no_commission: !!c.no_commission,
     });
     setShowCityModal(true);
   };
@@ -171,12 +194,20 @@ export default function StatesCitiesPage() {
           state_id: selectedState.id,
           name_en: cityForm.name_en,
           name_ar: cityForm.name_ar,
+          shipping_fee: Number(cityForm.shipping_fee),
+          commission: Number(cityForm.commission),
+          free_shipping: cityForm.free_shipping,
+          no_commission: cityForm.no_commission,
         });
       } else {
         await adminApi.createCity({
           state_id: selectedState.id,
           name_en: cityForm.name_en,
           name_ar: cityForm.name_ar,
+          shipping_fee: Number(cityForm.shipping_fee),
+          commission: Number(cityForm.commission),
+          free_shipping: cityForm.free_shipping,
+          no_commission: cityForm.no_commission,
         });
       }
       setShowCityModal(false);
@@ -453,6 +484,54 @@ export default function StatesCitiesPage() {
                   dir="rtl"
                 />
               </div>
+              <div className="form-group">
+                <label className="form-label">{t("shippingFee")} (SAR)</label>
+                <input
+                  id="state-shipping-fee"
+                  type="number"
+                  className="input"
+                  value={stateForm.shipping_fee}
+                  onChange={e => setStateForm(f => ({ ...f, shipping_fee: Number(e.target.value) }))}
+                  disabled={stateForm.free_shipping}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">{t("commission")} (SAR)</label>
+                <input
+                  id="state-commission"
+                  type="number"
+                  className="input"
+                  value={stateForm.commission}
+                  onChange={e => setStateForm(f => ({ ...f, commission: Number(e.target.value) }))}
+                  disabled={stateForm.no_commission}
+                />
+              </div>
+              <div style={{ display: "flex", gap: 20, marginTop: 8 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={stateForm.free_shipping}
+                    onChange={e => setStateForm(f => ({
+                      ...f,
+                      free_shipping: e.target.checked,
+                      shipping_fee: e.target.checked ? 0 : f.shipping_fee
+                    }))}
+                  />
+                  {t("freeShipping")}
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={stateForm.no_commission}
+                    onChange={e => setStateForm(f => ({
+                      ...f,
+                      no_commission: e.target.checked,
+                      commission: e.target.checked ? 0 : f.commission
+                    }))}
+                  />
+                  {t("noCommission")}
+                </label>
+              </div>
             </div>
             <div className="modal-footer">
               <button className="btn btn-ghost" onClick={() => setShowStateModal(false)}>{t("cancel")}</button>
@@ -493,6 +572,54 @@ export default function StatesCitiesPage() {
                   onChange={e => setCityForm(f => ({ ...f, name_ar: e.target.value }))}
                   dir="rtl"
                 />
+              </div>
+              <div className="form-group">
+                <label className="form-label">{t("shippingFee")} (SAR)</label>
+                <input
+                  id="city-shipping-fee"
+                  type="number"
+                  className="input"
+                  value={cityForm.shipping_fee}
+                  onChange={e => setCityForm(f => ({ ...f, shipping_fee: Number(e.target.value) }))}
+                  disabled={cityForm.free_shipping}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">{t("commission")} (SAR)</label>
+                <input
+                  id="city-commission"
+                  type="number"
+                  className="input"
+                  value={cityForm.commission}
+                  onChange={e => setCityForm(f => ({ ...f, commission: Number(e.target.value) }))}
+                  disabled={cityForm.no_commission}
+                />
+              </div>
+              <div style={{ display: "flex", gap: 20, marginTop: 8 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={cityForm.free_shipping}
+                    onChange={e => setCityForm(f => ({
+                      ...f,
+                      free_shipping: e.target.checked,
+                      shipping_fee: e.target.checked ? 0 : f.shipping_fee
+                    }))}
+                  />
+                  {t("freeShipping")}
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={cityForm.no_commission}
+                    onChange={e => setCityForm(f => ({
+                      ...f,
+                      no_commission: e.target.checked,
+                      commission: e.target.checked ? 0 : f.commission
+                    }))}
+                  />
+                  {t("noCommission")}
+                </label>
               </div>
             </div>
             <div className="modal-footer">

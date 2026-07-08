@@ -28,9 +28,9 @@ class MapPickerScreen extends StatefulWidget {
 
 class _MapPickerScreenState extends State<MapPickerScreen>
     with OSMMixinObserver {
-  // Default to Riyadh
-  static const double _defaultLat = 24.7136;
-  static const double _defaultLng = 46.6753;
+  // Default to Yemen (Sana'a)
+  static const double _defaultLat = 15.35;
+  static const double _defaultLng = 44.20;
 
   late MapController _mapController;
   GeoPoint _markerPosition = GeoPoint(

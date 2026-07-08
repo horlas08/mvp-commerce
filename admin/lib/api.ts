@@ -220,6 +220,15 @@ export const adminApi = {
     apiFetch<Coupon>(`/admin/coupons/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteCoupon: (id: string) =>
     apiFetch(`/admin/coupons/${id}`, { method: "DELETE" }),
+
+  // App Settings
+  listAppSettings: () =>
+    apiFetch<Record<string, { key: string; value_en: string; value_ar: string }>>("/admin/settings"),
+  updateAppSetting: (key: string, data: { value_en: string; value_ar: string }) =>
+    apiFetch<{ key: string; value_en: string; value_ar: string }>(`/admin/settings/${key}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
 };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -340,6 +349,10 @@ export interface State {
   id: string;
   name_en: string;
   name_ar: string;
+  shipping_fee: number;
+  commission: number;
+  free_shipping: boolean;
+  no_commission: boolean;
 }
 
 export interface City {
@@ -347,6 +360,10 @@ export interface City {
   state_id: string;
   name_en: string;
   name_ar: string;
+  shipping_fee: number;
+  commission: number;
+  free_shipping: boolean;
+  no_commission: boolean;
 }
 
 export interface PaginatedUsers { users: AdminUser[]; total: number; page: number; limit: number; }

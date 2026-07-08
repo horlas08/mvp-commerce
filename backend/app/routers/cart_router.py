@@ -22,12 +22,15 @@ class AddToCartRequest(BaseModel):
     image_url: Optional[str] = None
     external_url: Optional[str] = None
     site_name: Optional[str] = None
+    selections_json: Optional[str] = None
     quantity: int = 1
 
 
 class UpdateCartRequest(BaseModel):
     quantity: Optional[int] = None
     is_selected: Optional[bool] = None
+    price: Optional[str] = None
+
 
 
 @router.get("")
@@ -84,6 +87,9 @@ async def add_to_cart(
         existing = result.scalar_one_or_none()
         if existing:
             existing.quantity += req.quantity
+            # Update selections if provided (user may have changed variant)
+            if req.selections_json is not None:
+                existing.selections_json = req.selections_json
             await db.commit()
             await db.refresh(existing)
             return existing.to_dict(lang)
@@ -98,6 +104,7 @@ async def add_to_cart(
         image_url=req.image_url,
         external_url=req.external_url,
         site_name=req.site_name,
+        selections_json=req.selections_json,
         quantity=req.quantity,
     )
     db.add(item)
@@ -130,6 +137,8 @@ async def update_cart_item(
         item.quantity = req.quantity
     if req.is_selected is not None:
         item.is_selected = req.is_selected
+    if req.price is not None:
+        item.price = req.price
 
     await db.commit()
     await db.refresh(item)

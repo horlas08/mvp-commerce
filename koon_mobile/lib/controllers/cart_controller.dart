@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:get/get.dart';
 import '../services/cart_service.dart';
@@ -17,6 +18,13 @@ class CartController extends GetxController {
   final RxBool isLoading = false.obs;
   final RxInt totalCartCount = 0.obs;
 
+  // ── Cart Auto-Update Refresh States & Queue ─────────────────────────────
+  final RxList<Map<String, dynamic>> refreshQueue = <Map<String, dynamic>>[].obs;
+  final RxMap<String, String> itemStatuses = <String, String>{}.obs;
+  final RxMap<String, String> itemUpdatedPrices = <String, String>{}.obs;
+  final Rxn<Map<String, dynamic>> currentRefreshItem = Rxn<Map<String, dynamic>>();
+  Timer? _refreshTimeout;
+
   final List<Map<String, String>> cartTypes = [
     {'key': 'internal', 'label_en': 'Internal Cart', 'label_ar': 'السلة الداخلية'},
     {'key': 'amazon', 'label_en': 'Amazon Cart', 'label_ar': 'سلة أمازون'},
@@ -33,13 +41,85 @@ class CartController extends GetxController {
     ever(selectedCartType, (_) => loadCart());
   }
 
+  @override
+  void onClose() {
+    _refreshTimeout?.cancel();
+    super.onClose();
+  }
+
   Future<void> loadCart() async {
     isLoading.value = true;
     final lang = Get.locale?.languageCode ?? 'en';
     cartItems.value = await _cartService.getCart(cartType: selectedCartType.value, lang: lang);
     isLoading.value = false;
     _refreshTotalCount();
+
+    if (selectedCartType.value != 'internal') {
+      startCartRefresh();
+    }
   }
+
+  void startCartRefresh() {
+    _refreshTimeout?.cancel();
+    refreshQueue.clear();
+    itemStatuses.clear();
+    itemUpdatedPrices.clear();
+    currentRefreshItem.value = null;
+
+    final externalItems = cartItems.where((item) {
+      final extUrl = item['external_url']?.toString() ?? '';
+      return extUrl.isNotEmpty;
+    }).toList();
+
+    if (externalItems.isEmpty) return;
+
+    for (var item in externalItems) {
+      itemStatuses[item['id']] = 'pending';
+    }
+    refreshQueue.addAll(externalItems);
+    _nextQueueItem();
+  }
+
+  void _nextQueueItem() {
+    _refreshTimeout?.cancel();
+    if (refreshQueue.isEmpty) {
+      currentRefreshItem.value = null;
+      return;
+    }
+    final item = refreshQueue.removeAt(0);
+    currentRefreshItem.value = item;
+    itemStatuses[item['id']] = 'updating';
+
+    _refreshTimeout = Timer(const Duration(seconds: 15), () {
+      if (currentRefreshItem.value?['id'] == item['id']) {
+        Get.log("Timeout refreshing cart item ${item['id']}");
+        onRefreshFailed(item['id']);
+      }
+    });
+  }
+
+  void onRefreshComplete(String itemId, String? newPrice, {bool outOfStock = false}) async {
+    _refreshTimeout?.cancel();
+    if (outOfStock) {
+      itemStatuses[itemId] = 'out_of_stock';
+      await updateItemPrice(itemId, "Out of Stock");
+    } else if (newPrice != null) {
+      itemStatuses[itemId] = 'success';
+      itemUpdatedPrices[itemId] = newPrice;
+      final sarPrice = await KoonCurrencyService.convertToSar(newPrice);
+      await updateItemPrice(itemId, sarPrice);
+    } else {
+      itemStatuses[itemId] = 'success';
+    }
+    _nextQueueItem();
+  }
+
+  void onRefreshFailed(String itemId) {
+    _refreshTimeout?.cancel();
+    itemStatuses[itemId] = 'error';
+    _nextQueueItem();
+  }
+
 
   Future<void> _refreshTotalCount() async {
     // Get total count across all cart types
@@ -56,6 +136,7 @@ class CartController extends GetxController {
     String? imageUrl,
     String? externalUrl,
     String? siteName,
+    String? selectionsJson,
     int quantity = 1,
   }) async {
     String? convertedPrice = price;
@@ -72,6 +153,7 @@ class CartController extends GetxController {
         imageUrl: imageUrl,
         externalUrl: externalUrl,
         siteName: siteName,
+        selectionsJson: selectionsJson,
         quantity: quantity,
       );
       if (result != null) {
@@ -95,6 +177,11 @@ class CartController extends GetxController {
 
   Future<void> updateQuantity(String itemId, int quantity) async {
     final success = await _cartService.updateCartItem(itemId, quantity: quantity);
+    if (success) await loadCart();
+  }
+
+  Future<void> updateItemPrice(String itemId, String price) async {
+    final success = await _cartService.updateCartItem(itemId, price: price);
     if (success) await loadCart();
   }
 

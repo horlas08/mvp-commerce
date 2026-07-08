@@ -5,6 +5,7 @@ import 'package:get/get.dart' hide Trans;
 import 'package:google_fonts/google_fonts.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../controllers/checkout_controller.dart';
+import '../../../controllers/settings_controller.dart';
 
 class Step2Shipping extends StatelessWidget {
   const Step2Shipping({super.key});
@@ -17,6 +18,7 @@ class Step2Shipping extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ctrl = Get.find<CheckoutController>();
+    final settings = Get.find<SettingsController>();
     final isExternal = ctrl.cartType != 'internal';
 
     return SingleChildScrollView(
@@ -180,6 +182,10 @@ class Step2Shipping extends StatelessWidget {
               contentPadding: const EdgeInsets.all(16),
             ),
           ).animate(delay: 120.ms).fadeIn(duration: 300.ms),
+          const SizedBox(height: 24),
+          _PriceBreakdown(ctrl: ctrl, settings: settings)
+              .animate(delay: 140.ms)
+              .fadeIn(duration: 300.ms),
         ],
       ),
     );
@@ -398,5 +404,79 @@ class _TeamReviewCard extends StatelessWidget {
         ),
       ),
     ));
+  }
+}
+
+class _PriceBreakdown extends StatelessWidget {
+  final CheckoutController ctrl;
+  final SettingsController settings;
+
+  const _PriceBreakdown({required this.ctrl, required this.settings});
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() => Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: AppColors.secondaryGradient,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        children: [
+          _priceRow('subtotal'.tr(), settings.formatPrice(ctrl.subtotal, 'SAR'),
+              Colors.white70),
+          if (ctrl.shippingFee > 0)
+            _priceRow(
+              'shipping_fee'.tr(),
+              settings.formatPrice(ctrl.shippingFee, 'SAR'),
+              Colors.white70,
+            ),
+          if (ctrl.teamReviewFee > 0)
+            _priceRow(
+              'service_fee'.tr(),
+              settings.formatPrice(ctrl.teamReviewFee, 'SAR'),
+              Colors.white70,
+            ),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 10),
+            child: Divider(color: Colors.white24, height: 1),
+          ),
+          _priceRow(
+            'order_total'.tr(),
+            settings.formatPrice(ctrl.orderTotal, 'SAR'),
+            Colors.white,
+            isTotal: true,
+          ),
+        ],
+      ),
+    ));
+  }
+
+  Widget _priceRow(String label, String value, Color color,
+      {bool isTotal = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              fontSize: isTotal ? 15 : 13,
+              fontWeight: isTotal ? FontWeight.w700 : FontWeight.w400,
+              color: color,
+            ),
+          ),
+          Text(
+            value,
+            style: GoogleFonts.inter(
+              fontSize: isTotal ? 18 : 13,
+              fontWeight: isTotal ? FontWeight.w800 : FontWeight.w500,
+              color: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

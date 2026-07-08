@@ -1,15 +1,16 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request, Response, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
 from dotenv import load_dotenv
 import json
+from sqlalchemy.ext.asyncio import AsyncSession
 
 # Load .env so SMTP / config vars are available via os.getenv()
 load_dotenv()
 
-from app.database import init_db
+from app.database import init_db, get_db
 from app.routers import (
     auth_router,
     user_router,
@@ -132,6 +133,17 @@ app.include_router(support_router.router, prefix=API_PREFIX)
 app.include_router(notification_router.router, prefix=API_PREFIX)
 
 
+@app.get(API_PREFIX + "/settings")
+async def get_public_settings(
+    db: AsyncSession = Depends(get_db)
+):
+    from app.models.app_setting import AppSetting
+    from sqlalchemy import select
+    result = await db.execute(select(AppSetting))
+    settings = result.scalars().all()
+    return {s.key: s.to_dict() for s in settings}
+
+
 @app.get("/")
 def read_root():
     return {"message": "Koon Commerce API v2.0 is running.", "docs": "/docs"}
@@ -151,34 +163,50 @@ async def _seed_demo_data():
     from datetime import datetime, timedelta, timezone
 
     async with async_session() as db:
-        # Seed States & Cities if State table is empty
-        state_check = await db.execute(select(State).limit(1))
+        # Seed States & Cities (Clear Saudi and seed Yemeni Governorates)
+        state_check = await db.execute(select(State).where(State.name_en == "Sana'a"))
         if not state_check.scalar_one_or_none():
-            riyadh = State(id="state-riyadh", name_en="Riyadh", name_ar="منطقة الرياض")
-            makkah = State(id="state-makkah", name_en="Makkah", name_ar="منطقة مكة المكرمة")
-            eastern = State(id="state-eastern", name_en="Eastern Province", name_ar="المنطقة الشرقية")
-            medina = State(id="state-medina", name_en="Medina", name_ar="منطقة المدينة المنورة")
-            db.add_all([riyadh, makkah, eastern, medina])
+            from sqlalchemy import delete
+            # Delete old Saudi states/cities if any exist
+            await db.execute(delete(City))
+            await db.execute(delete(State))
+            await db.commit()
 
-            cities = [
-                City(id="city-riyadh", state_id=riyadh.id, name_en="Riyadh", name_ar="الرياض"),
-                City(id="city-kharj", state_id=riyadh.id, name_en="Al Kharj", name_ar="الخرج"),
-                City(id="city-diriyah", state_id=riyadh.id, name_en="Ad Diriyah", name_ar="الدرعية"),
-                
-                City(id="city-jeddah", state_id=makkah.id, name_en="Jeddah", name_ar="جدة"),
-                City(id="city-makkah", state_id=makkah.id, name_en="Makkah", name_ar="مكة المكرمة"),
-                City(id="city-taif", state_id=makkah.id, name_en="Taif", name_ar="الطائف"),
-
-                City(id="city-dammam", state_id=eastern.id, name_en="Dammam", name_ar="الدمام"),
-                City(id="city-khobar", state_id=eastern.id, name_en="Al Khobar", name_ar="الخبر"),
-                City(id="city-jubail", state_id=eastern.id, name_en="Al Jubail", name_ar="الجبيل"),
-
-                City(id="city-medina", state_id=medina.id, name_en="Medina", name_ar="المدينة المنورة"),
-                City(id="city-yanbu", state_id=medina.id, name_en="Yanbu", name_ar="ينبع"),
+            yemen_states = [
+                State(id="yemen-sana-city", name_en="Amanat Al-Asimah (Sana'a City)", name_ar="أمانة العاصمة (مدينة صنعاء)"),
+                State(id="yemen-sana", name_en="Sana'a", name_ar="صنعاء"),
+                State(id="yemen-aden", name_en="Aden", name_ar="عدن"),
+                State(id="yemen-marib", name_en="Ma'rib", name_ar="مأرب"),
+                State(id="yemen-taiz-city", name_en="Taiz (City)", name_ar="تعز (المدينة)"),
+                State(id="yemen-taiz-hawban", name_en="Taiz (Al-Hawban)", name_ar="تعز (الحوبان)"),
+                State(id="yemen-hadhramaut", name_en="Hadhramaut", name_ar="حضرموت"),
+                State(id="yemen-hudaydah", name_en="Al-Hudaydah", name_ar="الحديدة"),
+                State(id="yemen-ibb", name_en="Ibb", name_ar="إب"),
+                State(id="yemen-hajjah", name_en="Hajjah", name_ar="حجة"),
+                State(id="yemen-dhamar", name_en="Dhamar", name_ar="ذمار"),
+                State(id="yemen-saada", name_en="Saada", name_ar="صعدة"),
+                State(id="yemen-abyan", name_en="Abyan", name_ar="أبين"),
+                State(id="yemen-lahj", name_en="Lahj", name_ar="لحج"),
+                State(id="yemen-shabwah", name_en="Shabwah", name_ar="شبوة"),
+                State(id="yemen-bayda", name_en="Al-Bayda", name_ar="البيضاء"),
+                State(id="yemen-jawf", name_en="Al-Jawf", name_ar="الجوف"),
+                State(id="yemen-mahrah", name_en="Al-Mahrah", name_ar="المهرة"),
+                State(id="yemen-mahwit", name_en="Al-Mahwit", name_ar="المحويت"),
+                State(id="yemen-amran", name_en="Amran", name_ar="عمران"),
+                State(id="yemen-dhale", name_en="Ad-Dhale'", name_ar="الضالع"),
+                State(id="yemen-raymah", name_en="Raymah", name_ar="ريمة"),
+                State(id="yemen-socotra", name_en="Socotra", name_ar="سقطرى"),
             ]
+            db.add_all(yemen_states)
+            await db.commit()
+
+            cities = []
+            for s in yemen_states:
+                city_id = s.id.replace("yemen-", "city-")
+                cities.append(City(id=city_id, state_id=s.id, name_en=s.name_en, name_ar=s.name_ar))
             db.add_all(cities)
             await db.commit()
-            print("✅ States and Cities seeded successfully.")
+            print("✅ Yemeni Governorates seeded successfully.")
 
         # Seed Payment Methods if empty
         from app.models.payment_method import PaymentMethod
@@ -214,6 +242,31 @@ async def _seed_demo_data():
             db.add_all([cod, bank, stcpay])
             await db.commit()
             print("✅ Default payment methods seeded successfully.")
+
+        # Seed AppSettings if empty
+        from app.models.app_setting import AppSetting
+        setting_check = await db.execute(select(AppSetting).limit(1))
+        if not setting_check.scalar_one_or_none():
+            policies = [
+                AppSetting(
+                    key="shipping_confirmation",
+                    value_en="### Shipping & Confirmation Policy\n\nAll orders are processed and shipped within 1-3 business days. You will receive a confirmation message once shipped.",
+                    value_ar="### سياسة الشحن والتأكيد\n\nيتم معالجة وشحن جميع الطلبات خلال 1-3 أيام عمل. ستتلقى رسالة تأكيد بمجرد الشحن."
+                ),
+                AppSetting(
+                    key="inspection_policy",
+                    value_en="### Inspection Policy\n\nCustomers have the right to inspect packages upon arrival to ensure matching quality and quantity before acceptance.",
+                    value_ar="### سياسة الفحص والمعاينة\n\nيحق للعميل فحص الطرود عند وصولها للتأكد من مطابقة الجودة والكمية قبل الاستلام."
+                ),
+                AppSetting(
+                    key="pickup_delivery",
+                    value_en="### Pickup & Delivery Policy\n\nFor home delivery, orders are delivered directly to your address. For station pickup, please collect your order within 3 business days from the selected station.",
+                    value_ar="### سياسة الاستلام والتوصيل\n\nللتوصيل المنزلي، يتم تسليم الطلبات مباشرة إلى عنوانك. للاستلام من المحطة، يرجى استلام طلبك خلال 3 أيام عمل من المحطة المحددة."
+                )
+            ]
+            db.add_all(policies)
+            await db.commit()
+            print("✅ Default app settings/policies seeded successfully.")
 
         # Only seed if categories table is empty
         result = await db.execute(select(Category).limit(1))

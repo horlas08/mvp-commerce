@@ -92,4 +92,5 @@ class ApiConstants {
   static String get notifications => '$baseUrl/notifications';
   static String get notificationsUnread => '$baseUrl/notifications/unread-count';
   static String notificationRead(int id) => '$baseUrl/notifications/$id/read';
+  static String get settings => '$baseUrl/settings';
 }

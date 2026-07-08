@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../app/theme/app_colors.dart';
 import '../../services/product_service.dart';
 import '../webview/webview_screen.dart';
+import '../../app/utils/url_helper.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -63,10 +64,11 @@ class _SearchScreenState extends State<SearchScreen> {
 
   /// Opens an external URL in the WebView.
   void _openInWebView(String url, String siteName) {
+    final arabicUrl = UrlHelper.convertToArabicUrl(url);
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (_) => WebViewScreen(initialUrl: url, siteName: siteName),
+        builder: (_) => WebViewScreen(initialUrl: arabicUrl, siteName: siteName),
       ),
     );
   }

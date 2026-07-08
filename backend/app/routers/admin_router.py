@@ -920,11 +920,19 @@ async def seed_admin(db: AsyncSession = Depends(get_db)):
 class StateRequest(BaseModel):
     name_en: str
     name_ar: str
+    shipping_fee: Optional[float] = 0.0
+    commission: Optional[float] = 0.0
+    free_shipping: Optional[bool] = False
+    no_commission: Optional[bool] = False
 
 class CityRequest(BaseModel):
     state_id: str
     name_en: str
     name_ar: str
+    shipping_fee: Optional[float] = 0.0
+    commission: Optional[float] = 0.0
+    free_shipping: Optional[bool] = False
+    no_commission: Optional[bool] = False
 
 @router.get("/states")
 async def list_states_admin(
@@ -959,6 +967,10 @@ async def update_state_admin(
         raise HTTPException(status_code=404, detail="State not found")
     state.name_en = req.name_en
     state.name_ar = req.name_ar
+    state.shipping_fee = req.shipping_fee if req.shipping_fee is not None else 0.0
+    state.commission = req.commission if req.commission is not None else 0.0
+    state.free_shipping = req.free_shipping if req.free_shipping is not None else False
+    state.no_commission = req.no_commission if req.no_commission is not None else False
     await db.commit()
     await db.refresh(state)
     return state.to_dict()
@@ -1025,6 +1037,10 @@ async def update_city_admin(
     city.state_id = req.state_id
     city.name_en = req.name_en
     city.name_ar = req.name_ar
+    city.shipping_fee = req.shipping_fee if req.shipping_fee is not None else 0.0
+    city.commission = req.commission if req.commission is not None else 0.0
+    city.free_shipping = req.free_shipping if req.free_shipping is not None else False
+    city.no_commission = req.no_commission if req.no_commission is not None else False
     await db.commit()
     await db.refresh(city)
     return city.to_dict()
@@ -1273,4 +1289,43 @@ async def delete_coupon_admin(
     await db.delete(coupon)
     await db.commit()
     return {"message": "Coupon deleted"}
+
+
+# ── App Settings ─────────────────────────────────────────────────────────────
+
+class AppSettingUpdateRequest(BaseModel):
+    value_en: str
+    value_ar: str
+
+
+@router.get("/settings")
+async def list_settings_admin(
+    db: AsyncSession = Depends(get_db)
+):
+    from app.models.app_setting import AppSetting
+    result = await db.execute(select(AppSetting))
+    settings = result.scalars().all()
+    return {s.key: s.to_dict() for s in settings}
+
+
+@router.put("/settings/{key}")
+async def update_setting_admin(
+    key: str,
+    req: AppSettingUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user)
+):
+    from app.models.app_setting import AppSetting
+    result = await db.execute(select(AppSetting).where(AppSetting.key == key))
+    setting = result.scalar_one_or_none()
+    if not setting:
+        setting = AppSetting(key=key, value_en=req.value_en, value_ar=req.value_ar)
+        db.add(setting)
+    else:
+        setting.value_en = req.value_en
+        setting.value_ar = req.value_ar
+    await db.commit()
+    await db.refresh(setting)
+    return setting.to_dict()
+
 

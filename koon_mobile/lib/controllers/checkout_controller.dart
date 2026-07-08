@@ -56,24 +56,28 @@ class CheckoutController extends GetxController {
     loadAddresses();
     loadShippingOptions();
     loadPaymentOptions();
+    
+    // Register dynamic fee listeners
+    ever(selectedAddress, (_) => _updateDynamicFees());
+    ever(allowTeamReview, (_) => _updateDynamicFees());
+    ever(shippingType, (_) => _updateDynamicFees());
+    _updateDynamicFees();
   }
 
   // ── Address ────────────────────────────────────────────────────────────────
   Future<void> loadAddresses() async {
     isLoadingAddresses.value = true;
     addresses.value = await _addressService.getAddresses();
-    // Auto-select the first address that has a location linked
-    if (selectedAddress.value == null) {
-      final linked = addresses.firstWhereOrNull(
-        (a) => a['lat'] != null && a['lng'] != null,
-      );
-      selectedAddress.value = linked;
+    // Auto-select the default or first address
+    if (selectedAddress.value == null && addresses.isNotEmpty) {
+      final def = addresses.firstWhereOrNull((a) => a['is_default'] == true || a['is_default'] == 1);
+      selectedAddress.value = def ?? addresses.first;
     }
     isLoadingAddresses.value = false;
   }
 
   bool canSelectAddress(Map<String, dynamic> address) {
-    return address['lat'] != null && address['lng'] != null;
+    return true;
   }
 
   // ── Shipping ────────────────────────────────────────────────────────────────
@@ -93,11 +97,11 @@ class CheckoutController extends GetxController {
 
   // ── Navigation ───────────────────────────────────────────────────────────────
   void goToStep(int step) {
-    if (step >= 0 && step <= 3) currentStep.value = step;
+    if (step >= 0 && step <= 2) currentStep.value = step;
   }
 
   void nextStep() {
-    if (currentStep.value < 3) currentStep.value++;
+    if (currentStep.value < 2) currentStep.value++;
   }
 
   void prevStep() {
@@ -165,8 +169,81 @@ class CheckoutController extends GetxController {
     }
   }
 
-  // ── Shipping fee helper ───────────────────────────────────────────────────────
-  double get shippingFee => 0.0; // Set from API response when available
-  double get teamReviewFee => (allowTeamReview.value && cartType != 'internal') ? 5.0 : 0.0;
+  final RxDouble dynamicShippingFee = 0.0.obs;
+  final RxDouble dynamicCommissionFee = 0.0.obs;
+
+  double get shippingFee => dynamicShippingFee.value;
+  double get teamReviewFee => dynamicCommissionFee.value;
   double get orderTotal => subtotal + shippingFee + teamReviewFee;
+
+  Future<void> _updateDynamicFees() async {
+    final addr = selectedAddress.value;
+    if (addr == null) {
+      dynamicShippingFee.value = 0.0;
+      dynamicCommissionFee.value = (allowTeamReview.value && cartType != 'internal') ? 5.0 : 0.0;
+      return;
+    }
+
+    final stateName = addr['state']?.toString();
+    final cityName = addr['city']?.toString();
+
+    double sFee = 0.0;
+    double cFee = (allowTeamReview.value && cartType != 'internal') ? 5.0 : 0.0;
+
+    // Load states first if not loaded
+    List<Map<String, dynamic>> statesList = [];
+    try {
+      statesList = await _addressService.getStates();
+    } catch (_) {}
+
+    final matchedState = statesList.firstWhereOrNull((s) =>
+        s['name_en'] == stateName || s['name_ar'] == stateName || s['name'] == stateName);
+
+    if (matchedState != null) {
+      final bool stateFree = matchedState['free_shipping'] == true || matchedState['free_shipping'] == 1;
+      final bool stateNoComm = matchedState['no_commission'] == true || matchedState['no_commission'] == 1;
+      final double stateShipFee = double.tryParse(matchedState['shipping_fee']?.toString() ?? '0') ?? 0.0;
+      final double stateComm = double.tryParse(matchedState['commission']?.toString() ?? '5.0') ?? 5.0;
+
+      sFee = stateFree ? 0.0 : stateShipFee;
+      if (allowTeamReview.value && cartType != 'internal') {
+        cFee = stateNoComm ? 0.0 : stateComm;
+      }
+
+      // Check city overrides
+      try {
+        final citiesList = await _addressService.getCities(matchedState['id'].toString());
+        final matchedCity = citiesList.firstWhereOrNull((c) =>
+            c['name_en'] == cityName || c['name_ar'] == cityName || c['name'] == cityName);
+
+        if (matchedCity != null) {
+          final bool cityFree = matchedCity['free_shipping'] == true || matchedCity['free_shipping'] == 1;
+          final bool cityNoComm = matchedCity['no_commission'] == true || matchedCity['no_commission'] == 1;
+          final double cityShipFee = double.tryParse(matchedCity['shipping_fee']?.toString() ?? '0') ?? 0.0;
+          final double cityComm = double.tryParse(matchedCity['commission']?.toString() ?? '5.0') ?? 5.0;
+
+          if (cityFree) {
+            sFee = 0.0;
+          } else if (cityShipFee > 0) {
+            sFee = cityShipFee;
+          }
+
+          if (allowTeamReview.value && cartType != 'internal') {
+            if (cityNoComm) {
+              cFee = 0.0;
+            } else if (cityComm > 0) {
+              cFee = cityComm;
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (shippingType.value != 'home') {
+      sFee = 0.0;
+    }
+
+    dynamicShippingFee.value = sFee;
+    dynamicCommissionFee.value = cFee;
+  }
 }

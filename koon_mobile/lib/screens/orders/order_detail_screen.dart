@@ -10,6 +10,7 @@ import '../../app/theme/app_colors.dart';
 import '../../controllers/order_controller.dart';
 import '../webview/webview_screen.dart';
 import '../../app/constants/api_constants.dart';
+import '../../app/utils/url_helper.dart';
 
 class OrderDetailScreen extends StatefulWidget {
   final Map<String, dynamic> order;
@@ -305,7 +306,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               return GestureDetector(
                 onTap: externalUrl != null && externalUrl.isNotEmpty
                     ? () => Navigator.push(context, MaterialPageRoute(
-                        builder: (_) => WebViewScreen(initialUrl: externalUrl, siteName: source)))
+                        builder: (_) => WebViewScreen(initialUrl: UrlHelper.convertToArabicUrl(externalUrl), siteName: source)))
                     : null,
                 child: Container(
                   margin: const EdgeInsets.only(bottom: 10),

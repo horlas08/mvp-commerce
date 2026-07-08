@@ -55,6 +55,7 @@ export const translations = {
     commercePlatform: "Commerce Platform",
     adminBadge: "Admin",
     support: "Customer Support",
+    settings: "Settings",
 
     // Dashboard Page
     totalUsers: "Total Users",
@@ -161,6 +162,10 @@ export const translations = {
     deleteStateConfirm: "Delete this state? All cities in this state will also be deleted.",
     deleteCityConfirm: "Delete this city?",
     selectState: "Select State",
+    shippingFee: "Shipping Fee",
+    commission: "Commission",
+    freeShipping: "Free Shipping",
+    noCommission: "No Commission",
     imageUrl: "Image URL",
     paymentMethods: "Payment Methods",
     addPaymentMethod: "Add Payment Method",
@@ -297,6 +302,7 @@ export const translations = {
     commercePlatform: "منصة التجارة",
     adminBadge: "مشرف",
     support: "الدعم الفني",
+    settings: "الإعدادات",
 
     // Dashboard Page
     totalUsers: "إجمالي المستخدمين",
@@ -403,6 +409,10 @@ export const translations = {
     deleteStateConfirm: "حذف هذه المنطقة؟ سيتم حذف جميع المدن التابعة لها أيضاً.",
     deleteCityConfirm: "حذف هذه المدينة؟",
     selectState: "اختر المنطقة",
+    shippingFee: "رسوم الشحن",
+    commission: "العمولة",
+    freeShipping: "شحن مجاني",
+    noCommission: "بدون عمولة",
     imageUrl: "رابط الصورة",
     paymentMethods: "طرق الدفع",
     addPaymentMethod: "إضافة طريقة دفع",

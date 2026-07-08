@@ -39,19 +39,35 @@ class SettingsController extends GetxController {
   }
 
   String formatPrice(double price, String originalCurrency) {
-    if (currentCurrency.value == 'USD' && originalCurrency == 'SAR') {
-      // 1 USD = 3.75 SAR
-      final converted = price / 3.75;
-      return '\$${converted.toStringAsFixed(2)}';
-    } else if (currentCurrency.value == 'SAR' && originalCurrency == 'USD') {
-      final converted = price * 3.75;
-      return '${converted.toStringAsFixed(2)} ' + 'SAR'.tr();
+    // 1. Normalize the original price to USD first
+    double priceInUsd = 0.0;
+    final origUpper = originalCurrency.toUpperCase().trim();
+    if (origUpper == 'USD' || origUpper == '\$') {
+      priceInUsd = price;
+    } else if (origUpper == 'SAR' || origUpper == 'SR') {
+      priceInUsd = price / 3.75;
+    } else if (origUpper == 'YER_OLD' || origUpper == 'YER') {
+      priceInUsd = price / 530.0;
+    } else if (origUpper == 'YER_NEW') {
+      priceInUsd = price / 1850.0;
     } else {
-      // display original currency format
-      if (originalCurrency == 'USD') {
-        return '\$${price.toStringAsFixed(2)}';
-      }
-      return '${price.toStringAsFixed(2)} ' + 'SAR'.tr();
+      // Fallback: assume SAR
+      priceInUsd = price / 3.75;
+    }
+
+    // 2. Convert from USD to the current selected currency
+    if (currentCurrency.value == 'USD') {
+      return '\$${priceInUsd.toStringAsFixed(2)}';
+    } else if (currentCurrency.value == 'YER_OLD') {
+      final converted = priceInUsd * 530.0;
+      return '${converted.toStringAsFixed(0)} ' + 'YER_OLD'.tr();
+    } else if (currentCurrency.value == 'YER_NEW') {
+      final converted = priceInUsd * 1850.0;
+      return '${converted.toStringAsFixed(0)} ' + 'YER_NEW'.tr();
+    } else {
+      // default is SAR
+      final converted = priceInUsd * 3.75;
+      return '${converted.toStringAsFixed(2)} ' + 'SAR'.tr();
     }
   }
 }

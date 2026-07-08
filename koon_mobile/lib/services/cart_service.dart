@@ -23,6 +23,7 @@ class CartService {
     String? imageUrl,
     String? externalUrl,
     String? siteName,
+    String? selectionsJson,
     int quantity = 1,
   }) async {
     try {
@@ -34,6 +35,7 @@ class CartService {
         if (imageUrl != null) 'image_url': imageUrl,
         if (externalUrl != null) 'external_url': externalUrl,
         if (siteName != null) 'site_name': siteName,
+        if (selectionsJson != null) 'selections_json': selectionsJson,
         'quantity': quantity,
       });
       return response.data;
@@ -47,11 +49,12 @@ class CartService {
     }
   }
 
-  Future<bool> updateCartItem(String itemId, {int? quantity, bool? isSelected}) async {
+  Future<bool> updateCartItem(String itemId, {int? quantity, bool? isSelected, String? price}) async {
     try {
       await _dio.put('${ApiConstants.cart}/$itemId', data: {
         if (quantity != null) 'quantity': quantity,
         if (isSelected != null) 'is_selected': isSelected,
+        if (price != null) 'price': price,
       });
       return true;
     } catch (_) { return false; }

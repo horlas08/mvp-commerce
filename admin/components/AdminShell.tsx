@@ -15,6 +15,7 @@ import {
   Coins,
   RotateCcw,
   Ticket,
+  Settings,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { useLang } from "@/lib/lang-context";
@@ -30,8 +31,9 @@ import SupportPage from "./pages/SupportPage";
 import PaymentsPage from "./pages/PaymentsPage";
 import RefundsPage from "./pages/RefundsPage";
 import CouponsPage from "./pages/CouponsPage";
+import SettingsPage from "./pages/SettingsPage";
 
-type Page = "dashboard" | "users" | "products" | "orders" | "categories" | "statesAndCities" | "paymentMethods" | "support" | "payments" | "refunds" | "coupons";
+type Page = "dashboard" | "users" | "products" | "orders" | "categories" | "statesAndCities" | "paymentMethods" | "support" | "payments" | "refunds" | "coupons" | "settings";
 
 const NAV_ITEMS = [
   {
@@ -53,6 +55,7 @@ const NAV_ITEMS = [
       { id: "paymentMethods" as Page, labelKey: "paymentMethods" as const, icon: CreditCard },
       { id: "support" as Page, labelKey: "support" as const, icon: MessageSquare },
       { id: "users" as Page, labelKey: "users" as const, icon: Users },
+      { id: "settings" as Page, labelKey: "settings" as const, icon: Settings },
     ],
   },
 ];
@@ -83,6 +86,7 @@ export default function AdminShell() {
       case "payments": return <PaymentsPage />;
       case "refunds": return <RefundsPage />;
       case "coupons": return <CouponsPage />;
+      case "settings": return <SettingsPage />;
     }
   };
 

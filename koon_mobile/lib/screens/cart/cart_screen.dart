@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -11,6 +12,10 @@ import '../../controllers/settings_controller.dart';
 import '../auth/login_screen.dart';
 import '../checkout/checkout_screen.dart';
 import '../webview/webview_screen.dart';
+import '../../app/utils/url_helper.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import '../../controllers/config_controller.dart';
+import '../../app/utils/scraper_helper.dart';
 
 class CartScreen extends StatelessWidget {
   final bool showBackButton;
@@ -114,6 +119,48 @@ class CartScreen extends StatelessWidget {
                 ),
               );
             }).animate().fadeIn(duration: 300.ms),
+
+            _buildHiddenScraperWebView(cartController),
+
+            Obx(() {
+              final activeItem = cartController.currentRefreshItem.value;
+              if (activeItem == null) return const SizedBox.shrink();
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+                ),
+                child: Row(
+                  children: [
+                    const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        lang == 'ar'
+                            ? 'جاري تحديث الأسعار والمخزون في الخلفية...'
+                            : 'Updating prices and stock in background...',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
 
             // Cart Items
             Expanded(
@@ -240,10 +287,24 @@ class CartScreen extends StatelessWidget {
               child: GestureDetector(
                 onTap: externalUrl != null && externalUrl.isNotEmpty
                     ? () {
-                        // Open in WebViewScreen
+                        // Parse stored selections_json so WebView can auto-select the variant.
+                        Map<String, String>? preselected;
+                        final rawSelections = item['selections_json'] as String?;
+                        if (rawSelections != null && rawSelections.isNotEmpty) {
+                          try {
+                            final decoded = jsonDecode(rawSelections);
+                            if (decoded is Map) {
+                              preselected = decoded.map(
+                                (k, v) => MapEntry(k.toString(), v.toString()),
+                              );
+                            }
+                          } catch (_) {}
+                        }
+                        // Open in WebViewScreen with pre-selected variants
                         Get.to(() => WebViewScreen(
-                              initialUrl: externalUrl,
+                              initialUrl: UrlHelper.convertToArabicUrl(externalUrl),
                               siteName: cartType.toString().toUpperCase(),
+                              preselectedVariants: preselected,
                             ));
                       }
                     : null,
@@ -276,10 +337,44 @@ class CartScreen extends StatelessWidget {
                             ],
                           ),
                           const SizedBox(height: 6),
-                          Obx(() => Text(
-                                settingsController.formatPrice(priceVal, originalCurrency),
-                                style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.secondary),
-                              )),
+                          Obx(() {
+                            final status = controller.itemStatuses[item['id']];
+                            final isUpdating = status == 'updating';
+                            final isFailed = status == 'error';
+                            final isSuccess = status == 'success';
+                            final isOutOfStock = status == 'out_of_stock' || item['price']?.toString().toLowerCase().contains('out of stock') == true;
+
+                            return Row(
+                              children: [
+                                if (isOutOfStock)
+                                  Text(
+                                    Get.locale?.languageCode == 'ar' ? 'غير متوفر' : 'Out of Stock',
+                                    style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.error),
+                                  )
+                                else
+                                  Text(
+                                    settingsController.formatPrice(priceVal, originalCurrency),
+                                    style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.secondary),
+                                  ),
+                                if (isUpdating || isFailed || isSuccess) ...[
+                                  const SizedBox(width: 8),
+                                  if (isUpdating)
+                                    const SizedBox(
+                                      width: 12,
+                                      height: 12,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 1.5,
+                                        valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                                      ),
+                                    )
+                                  else if (isFailed)
+                                    const Icon(Icons.error_outline, size: 14, color: AppColors.error)
+                                  else if (isSuccess)
+                                    const Icon(Icons.check_circle_outline, size: 14, color: AppColors.success),
+                                ],
+                              ],
+                            );
+                          }),
                         ],
                       ),
                     ),
@@ -500,13 +595,85 @@ class CartScreen extends StatelessWidget {
                   },
                 ),
               ),
-              ),
-              const SizedBox(height: 16),
-            ],
-          ),
+            ),
+            const SizedBox(height: 16),
+          ],
         ),
-        );
-      },
+      ),
     );
+  },
+);
+}
+  Widget _buildHiddenScraperWebView(CartController cartController) {
+    return Obx(() {
+      final currentItem = cartController.currentRefreshItem.value;
+      if (currentItem == null) return const SizedBox.shrink();
+
+      final externalUrl = currentItem['external_url'] ?? '';
+      if (externalUrl.isEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          cartController.onRefreshFailed(currentItem['id']);
+        });
+        return const SizedBox.shrink();
+      }
+
+      return SizedBox(
+        width: 1,
+        height: 1,
+        child: InAppWebView(
+          key: ValueKey(currentItem['id']),
+          initialUrlRequest: URLRequest(
+            url: WebUri(externalUrl),
+            headers: {
+              'Accept-Language': 'ar-SA,ar;q=0.9,en-US;q=0.8,en;q=0.7',
+            },
+          ),
+          initialSettings: InAppWebViewSettings(
+            javaScriptEnabled: true,
+            domStorageEnabled: true,
+            useShouldOverrideUrlLoading: true,
+            mediaPlaybackRequiresUserGesture: false,
+            userAgent: "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
+          ),
+          onLoadStop: (webController, url) async {
+            await Future.delayed(const Duration(milliseconds: 3500));
+            if (cartController.currentRefreshItem.value?['id'] != currentItem['id']) return;
+
+            try {
+              final configController = Get.find<ConfigController>();
+              final config = configController.getConfigForUrl(externalUrl);
+              if (config == null) {
+                cartController.onRefreshFailed(currentItem['id']);
+                return;
+              }
+
+              final script = ScraperHelper.buildScraperScript(config);
+              await webController.evaluateJavascript(source: script);
+              await Future.delayed(const Duration(milliseconds: 300));
+
+              final raw = await webController.evaluateJavascript(
+                source: 'window.__koonExtractProduct ? window.__koonExtractProduct() : null',
+              );
+
+              if (raw != null) {
+                final data = Map<String, dynamic>.from(raw as Map);
+                final newPrice = data['price']?.toString() ?? '';
+                final isOutOfStock = data['is_out_of_stock'] == true || newPrice.toLowerCase().contains('out of stock') || newPrice.contains('غير متوفر');
+
+                cartController.onRefreshComplete(
+                  currentItem['id'],
+                  newPrice.isNotEmpty ? newPrice : null,
+                  outOfStock: isOutOfStock,
+                );
+              } else {
+                cartController.onRefreshComplete(currentItem['id'], null, outOfStock: true);
+              }
+            } catch (e) {
+              cartController.onRefreshFailed(currentItem['id']);
+            }
+          },
+        ),
+      );
+    });
   }
 }

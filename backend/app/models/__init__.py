@@ -14,11 +14,12 @@ from app.models.payment_method import PaymentMethod
 from app.models.support import SupportTicket, SupportMessage
 from app.models.notification import Notification
 from app.models.wallet_transaction import WalletTransaction, WalletTransactionType
+from app.models.app_setting import AppSetting
 
 __all__ = [
     "User", "Product", "Category", "CartItem", "CartType",
     "Order", "OrderItem", "OrderStatus", "PaymentStatus", "Address", "WishlistItem",
     "Coupon", "Seller", "RefundRequest", "RefundStatus", "Banner",
     "State", "City", "PaymentMethod", "SupportTicket", "SupportMessage",
-    "Notification", "WalletTransaction", "WalletTransactionType",
+    "Notification", "WalletTransaction", "WalletTransactionType", "AppSetting",
 ]

@@ -381,8 +381,8 @@ def test_place_order_multipart():
     )
     assert response.status_code == 200
     order = response.json()
-    assert "payment_method=cod" in order["notes"]
-    assert "proof=" in order["notes"]
+    assert order["payment_method_id"] == "cod"
+    assert order["payment_proof_url"] is not None
     assert len(order["items"]) == 1
 
 
@@ -625,7 +625,7 @@ def test_wallet_endpoints():
         data=data_order,
     )
     assert response.status_code == 200
-    assert "payment_method=wallet" in response.json()["notes"]
+    assert response.json()["payment_method_id"] == "wallet"
 
     # Verify wallet has been deducted
     response = client.get("/api/v1/wallet/balance", headers=headers)

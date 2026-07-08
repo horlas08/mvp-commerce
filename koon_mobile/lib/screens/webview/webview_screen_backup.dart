@@ -18,22 +18,15 @@ import '../../services/wishlist_service.dart';
 import '../../app/constants/api_constants.dart';
 import '../auth/login_screen.dart';
 import '../cart/cart_screen.dart';
-import '../../app/utils/scraper_helper.dart';
 
 class WebViewScreen extends StatefulWidget {
   final String initialUrl;
   final String siteName;
-  /// Optional variant pre-selections from a cart item.
-  /// Keys are attribute names (e.g. "Color"), values are chosen options (e.g. "Red").
-  /// When set, the WebView will automatically click the matching variant swatches
-  /// after the product page has loaded.
-  final Map<String, String>? preselectedVariants;
 
   const WebViewScreen({
     super.key,
     required this.initialUrl,
     required this.siteName,
-    this.preselectedVariants,
   });
 
   // ── Currency Cookie Setter (force SAR display on the website itself) ──────
@@ -128,8 +121,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
   Map<String, dynamic>? _currentConfig;
   Map<String, dynamic>? _currentProduct;
   String? _loadError;
-  /// Prevents injecting pre-selections more than once per navigation.
-  bool _preselectInjected = false;
 
   // ── HTML source dumping (dev tool) ────────────────────────────────────────
   // Saves the live page HTML to <appExternalStorage>/<site>_source.html so we
@@ -203,10 +194,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
       return;
     }
     _lastInjectAt = now;
-
-    final scraperJs = ScraperHelper.buildScraperScript(_currentConfig!);
-    await _webViewController!.evaluateJavascript(source: scraperJs);
-    return;
 
     final hideSelectors = List<String>.from(_currentConfig!['hide_selectors']);
     final urlLower = _currentUrl.toLowerCase();
@@ -1570,12 +1557,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
     if (action == 'cart') {
       final cartController = Get.find<CartController>();
-      // Build selections_json from the chosen variants so they can be replayed
-      // when the user taps the item in the cart to open the WebView again.
-      final effectiveSelections = chosen ?? _selectionsToMap(selections);
-      final String? selectionsJson = effectiveSelections.isNotEmpty
-          ? jsonEncode(effectiveSelections)
-          : null;
       final result = await cartController.addToCart(
         cartType: cartType,
         title: finalTitle,
@@ -1583,7 +1564,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
         imageUrl: product['image_url']?.toString(),
         externalUrl: product['url']?.toString(),
         siteName: product['site']?.toString() ?? widget.siteName,
-        selectionsJson: selectionsJson,
         quantity: quantity,
       );
       if (result == AddToCartStatus.success) {
@@ -1839,45 +1819,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
     _dumpCounters[counterKey] = (_dumpCounters[counterKey] ?? 0) + 1;
     final n = _dumpCounters[counterKey]!;
     return '${folder}_details_$n';
-  }
-
-  /// Injects pre-selected variant choices (from the originating cart item) into
-  /// the page via the __koonSelectOption JS function.  Called once per page load.
-  Future<void> _injectPreselectedVariants() async {
-    final variants = widget.preselectedVariants;
-    if (variants == null || variants.isEmpty) return;
-    if (_preselectInjected) return;
-    if (_webViewController == null) return;
-    _preselectInjected = true;
-
-    // Wait for the page's SKU/variant module to fully mount.
-    // Most SPAs (AliExpress, Alibaba, Amazon) need ~800-1200ms after onLoadStop.
-    await Future.delayed(const Duration(milliseconds: 1000));
-    if (!mounted) return;
-
-    // First open the SKU picker (scrolls it into view / expands it).
-    try {
-      await _webViewController!.evaluateJavascript(
-        source: 'window.__koonOpenSkuPicker ? window.__koonOpenSkuPicker() : false',
-      );
-      // Small pause for the picker animation to finish.
-      await Future.delayed(const Duration(milliseconds: 400));
-    } catch (_) {}
-
-    // Click each variant option sequentially, with a pause between each to let
-    // the page update (price/image/availability often reloads after each click).
-    for (final entry in variants.entries) {
-      if (!mounted) return;
-      try {
-        final name = entry.key;
-        final value = entry.value;
-        if (name.isEmpty || value.isEmpty) continue;
-        final js =
-            'window.__koonSelectOption ? window.__koonSelectOption(${jsonEncode(name)}, ${jsonEncode(value)}) : false';
-        await _webViewController!.evaluateJavascript(source: js);
-        await Future.delayed(const Duration(milliseconds: 600));
-      } catch (_) {}
-    }
   }
 
   Future<void> _dumpHtml() async {
@@ -2516,8 +2457,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
           setState(() {
             _isLoading = false;
             if (url != null) _currentUrl = url.toString();
-            // Reset injection flag when navigating to a new page
-            _preselectInjected = false;
           });
         }
         _applyHidingAndScraping(force: true);
@@ -2525,9 +2464,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
         // Dump HTML for offline analysis (dev tool, off by default — toggle via
         // the code icon in the app bar).
         _dumpHtml();
-        // Auto-select variants from the originating cart item (if provided).
-        // We wait briefly for the page's JS/SKU module to mount before clicking.
-        await _injectPreselectedVariants();
       },
       onReceivedError: (controller, request, error) {
         if (request.isForMainFrame != true) return;

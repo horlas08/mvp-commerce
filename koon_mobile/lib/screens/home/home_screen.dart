@@ -13,6 +13,7 @@ import '../../controllers/settings_controller.dart';
 import '../search/search_screen.dart';
 import '../webview/webview_screen.dart';
 import '../product/product_detail_screen.dart';
+import '../../app/utils/url_helper.dart';
 import '../../controllers/support_controller.dart';
 import '../support/support_list_screen.dart';
 import '../support/notification_screen.dart';
@@ -471,13 +472,14 @@ class _HomeScreenState extends State<HomeScreen> {
     return GestureDetector(
       onTap: store['enabled']
           ? () async {
-              await WebViewScreen.setupCurrencyCookies(store['url']);
+              final arabicUrl = UrlHelper.convertToArabicUrl(store['url']);
+              await WebViewScreen.setupCurrencyCookies(arabicUrl);
               if (!mounted) return;
               Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => WebViewScreen(
-                    initialUrl: store['url'],
+                    initialUrl: arabicUrl,
                     siteName: store['name'],
                   ),
                 ),
