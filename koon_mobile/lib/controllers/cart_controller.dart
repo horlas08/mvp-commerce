@@ -103,11 +103,16 @@ class CartController extends GetxController {
     if (outOfStock) {
       itemStatuses[itemId] = 'out_of_stock';
       await updateItemPrice(itemId, "Out of Stock");
-    } else if (newPrice != null) {
-      itemStatuses[itemId] = 'success';
-      itemUpdatedPrices[itemId] = newPrice;
-      final sarPrice = await KoonCurrencyService.convertToSar(newPrice);
-      await updateItemPrice(itemId, sarPrice);
+    } else if (newPrice != null && newPrice.isNotEmpty && !newPrice.toLowerCase().contains('unknown')) {
+      final parsed = KoonCurrencyService.parsePriceToDouble(newPrice);
+      if (parsed > 0) {
+        itemStatuses[itemId] = 'success';
+        itemUpdatedPrices[itemId] = newPrice;
+        final sarPrice = await KoonCurrencyService.convertToSar(newPrice);
+        await updateItemPrice(itemId, sarPrice);
+      } else {
+        itemStatuses[itemId] = 'error';
+      }
     } else {
       itemStatuses[itemId] = 'success';
     }
@@ -137,6 +142,7 @@ class CartController extends GetxController {
     String? externalUrl,
     String? siteName,
     String? selectionsJson,
+    int minQuantity = 1,
     int quantity = 1,
   }) async {
     String? convertedPrice = price;
@@ -154,6 +160,7 @@ class CartController extends GetxController {
         externalUrl: externalUrl,
         siteName: siteName,
         selectionsJson: selectionsJson,
+        minQuantity: minQuantity,
         quantity: quantity,
       );
       if (result != null) {
@@ -204,8 +211,8 @@ class CartController extends GetxController {
     double total = 0;
     for (var item in cartItems) {
       if (item['is_selected'] == true) {
-        final priceStr = item['price']?.toString() ?? item['product']?['price']?.toString() ?? '0';
-        final price = double.tryParse(priceStr.replaceAll(RegExp(r'[^\d.]'), '')) ?? 0;
+        final rawPrice = item['price'] ?? item['product']?['price'];
+        final price = KoonCurrencyService.parsePriceToDouble(rawPrice);
         final qty = item['quantity'] ?? 1;
         total += price * qty;
       }

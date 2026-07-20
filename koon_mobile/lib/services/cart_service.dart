@@ -24,6 +24,7 @@ class CartService {
     String? externalUrl,
     String? siteName,
     String? selectionsJson,
+    int minQuantity = 1,
     int quantity = 1,
   }) async {
     try {
@@ -36,6 +37,7 @@ class CartService {
         if (externalUrl != null) 'external_url': externalUrl,
         if (siteName != null) 'site_name': siteName,
         if (selectionsJson != null) 'selections_json': selectionsJson,
+        'min_quantity': minQuantity,
         'quantity': quantity,
       });
       return response.data;

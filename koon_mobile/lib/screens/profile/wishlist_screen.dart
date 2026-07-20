@@ -8,6 +8,7 @@ import '../../app/utils/app_snackbar.dart';
 import '../../services/wishlist_service.dart';
 import '../../controllers/cart_controller.dart';
 import '../../controllers/settings_controller.dart';
+import '../../services/currency_service.dart';
 import '../product/product_detail_screen.dart';
 import '../auth/login_screen.dart';
 
@@ -109,7 +110,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
                     final title = item['title'] ?? item['product']?['title'] ?? 'Product';
                     final imageUrl = item['image_url'] ?? (item['product']?['images'] as List?)?.firstOrNull?.toString();
                     
-                    final double priceVal = (item['product']?['price'] ?? double.tryParse(item['price']?.toString().replaceAll(RegExp(r'[^0-9.]'), '') ?? '0') ?? 0.0).toDouble();
+                    final double priceVal = KoonCurrencyService.parsePriceToDouble(item['product']?['price'] ?? item['price']);
                     final String originalCurrency = item['product']?['currency'] ?? 'SAR';
 
                     // Prepare productMap to navigate to detail screen

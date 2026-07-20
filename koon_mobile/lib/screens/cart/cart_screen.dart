@@ -16,6 +16,7 @@ import '../../app/utils/url_helper.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import '../../controllers/config_controller.dart';
 import '../../app/utils/scraper_helper.dart';
+import '../../services/currency_service.dart';
 
 class CartScreen extends StatelessWidget {
   final bool showBackButton;
@@ -197,6 +198,28 @@ class CartScreen extends StatelessWidget {
             // Bottom checkout bar
             Obx(() {
               if (cartController.cartItems.isEmpty) return const SizedBox();
+
+              // Check if any selected item has an unknown/zero price
+              final selectedItems = cartController.cartItems.where((i) => i['is_selected'] == true).toList();
+              final hasUnknownPrice = selectedItems.any((item) {
+                final rawPrice = (item['product']?['price'] ?? item['price'])?.toString() ?? '';
+                final parsed = KoonCurrencyService.parsePriceToDouble(rawPrice);
+                return parsed <= 0 &&
+                    rawPrice.isNotEmpty &&
+                    !rawPrice.toLowerCase().contains('out of stock') &&
+                    !rawPrice.contains('غير متوفر');
+              });
+              // Also block if ALL selected have zero price (price completely missing)
+              final hasMissingPrice = selectedItems.isNotEmpty &&
+                  selectedItems.every((item) {
+                    final rawPrice = (item['product']?['price'] ?? item['price'])?.toString() ?? '';
+                    return rawPrice.isEmpty ||
+                        rawPrice.toLowerCase().contains('unknown') ||
+                        KoonCurrencyService.parsePriceToDouble(rawPrice) <= 0;
+                  });
+
+              final checkoutBlocked = hasUnknownPrice || hasMissingPrice;
+
               return Container(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                 decoration: BoxDecoration(
@@ -205,40 +228,76 @@ class CartScreen extends StatelessWidget {
                   boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 20, offset: const Offset(0, -4))],
                 ),
                 child: SafeArea(
-                  child: Row(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text('total_amount'.tr(), style: GoogleFonts.inter(color: AppColors.textSecondary, fontSize: 12)),
-                          const SizedBox(height: 2),
-                          Obx(() => Text(
-                                Get.find<SettingsController>().formatPrice(cartController.totalAmount, 'SAR'),
-                                style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
-                              )),
-                        ],
-                      ),
-                      const SizedBox(width: 20),
-                      Expanded(
-                        child: SizedBox(
-                          height: 50,
-                          child: ElevatedButton(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const CheckoutScreen(),
+                      if (checkoutBlocked)
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          margin: const EdgeInsets.only(bottom: 10),
+                          decoration: BoxDecoration(
+                            color: AppColors.error.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 16),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  lang == 'ar'
+                                      ? 'لا يمكن المتابعة: بعض المنتجات المحددة لا تملك سعراً معروفاً.'
+                                      : 'Cannot proceed: some selected items have an unknown price.',
+                                  style: GoogleFonts.inter(fontSize: 11, color: AppColors.error, fontWeight: FontWeight.w500),
                                 ),
-                              );
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.secondary,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                            ),
-                            child: Text('proceed_to_checkout'.tr(), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                              ),
+                            ],
                           ),
                         ),
+                      Row(
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text('total_amount'.tr(), style: GoogleFonts.inter(color: AppColors.textSecondary, fontSize: 12)),
+                              const SizedBox(height: 2),
+                              Obx(() => Text(
+                                    Get.find<SettingsController>().formatPrice(cartController.totalAmount, 'SAR'),
+                                    style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                                  )),
+                            ],
+                          ),
+                          const SizedBox(width: 20),
+                          Expanded(
+                            child: SizedBox(
+                              height: 50,
+                              child: ElevatedButton(
+                                onPressed: checkoutBlocked
+                                    ? null
+                                    : () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => const CheckoutScreen(),
+                                          ),
+                                        );
+                                      },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.secondary,
+                                  disabledBackgroundColor: AppColors.textHint.withOpacity(0.3),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                ),
+                                child: Text(
+                                  'proceed_to_checkout'.tr(),
+                                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -260,10 +319,13 @@ class CartScreen extends StatelessWidget {
 
   Widget _buildCartItem(Map<String, dynamic> item, CartController controller, int index) {
     final title = item['title'] ?? item['product']?['title'] ?? 'Product';
-    final double priceVal = (item['product']?['price'] ?? double.tryParse(item['price']?.toString().replaceAll(RegExp(r'[^0-9.]'), '') ?? '0') ?? 0.0).toDouble();
+    final double priceVal = KoonCurrencyService.parsePriceToDouble(item['product']?['price'] ?? item['price']);
     final originalCurrency = item['product']?['currency'] ?? 'SAR';
     final imageUrl = item['image_url'] ?? (item['product']?['images'] as List?)?.firstOrNull?.toString();
     final quantity = item['quantity'] ?? 1;
+    final int minQty = (item['min_quantity'] is int)
+        ? item['min_quantity'] as int
+        : int.tryParse(item['min_quantity']?.toString() ?? '1') ?? 1;
     final settingsController = Get.find<SettingsController>();
     final externalUrl = item['external_url'] as String?;
     final cartType = item['cart_type'] ?? controller.selectedCartType.value;
@@ -342,7 +404,24 @@ class CartScreen extends StatelessWidget {
                             final isUpdating = status == 'updating';
                             final isFailed = status == 'error';
                             final isSuccess = status == 'success';
-                            final isOutOfStock = status == 'out_of_stock' || item['price']?.toString().toLowerCase().contains('out of stock') == true;
+                            final rawPriceStr = (item['product']?['price'] ?? item['price'])?.toString() ?? '';
+                            final isOutOfStock = status == 'out_of_stock'
+                                || rawPriceStr.toLowerCase().contains('out of stock')
+                                || rawPriceStr.contains('غير متوفر');
+
+                            // Determine what to display: formatted price, raw string, or "—"
+                            String priceDisplay;
+                            if (priceVal > 0) {
+                              priceDisplay = settingsController.formatPrice(priceVal, originalCurrency);
+                            } else if (rawPriceStr.isNotEmpty
+                                && !rawPriceStr.toLowerCase().contains('unknown')
+                                && !rawPriceStr.toLowerCase().contains('out of stock')
+                                && !rawPriceStr.contains('غير متوفر')) {
+                              // Could not parse to double — show the raw stored string as-is
+                              priceDisplay = rawPriceStr;
+                            } else {
+                              priceDisplay = '—';
+                            }
 
                             return Row(
                               children: [
@@ -353,7 +432,7 @@ class CartScreen extends StatelessWidget {
                                   )
                                 else
                                   Text(
-                                    settingsController.formatPrice(priceVal, originalCurrency),
+                                    priceDisplay,
                                     style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.secondary),
                                   ),
                                 if (isUpdating || isFailed || isSuccess) ...[
@@ -389,9 +468,25 @@ class CartScreen extends StatelessWidget {
                 _buildQtyButton(Icons.add, () => controller.updateQuantity(item['id'], quantity + 1)),
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Text('$quantity', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700)),
+                  child: Column(
+                    children: [
+                      Text('$quantity', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700)),
+                      if (minQty > 1)
+                        Text(
+                          'min $minQty',
+                          style: GoogleFonts.inter(fontSize: 9, color: AppColors.textHint, fontWeight: FontWeight.w500),
+                        ),
+                    ],
+                  ),
                 ),
-                _buildQtyButton(Icons.remove, () => controller.updateQuantity(item['id'], quantity - 1)),
+                // Minus is disabled when quantity is already at minQty
+                _buildQtyButton(
+                  Icons.remove,
+                  quantity > minQty
+                      ? () => controller.updateQuantity(item['id'], quantity - 1)
+                      : null,
+                  disabled: quantity <= minQty,
+                ),
               ],
             ),
           ],
@@ -400,16 +495,16 @@ class CartScreen extends StatelessWidget {
     ).animate(delay: Duration(milliseconds: index * 80)).fadeIn(duration: 300.ms).slideX(begin: 0.05);
   }
 
-  Widget _buildQtyButton(IconData icon, VoidCallback onTap) {
+  Widget _buildQtyButton(IconData icon, VoidCallback? onTap, {bool disabled = false}) {
     return GestureDetector(
-      onTap: onTap,
+      onTap: disabled ? null : onTap,
       child: Container(
         width: 32, height: 32,
         decoration: BoxDecoration(
-          color: AppColors.secondary,
+          color: disabled ? AppColors.textHint.withOpacity(0.25) : AppColors.secondary,
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Icon(icon, color: Colors.white, size: 18),
+        child: Icon(icon, color: disabled ? AppColors.textHint : Colors.white, size: 18),
       ),
     );
   }
@@ -650,6 +745,27 @@ class CartScreen extends StatelessWidget {
               final script = ScraperHelper.buildScraperScript(config);
               await webController.evaluateJavascript(source: script);
               await Future.delayed(const Duration(milliseconds: 300));
+
+              // Auto-select stored variant options if available
+              final rawSelections = currentItem['selections_json'] as String?;
+              if (rawSelections != null && rawSelections.isNotEmpty) {
+                try {
+                  final decoded = jsonDecode(rawSelections);
+                  if (decoded is Map) {
+                    await webController.evaluateJavascript(
+                      source: 'window.__koonOpenSkuPicker && window.__koonOpenSkuPicker()',
+                    );
+                    await Future.delayed(const Duration(milliseconds: 300));
+                    for (final entry in decoded.entries) {
+                      final name = entry.key.toString();
+                      final value = entry.value.toString();
+                      final js = 'window.__koonSelectOption ? window.__koonSelectOption(${jsonEncode(name)}, ${jsonEncode(value)}) : false';
+                      await webController.evaluateJavascript(source: js);
+                      await Future.delayed(const Duration(milliseconds: 400));
+                    }
+                  }
+                } catch (_) {}
+              }
 
               final raw = await webController.evaluateJavascript(
                 source: 'window.__koonExtractProduct ? window.__koonExtractProduct() : null',

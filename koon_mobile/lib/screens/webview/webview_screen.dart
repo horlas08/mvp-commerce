@@ -1584,6 +1584,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
         externalUrl: product['url']?.toString(),
         siteName: product['site']?.toString() ?? widget.siteName,
         selectionsJson: selectionsJson,
+        minQuantity: minQty,
         quantity: quantity,
       );
       if (result == AddToCartStatus.success) {

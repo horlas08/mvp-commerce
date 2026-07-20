@@ -79,4 +79,70 @@ class KoonCurrencyService {
 
     return priceStr;
   }
+
+  static double parsePriceToDouble(dynamic priceRaw) {
+    if (priceRaw == null) return 0.0;
+    if (priceRaw is num) return priceRaw.toDouble();
+    String str = priceRaw.toString().trim();
+    if (str.isEmpty ||
+        str.toLowerCase().contains('out of stock') ||
+        str.toLowerCase().contains('unknown') ||
+        str.contains('غير متوفر')) {
+      return 0.0;
+    }
+
+    // Convert Arabic / Persian numerals to ASCII
+    const arabicDigits = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+    const persianDigits = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
+    for (int i = 0; i < 10; i++) {
+      str = str.replaceAll(arabicDigits[i], '$i').replaceAll(persianDigits[i], '$i');
+    }
+
+    // Extract first number match — MUST start with a digit so we don't
+    // accidentally match the period inside Arabic currency symbols like "ر.س"
+    // which would give us "." → cleaned to "" → 0.0.
+    final match = RegExp(r'(\d[\d,.]*)').firstMatch(str);
+    if (match == null) return 0.0;
+
+    var numStr = match.group(1)!;
+
+    // Clean leading/trailing dots/commas
+    while (numStr.startsWith('.') || numStr.startsWith(',')) {
+      numStr = numStr.substring(1);
+    }
+    while (numStr.endsWith('.') || numStr.endsWith(',')) {
+      numStr = numStr.substring(0, numStr.length - 1);
+    }
+    if (numStr.isEmpty) return 0.0;
+
+    try {
+      double? val;
+      if (numStr.contains(',') && numStr.contains('.')) {
+        if (numStr.lastIndexOf(',') > numStr.lastIndexOf('.')) {
+          val = double.tryParse(numStr.replaceAll('.', '').replaceAll(',', '.'));
+        } else {
+          val = double.tryParse(numStr.replaceAll(',', ''));
+        }
+      } else if (numStr.contains(',')) {
+        final parts = numStr.split(',');
+        if (parts.length > 2 || (parts.length == 2 && parts[1].length == 3)) {
+          val = double.tryParse(numStr.replaceAll(',', ''));
+        } else {
+          val = double.tryParse(numStr.replaceAll(',', '.'));
+        }
+      } else if (numStr.contains('.')) {
+        final parts = numStr.split('.');
+        if (parts.length > 2) {
+          val = double.tryParse(numStr.replaceAll('.', ''));
+        } else {
+          val = double.tryParse(numStr);
+        }
+      } else {
+        val = double.tryParse(numStr);
+      }
+      return val ?? 0.0;
+    } catch (_) {
+      return 0.0;
+    }
+  }
 }

@@ -23,6 +23,7 @@ class AddToCartRequest(BaseModel):
     external_url: Optional[str] = None
     site_name: Optional[str] = None
     selections_json: Optional[str] = None
+    min_quantity: int = 1
     quantity: int = 1
 
 
@@ -90,6 +91,9 @@ async def add_to_cart(
             # Update selections if provided (user may have changed variant)
             if req.selections_json is not None:
                 existing.selections_json = req.selections_json
+            # Update min_quantity if it changed
+            if req.min_quantity > 1:
+                existing.min_quantity = req.min_quantity
             await db.commit()
             await db.refresh(existing)
             return existing.to_dict(lang)
@@ -105,6 +109,7 @@ async def add_to_cart(
         external_url=req.external_url,
         site_name=req.site_name,
         selections_json=req.selections_json,
+        min_quantity=req.min_quantity,
         quantity=req.quantity,
     )
     db.add(item)

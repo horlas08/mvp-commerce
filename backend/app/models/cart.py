@@ -35,6 +35,8 @@ class CartItem(Base):
     site_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     # JSON-encoded variant selections, e.g. {"Color": "Red", "Size": "XL"}
     selections_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Minimum order quantity from the external site (e.g. Alibaba MOQ)
+    min_quantity: Mapped[int] = mapped_column(Integer, default=1)
 
     quantity: Mapped[int] = mapped_column(Integer, default=1)
     is_selected: Mapped[bool] = mapped_column(default=True)
@@ -62,4 +64,5 @@ class CartItem(Base):
             result["external_url"] = self.external_url
             result["site_name"] = self.site_name
             result["selections_json"] = self.selections_json
+            result["min_quantity"] = self.min_quantity
         return result
