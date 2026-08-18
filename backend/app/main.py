@@ -212,36 +212,92 @@ async def _seed_demo_data():
         from app.models.payment_method import PaymentMethod
         payment_check = await db.execute(select(PaymentMethod).limit(1))
         if not payment_check.scalar_one_or_none():
-            cod = PaymentMethod(
-                id="payment-cod",
-                title_en="Cash on Delivery",
-                title_ar="الدفع عند الاستلام",
-                details_en="Pay in cash upon delivery.",
-                details_ar="الدفع نقداً عند الاستلام.",
-                is_active=True,
-                fields_json="[]"
-            )
+            bank_accounts_data = [
+                {
+                    "id": "acc-1",
+                    "bank_name_ar": "نقطة حاسب الكريمي",
+                    "bank_name_en": "Kuraimi Haseb Point",
+                    "account_number": "1790096",
+                    "logo_url": "/static/seed/banks/kuraimi_haseb.png",
+                },
+                {
+                    "id": "acc-2",
+                    "bank_name_ar": "الشامل موني",
+                    "bank_name_en": "Shamil Money",
+                    "account_number": "5901094",
+                    "logo_url": "/static/seed/banks/shamil_money.png",
+                },
+                {
+                    "id": "acc-3",
+                    "bank_name_ar": "بنك القطيبي",
+                    "bank_name_en": "Al Qutaibi Bank",
+                    "account_number": "78266666",
+                    "logo_url": "/static/seed/banks/qutaibi_bank.png",
+                },
+                {
+                    "id": "acc-4",
+                    "bank_name_ar": "بنك السلام كابيتال",
+                    "bank_name_en": "Al Salam Capital Bank",
+                    "account_number": "14433",
+                    "logo_url": "/static/seed/banks/salam_capital.png",
+                },
+                {
+                    "id": "acc-5",
+                    "bank_name_ar": "الكريمي",
+                    "bank_name_en": "Al Kuraimi Bank",
+                    "account_number": "3155416717",
+                    "logo_url": "/static/seed/banks/kuraimi_bank.png",
+                },
+                {
+                    "id": "acc-6",
+                    "bank_name_ar": "بنك اليمن والكويت",
+                    "bank_name_en": "Yemen Kuwait Bank",
+                    "account_number": "0236971",
+                    "logo_url": "/static/seed/banks/ykb_bank.png",
+                },
+                {
+                    "id": "acc-7",
+                    "bank_name_ar": "بنك الامل",
+                    "bank_name_en": "Al-Amal Bank",
+                    "account_number": "282201002777",
+                    "logo_url": "/static/seed/banks/alamal_bank.png",
+                },
+                {
+                    "id": "acc-8",
+                    "bank_name_ar": "بيس",
+                    "bank_name_en": "Pyes",
+                    "account_number": "2471501",
+                    "logo_url": "/static/seed/banks/pyes_wallet.png",
+                },
+                {
+                    "id": "acc-9",
+                    "bank_name_ar": "بنك الشرق",
+                    "bank_name_en": "Al Sharq Bank",
+                    "account_number": "422333444",
+                    "logo_url": "/static/seed/banks/alsharq_bank.png",
+                },
+                {
+                    "id": "acc-10",
+                    "bank_name_ar": "بنك السلام كابيتال نقطة سلام باي",
+                    "bank_name_en": "Al Salam Capital - Salam Pay Point",
+                    "account_number": "119501",
+                    "logo_url": "/static/seed/banks/salam_pay.png",
+                },
+            ]
+
             bank = PaymentMethod(
                 id="payment-bank",
-                title_en="Bank Transfer",
-                title_ar="تحويل بنكي",
-                details_en="Please transfer the total amount to our bank account below and upload the proof.",
-                details_ar="يرجى تحويل المبلغ الإجمالي إلى حسابنا البنكي أدناه ورفع ما يثبت ذلك.",
+                title_en="Bank Transfer 💳",
+                title_ar="حوالة بنكية 💳",
+                details_en="Please transfer the total amount to one of the accounts below and upload the receipt photo.",
+                details_ar="يرجى تحويل المبلغ الإجمالي إلى أحد الحسابات الموضحة أدناه ورفع صورة الإشعار.",
                 is_active=True,
-                fields_json='[{"key": "bank_name", "label_en": "Select Bank", "label_ar": "اختر البنك", "type": "select", "options": ["Al Rajhi Bank", "SNB (Al Ahli)", "Riyad Bank", "Alinma Bank"]}, {"key": "account_name", "label_en": "Your Full Name", "label_ar": "اسمك الكامل", "type": "text"}, {"key": "amount_transferred", "label_en": "Amount Transferred (SAR)", "label_ar": "المبلغ المحول (ريال)", "type": "number"}, {"key": "receipt_proof", "label_en": "Receipt Photo", "label_ar": "صورة الإيصال", "type": "file"}]'
+                fields_json='[{"key": "receipt_proof", "label_en": "Transfer Receipt Photo", "label_ar": "صورة إشعار التحويل", "type": "file"}]',
+                bank_accounts_json=json.dumps(bank_accounts_data)
             )
-            stcpay = PaymentMethod(
-                id="payment-stcpay",
-                title_en="STC Pay Transfer",
-                title_ar="تحويل STC Pay",
-                details_en="Please transfer to our STC Pay wallet (+966 50 000 0000) and fill details.",
-                details_ar="يرجى التحويل إلى محفظة STC Pay الخاصة بنا (+966 50 000 0000) وتعبئة التفاصيل.",
-                is_active=True,
-                fields_json='[{"key": "sender_phone", "label_en": "Sender Phone Number", "label_ar": "رقم هاتف المرسل", "type": "number"}, {"key": "transaction_id", "label_en": "Transaction ID", "label_ar": "رقم العملية", "type": "text"}, {"key": "transfer_proof", "label_en": "Transfer Screenshot", "label_ar": "لقطة شاشة التحويل", "type": "file"}]'
-            )
-            db.add_all([cod, bank, stcpay])
+            db.add(bank)
             await db.commit()
-            print("✅ Default payment methods seeded successfully.")
+            print("✅ Default bank transfer payment method with 10 deposit bank accounts seeded successfully.")
 
         # Seed AppSettings if empty
         from app.models.app_setting import AppSetting
@@ -262,6 +318,11 @@ async def _seed_demo_data():
                     key="pickup_delivery",
                     value_en="### Pickup & Delivery Policy\n\nFor home delivery, orders are delivered directly to your address. For station pickup, please collect your order within 3 business days from the selected station.",
                     value_ar="### سياسة الاستلام والتوصيل\n\nللتوصيل المنزلي، يتم تسليم الطلبات مباشرة إلى عنوانك. للاستلام من المحطة، يرجى استلام طلبك خلال 3 أيام عمل من المحطة المحددة."
+                ),
+                AppSetting(
+                    key="team_review_fee",
+                    value_en="5.0",
+                    value_ar="5.0"
                 )
             ]
             db.add_all(policies)

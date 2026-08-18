@@ -17,6 +17,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import '../../controllers/config_controller.dart';
 import '../../app/utils/scraper_helper.dart';
 import '../../services/currency_service.dart';
+import '../../app/utils/currency_bottom_sheet.dart';
 
 class CartScreen extends StatelessWidget {
   final bool showBackButton;
@@ -41,6 +42,7 @@ class CartScreen extends StatelessWidget {
               )
             : null,
         actions: [
+          const CurrencySwitcherAppBarButton(),
           Obx(() => cartController.cartItems.isNotEmpty
               ? IconButton(
                   icon: const Icon(Icons.delete_outline, color: AppColors.error),
@@ -184,13 +186,17 @@ class CartScreen extends StatelessWidget {
                     ),
                   );
                 }
-                return ListView.builder(
-                  padding: const EdgeInsets.all(12),
-                  itemCount: cartController.cartItems.length,
-                  itemBuilder: (context, index) {
-                    final item = cartController.cartItems[index];
-                    return _buildCartItem(item, cartController, index);
-                  },
+                return RefreshIndicator(
+                  color: AppColors.primary,
+                  onRefresh: () => cartController.loadCart(autoRefresh: true),
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(12),
+                    itemCount: cartController.cartItems.length,
+                    itemBuilder: (context, index) {
+                      final item = cartController.cartItems[index];
+                      return _buildCartItem(item, cartController, index);
+                    },
+                  ),
                 );
               }),
             ),
@@ -199,26 +205,63 @@ class CartScreen extends StatelessWidget {
             Obx(() {
               if (cartController.cartItems.isEmpty) return const SizedBox();
 
-              // Check if any selected item has an unknown/zero price
               final selectedItems = cartController.cartItems.where((i) => i['is_selected'] == true).toList();
-              final hasUnknownPrice = selectedItems.any((item) {
-                final rawPrice = (item['product']?['price'] ?? item['price'])?.toString() ?? '';
-                final parsed = KoonCurrencyService.parsePriceToDouble(rawPrice);
-                return parsed <= 0 &&
-                    rawPrice.isNotEmpty &&
-                    !rawPrice.toLowerCase().contains('out of stock') &&
-                    !rawPrice.contains('غير متوفر');
+              final hasNoSelection = selectedItems.isEmpty;
+              final hasUpdatingItems = selectedItems.any((i) =>
+                  cartController.itemStatuses[i['id']] == 'updating' ||
+                  cartController.itemStatuses[i['id']] == 'pending');
+              final hasFailedItems = selectedItems.any((i) => cartController.itemStatuses[i['id']] == 'error');
+              final hasStaleItems = selectedItems.any((i) {
+                final extUrl = i['external_url']?.toString() ?? '';
+                return extUrl.isNotEmpty && !cartController.isItemFresh(i);
               });
-              // Also block if ALL selected have zero price (price completely missing)
-              final hasMissingPrice = selectedItems.isNotEmpty &&
-                  selectedItems.every((item) {
-                    final rawPrice = (item['product']?['price'] ?? item['price'])?.toString() ?? '';
-                    return rawPrice.isEmpty ||
-                        rawPrice.toLowerCase().contains('unknown') ||
-                        KoonCurrencyService.parsePriceToDouble(rawPrice) <= 0;
-                  });
+              final hasOutOfStock = selectedItems.any((i) {
+                final rawPrice = (i['product']?['price'] ?? i['price'])?.toString() ?? '';
+                final status = cartController.itemStatuses[i['id']];
+                return status == 'out_of_stock' ||
+                    rawPrice.toLowerCase().contains('out of stock') ||
+                    rawPrice.contains('غير متوفر');
+              });
+              final hasUnknownPrice = selectedItems.any((i) {
+                final rawPrice = (i['product']?['price'] ?? i['price'])?.toString() ?? '';
+                return rawPrice.isEmpty ||
+                    rawPrice.toLowerCase().contains('unknown') ||
+                    KoonCurrencyService.parsePriceToDouble(rawPrice) <= 0;
+              });
 
-              final checkoutBlocked = hasUnknownPrice || hasMissingPrice;
+              final checkoutBlocked = hasNoSelection ||
+                  hasUpdatingItems ||
+                  hasFailedItems ||
+                  hasStaleItems ||
+                  hasOutOfStock ||
+                  hasUnknownPrice;
+
+              String? blockReason;
+              if (hasNoSelection) {
+                blockReason = lang == 'ar'
+                    ? 'يرجى تحديد منتج واحد على الأقل للمتابعة.'
+                    : 'Please select at least one item to proceed.';
+              } else if (hasUpdatingItems) {
+                blockReason = lang == 'ar'
+                    ? 'يرجى الانتظار: جاري تحديث الأسعار والمخزون في الخلفية...'
+                    : 'Please wait: updating prices and stock in background...';
+              } else if (hasFailedItems) {
+                blockReason = lang == 'ar'
+                    ? 'لا يمكن إتمام الطلب: فشل تحديث السعر لبعض المنتجات. يرجى الضغط على زر إعادة المحاولة 🔄 في بطاقة المنتج.'
+                    : 'Cannot proceed: price update failed for some items. Please tap retry 🔄 on the item card.';
+              } else if (hasStaleItems) {
+                blockReason = lang == 'ar'
+                    ? 'لا يمكن إتمام الطلب: بعض المنتجات تحتاج إلى تحديث أسعارها اليومية.'
+                    : 'Cannot proceed: some items require today\'s price update.';
+              } else if (hasOutOfStock) {
+                blockReason = lang == 'ar'
+                    ? 'لا يمكن إتمام الطلب: بعض المنتجات المحددة غير متوفرة في المخزون.'
+                    : 'Cannot proceed: some selected items are out of stock.';
+              } else if (hasUnknownPrice) {
+                blockReason = lang == 'ar'
+                    ? 'لا يمكن إتمام الطلب: بعض المنتجات المحددة لا تملك سعراً معروفاً.'
+                    : 'Cannot proceed: some selected items have an unknown price.';
+              }
 
               return Container(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -231,26 +274,34 @@ class CartScreen extends StatelessWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (checkoutBlocked)
+                      if (checkoutBlocked && blockReason != null)
                         Container(
                           width: double.infinity,
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           margin: const EdgeInsets.only(bottom: 10),
                           decoration: BoxDecoration(
-                            color: AppColors.error.withOpacity(0.08),
+                            color: (hasUpdatingItems ? AppColors.primary : AppColors.error).withOpacity(0.08),
                             borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                            border: Border.all(
+                              color: (hasUpdatingItems ? AppColors.primary : AppColors.error).withOpacity(0.3),
+                            ),
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 16),
+                              Icon(
+                                hasUpdatingItems ? Icons.hourglass_top_rounded : Icons.warning_amber_rounded,
+                                color: hasUpdatingItems ? AppColors.primary : AppColors.error,
+                                size: 16,
+                              ),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
-                                  lang == 'ar'
-                                      ? 'لا يمكن المتابعة: بعض المنتجات المحددة لا تملك سعراً معروفاً.'
-                                      : 'Cannot proceed: some selected items have an unknown price.',
-                                  style: GoogleFonts.inter(fontSize: 11, color: AppColors.error, fontWeight: FontWeight.w500),
+                                  blockReason,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    color: hasUpdatingItems ? AppColors.primary : AppColors.error,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ),
                             ],
@@ -307,13 +358,13 @@ class CartScreen extends StatelessWidget {
           ],
         );
       }),
-      // WhatsApp FAB
-      floatingActionButton: FloatingActionButton(
-        mini: true,
-        backgroundColor: const Color(0xFF25D366),
-        onPressed: () {},
-        child: const Icon(Icons.chat, color: Colors.white, size: 22),
-      ),
+      // WhatsApp FAB (commented out)
+      // floatingActionButton: FloatingActionButton(
+      //   mini: true,
+      //   backgroundColor: const Color(0xFF25D366),
+      //   onPressed: () {},
+      //   child: const Icon(Icons.chat, color: Colors.white, size: 22),
+      // ),
     );
   }
 
@@ -322,10 +373,13 @@ class CartScreen extends StatelessWidget {
     final double priceVal = KoonCurrencyService.parsePriceToDouble(item['product']?['price'] ?? item['price']);
     final originalCurrency = item['product']?['currency'] ?? 'SAR';
     final imageUrl = item['image_url'] ?? (item['product']?['images'] as List?)?.firstOrNull?.toString();
-    final quantity = item['quantity'] ?? 1;
+    final int quantity = (item['quantity'] is int)
+        ? item['quantity'] as int
+        : int.tryParse(item['quantity']?.toString() ?? '1') ?? 1;
     final int minQty = (item['min_quantity'] is int)
         ? item['min_quantity'] as int
         : int.tryParse(item['min_quantity']?.toString() ?? '1') ?? 1;
+    final bool isMinOrder = quantity <= minQty;
     final settingsController = Get.find<SettingsController>();
     final externalUrl = item['external_url'] as String?;
     final cartType = item['cart_type'] ?? controller.selectedCartType.value;
@@ -447,7 +501,39 @@ class CartScreen extends StatelessWidget {
                                       ),
                                     )
                                   else if (isFailed)
-                                    const Icon(Icons.error_outline, size: 14, color: AppColors.error)
+                                    GestureDetector(
+                                      onTap: () {
+                                        final err = controller.itemErrors[item['id']] ?? (Get.locale?.languageCode == 'ar' ? 'فشل التحديث' : 'Update failed');
+                                        Get.snackbar(
+                                          'auto_update_error'.tr(),
+                                          err,
+                                          snackPosition: SnackPosition.BOTTOM,
+                                          duration: const Duration(seconds: 4),
+                                          mainButton: TextButton(
+                                            onPressed: () => controller.retryItemRefresh(item['id']),
+                                            child: Text('retry'.tr(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                          ),
+                                        );
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.error.withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Icon(Icons.error_outline, size: 12, color: AppColors.error),
+                                            const SizedBox(width: 4),
+                                            GestureDetector(
+                                              onTap: () => controller.retryItemRefresh(item['id']),
+                                              child: const Icon(Icons.refresh, size: 12, color: AppColors.error),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    )
                                   else if (isSuccess)
                                     const Icon(Icons.check_circle_outline, size: 14, color: AppColors.success),
                                 ],
@@ -482,10 +568,10 @@ class CartScreen extends StatelessWidget {
                 // Minus is disabled when quantity is already at minQty
                 _buildQtyButton(
                   Icons.remove,
-                  quantity > minQty
+                  !isMinOrder
                       ? () => controller.updateQuantity(item['id'], quantity - 1)
                       : null,
-                  disabled: quantity <= minQty,
+                  disabled: isMinOrder,
                 ),
               ],
             ),
@@ -498,13 +584,20 @@ class CartScreen extends StatelessWidget {
   Widget _buildQtyButton(IconData icon, VoidCallback? onTap, {bool disabled = false}) {
     return GestureDetector(
       onTap: disabled ? null : onTap,
-      child: Container(
-        width: 32, height: 32,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        width: 32,
+        height: 32,
         decoration: BoxDecoration(
-          color: disabled ? AppColors.textHint.withOpacity(0.25) : AppColors.secondary,
+          color: disabled ? AppColors.divider.withOpacity(0.5) : AppColors.secondary,
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Icon(icon, color: disabled ? AppColors.textHint : Colors.white, size: 18),
+        child: Icon(
+          icon,
+          color: disabled ? AppColors.textHint.withOpacity(0.45) : Colors.white,
+          size: 18,
+        ),
       ),
     );
   }
@@ -704,21 +797,148 @@ class CartScreen extends StatelessWidget {
       final currentItem = cartController.currentRefreshItem.value;
       if (currentItem == null) return const SizedBox.shrink();
 
-      final externalUrl = currentItem['external_url'] ?? '';
+      final externalUrl = currentItem['external_url']?.toString() ?? '';
       if (externalUrl.isEmpty) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          cartController.onRefreshFailed(currentItem['id']);
+          cartController.onRefreshFailed(currentItem['id'], reason: 'External URL is missing');
         });
         return const SizedBox.shrink();
       }
 
-      return SizedBox(
-        width: 1,
-        height: 1,
+      return _HiddenScraperWebView(
+        key: ValueKey(currentItem['id']),
+        item: currentItem,
+        controller: cartController,
+      );
+    });
+  }
+}
+
+class _HiddenScraperWebView extends StatefulWidget {
+  final Map<String, dynamic> item;
+  final CartController controller;
+
+  const _HiddenScraperWebView({
+    super.key,
+    required this.item,
+    required this.controller,
+  });
+
+  @override
+  State<_HiddenScraperWebView> createState() => _HiddenScraperWebViewState();
+}
+
+class _HiddenScraperWebViewState extends State<_HiddenScraperWebView> {
+  InAppWebViewController? _webViewController;
+  bool _completed = false;
+  bool _injected = false;
+  bool _replayed = false;
+
+  void _finishSuccess(String price, bool isOutOfStock) {
+    if (_completed || !mounted) return;
+    _completed = true;
+    widget.controller.onRefreshComplete(
+      widget.item['id'],
+      price,
+      outOfStock: isOutOfStock,
+    );
+  }
+
+  void _finishFailed(String reason) {
+    if (_completed || !mounted) return;
+    _completed = true;
+    widget.controller.onRefreshFailed(
+      widget.item['id'],
+      reason: reason,
+    );
+  }
+
+  Future<void> _injectScraper(InAppWebViewController webController, String? currentUrl) async {
+    if (_completed || !mounted) return;
+    try {
+      final extUrl = widget.item['external_url']?.toString() ?? '';
+      final targetUrl = currentUrl ?? UrlHelper.convertToArabicUrl(extUrl);
+      final configController = Get.find<ConfigController>();
+      final config = configController.getConfigForUrl(targetUrl) ??
+          configController.getConfigForUrl(extUrl);
+
+      if (config == null) return;
+
+      final script = ScraperHelper.buildScraperScript(config);
+      await webController.evaluateJavascript(source: script);
+
+      // Replay stored variant selections if present
+      final rawSelections = widget.item['selections_json'] as String?;
+      if (rawSelections != null && rawSelections.isNotEmpty && !_replayed) {
+        _replayed = true;
+        try {
+          final decoded = jsonDecode(rawSelections);
+          if (decoded is Map && decoded.isNotEmpty) {
+            Get.log('[CartScraper] Replaying variants for ${widget.item['id']}: $decoded');
+            await webController.evaluateJavascript(
+              source: 'window.__koonOpenSkuPicker && window.__koonOpenSkuPicker()',
+            );
+            await Future.delayed(const Duration(milliseconds: 350));
+            for (final entry in decoded.entries) {
+              if (_completed || !mounted) return;
+              final name = entry.key.toString();
+              final value = entry.value.toString();
+              final js = 'window.__koonSelectOption ? window.__koonSelectOption(${jsonEncode(name)}, ${jsonEncode(value)}) : false';
+              await webController.evaluateJavascript(source: js);
+              await Future.delayed(const Duration(milliseconds: 450));
+            }
+          }
+        } catch (e) {
+          Get.log('[CartScraper] Variant replay error: $e');
+        }
+      }
+
+      // Attempt immediate extraction
+      if (!_completed && mounted) {
+        final raw = await webController.evaluateJavascript(
+          source: 'window.__koonExtractProduct ? window.__koonExtractProduct() : null',
+        );
+        if (raw != null && raw is Map) {
+          _handleExtractedData(Map<String, dynamic>.from(raw));
+        }
+      }
+    } catch (e) {
+      Get.log('[CartScraper] Scraper injection exception: $e');
+    }
+  }
+
+  void _handleExtractedData(Map<String, dynamic> data) {
+    if (_completed || !mounted) return;
+    final price = data['price']?.toString() ?? '';
+    final isOutOfStock = data['is_out_of_stock'] == true ||
+        price.toLowerCase().contains('out of stock') ||
+        price.contains('غير متوفر');
+
+    if (isOutOfStock) {
+      Get.log('[CartScraper] Extracted out-of-stock for ${widget.item['id']}');
+      _finishSuccess(price, true);
+    } else if (price.isNotEmpty &&
+        !price.toLowerCase().contains('unknown') &&
+        KoonCurrencyService.parsePriceToDouble(price) > 0) {
+      Get.log('[CartScraper] Extracted valid price "$price" for ${widget.item['id']}');
+      _finishSuccess(price, false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final externalUrl = widget.item['external_url']?.toString() ?? '';
+    final targetUrl = UrlHelper.convertToArabicUrl(externalUrl);
+
+    return Offstage(
+      offstage: true,
+      child: SizedBox(
+        width: 375,
+        height: 667,
         child: InAppWebView(
-          key: ValueKey(currentItem['id']),
+          key: ValueKey('${widget.item['id']}_$targetUrl'),
           initialUrlRequest: URLRequest(
-            url: WebUri(externalUrl),
+            url: WebUri(targetUrl),
             headers: {
               'Accept-Language': 'ar-SA,ar;q=0.9,en-US;q=0.8,en;q=0.7',
             },
@@ -726,70 +946,82 @@ class CartScreen extends StatelessWidget {
           initialSettings: InAppWebViewSettings(
             javaScriptEnabled: true,
             domStorageEnabled: true,
+            databaseEnabled: true,
+            cacheEnabled: true,
             useShouldOverrideUrlLoading: true,
             mediaPlaybackRequiresUserGesture: false,
-            userAgent: "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
+            mixedContentMode: MixedContentMode.MIXED_CONTENT_ALWAYS_ALLOW,
+            userAgent:
+                "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
           ),
-          onLoadStop: (webController, url) async {
-            await Future.delayed(const Duration(milliseconds: 3500));
-            if (cartController.currentRefreshItem.value?['id'] != currentItem['id']) return;
-
-            try {
-              final configController = Get.find<ConfigController>();
-              final config = configController.getConfigForUrl(externalUrl);
-              if (config == null) {
-                cartController.onRefreshFailed(currentItem['id']);
-                return;
+          onWebViewCreated: (controller) async {
+            _webViewController = controller;
+            controller.addJavaScriptHandler(
+              handlerName: 'onProductDetected',
+              callback: (args) {
+                if (_completed || !mounted) return;
+                if (args.isNotEmpty && args[0] != null && args[0] is Map) {
+                  final data = Map<String, dynamic>.from(args[0]);
+                  _handleExtractedData(data);
+                }
+              },
+            );
+            await WebViewScreen.setupCurrencyCookies(targetUrl);
+          },
+          shouldOverrideUrlLoading: (controller, navigationAction) async {
+            final uri = navigationAction.request.url;
+            if (uri == null) return NavigationActionPolicy.ALLOW;
+            final scheme = uri.scheme.toLowerCase();
+            const allowedSchemes = {'http', 'https', 'about', 'data', 'blank'};
+            if (!allowedSchemes.contains(scheme)) {
+              return NavigationActionPolicy.CANCEL;
+            }
+            return NavigationActionPolicy.ALLOW;
+          },
+          onReceivedError: (controller, request, error) {
+            if (request.isForMainFrame ?? true) {
+              Get.log('[CartScraper] Mainframe error: ${error.description}');
+              if (error.type == -2 || error.description.contains('ERR_NAME_NOT_RESOLVED')) {
+                _finishFailed('Network error: ${error.description}');
               }
-
-              final script = ScraperHelper.buildScraperScript(config);
-              await webController.evaluateJavascript(source: script);
-              await Future.delayed(const Duration(milliseconds: 300));
-
-              // Auto-select stored variant options if available
-              final rawSelections = currentItem['selections_json'] as String?;
-              if (rawSelections != null && rawSelections.isNotEmpty) {
-                try {
-                  final decoded = jsonDecode(rawSelections);
-                  if (decoded is Map) {
-                    await webController.evaluateJavascript(
-                      source: 'window.__koonOpenSkuPicker && window.__koonOpenSkuPicker()',
-                    );
-                    await Future.delayed(const Duration(milliseconds: 300));
-                    for (final entry in decoded.entries) {
-                      final name = entry.key.toString();
-                      final value = entry.value.toString();
-                      final js = 'window.__koonSelectOption ? window.__koonSelectOption(${jsonEncode(name)}, ${jsonEncode(value)}) : false';
-                      await webController.evaluateJavascript(source: js);
-                      await Future.delayed(const Duration(milliseconds: 400));
-                    }
-                  }
-                } catch (_) {}
+            }
+          },
+          onReceivedHttpError: (controller, request, errorResponse) {
+            if (request.isForMainFrame ?? true) {
+              final code = errorResponse.statusCode;
+              if (code != null && code >= 400 && code != 403) {
+                Get.log('[CartScraper] HTTP error $code');
+                _finishFailed('HTTP $code error from server');
               }
+            }
+          },
+          onProgressChanged: (controller, progress) {
+            if (progress >= 50 && !_injected) {
+              _injected = true;
+              _injectScraper(controller, null);
+            }
+          },
+          onPageCommitVisible: (controller, url) {
+            if (!_injected) {
+              _injected = true;
+              _injectScraper(controller, url?.toString());
+            }
+          },
+          onLoadStop: (controller, url) async {
+            Get.log('[CartScraper] Page onLoadStop: $url');
+            await WebViewScreen.setupCurrencyCookies(url?.toString() ?? targetUrl);
+            await _injectScraper(controller, url?.toString());
 
-              final raw = await webController.evaluateJavascript(
-                source: 'window.__koonExtractProduct ? window.__koonExtractProduct() : null',
-              );
-
-              if (raw != null) {
-                final data = Map<String, dynamic>.from(raw as Map);
-                final newPrice = data['price']?.toString() ?? '';
-                final isOutOfStock = data['is_out_of_stock'] == true || newPrice.toLowerCase().contains('out of stock') || newPrice.contains('غير متوفر');
-
-                cartController.onRefreshComplete(
-                  currentItem['id'],
-                  newPrice.isNotEmpty ? newPrice : null,
-                  outOfStock: isOutOfStock,
-                );
-              } else {
-                cartController.onRefreshComplete(currentItem['id'], null, outOfStock: true);
+            // Delayed fallback extraction if not completed yet
+            if (!_completed) {
+              await Future.delayed(const Duration(milliseconds: 1500));
+              if (!_completed && mounted) {
+                await _injectScraper(controller, url?.toString());
               }
-            } catch (e) {
-              cartController.onRefreshFailed(currentItem['id']);
             }
           },
         ),
-      );
-    });
+      ),
+    );
   }
 }

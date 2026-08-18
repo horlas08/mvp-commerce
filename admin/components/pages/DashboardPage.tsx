@@ -124,11 +124,11 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
       {/* Stats grid */}
       <div className="stats-grid">
         <StatCard icon={Users} label={t("totalUsers")} value={stats?.total_users ?? 0} color="purple" />
-        <StatCard icon={Package} label={t("totalProducts")} value={stats?.total_products ?? 0} color="blue" />
+        {/* <StatCard icon={Package} label={t("totalProducts")} value={stats?.total_products ?? 0} color="blue" /> */}
         <StatCard icon={ShoppingBag} label={t("totalOrders")} value={stats?.total_orders ?? 0} color="green" />
         <StatCard icon={DollarSign} label={t("totalRevenue")} value={(stats?.total_revenue ?? 0).toFixed(0)} color="amber" suffix="﷼ " />
         <StatCard icon={Clock} label={t("pendingOrders")} value={stats?.pending_orders ?? 0} color="rose" />
-        <StatCard icon={CheckCircle} label={t("activeProducts")} value={stats?.active_products ?? 0} color="cyan" />
+        {/* <StatCard icon={CheckCircle} label={t("activeProducts")} value={stats?.active_products ?? 0} color="cyan" /> */}
         <StatCard icon={CreditCard} label={t("pendingApprovals")} value={(stats as any)?.pending_payments ?? 0} color="purple" />
         <StatCard icon={Undo} label={t("pendingRefunds")} value={(stats as any)?.pending_refunds ?? 0} color="rose" />
       </div>

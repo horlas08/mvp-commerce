@@ -155,9 +155,9 @@ export const adminApi = {
     if (params?.state_id) q.set("state_id", params.state_id);
     return apiFetch<City[]>(`/admin/cities?${q}`);
   },
-  createCity: (data: { state_id: string; name_en: string; name_ar: string }) =>
+  createCity: (data: Partial<City> & { state_id: string; name_en: string; name_ar: string }) =>
     apiFetch<City>("/admin/cities", { method: "POST", body: JSON.stringify(data) }),
-  updateCity: (id: string, data: Partial<{ state_id: string; name_en: string; name_ar: string }>) =>
+  updateCity: (id: string, data: Partial<City>) =>
     apiFetch<City>(`/admin/cities/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   deleteCity: (id: string) => apiFetch(`/admin/cities/${id}`, { method: "DELETE" }),
 
@@ -231,7 +231,17 @@ export const adminApi = {
     }),
 };
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+export interface BankAccount {
+  id?: string;
+  bank_name_en?: string;
+  bank_name_ar?: string;
+  bank_name?: string;
+  account_number: string;
+  account_name?: string;
+  iban?: string;
+  logo_url?: string;
+}
+
 export interface PaymentMethod {
   id: string;
   title_en: string;
@@ -244,6 +254,8 @@ export interface PaymentMethod {
   is_active: boolean;
   fields?: any[];
   raw_fields?: any[];
+  bank_accounts?: BankAccount[];
+  raw_bank_accounts?: BankAccount[];
 }
 
 export interface AdminUser {
@@ -435,7 +447,7 @@ export interface Coupon {
   used_count: number;
   is_active: boolean;
   expires_at?: string;
-  applicability: "all" | "internal" | "external";
+  applicability: "all" | "internal" | "external" | "wallet" | "funding";
 }
 
 export interface CreateCouponPayload {

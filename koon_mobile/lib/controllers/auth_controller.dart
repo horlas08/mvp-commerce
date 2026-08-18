@@ -44,6 +44,23 @@ class AuthController extends GetxController {
     }
   }
 
+  Future<void> refreshProfile() async {
+    final profile = await _authService.getProfile();
+    if (profile != null) {
+      user.value = profile;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('user_data', jsonEncode(profile));
+    }
+  }
+
+  void updateCreditBalance(double newBalance) {
+    if (user.value != null) {
+      final updated = Map<String, dynamic>.from(user.value!);
+      updated['credit_balance'] = newBalance;
+      user.value = updated;
+    }
+  }
+
   /// Returns [LoginResult].
   /// Throws [UserNotFoundException] when the email is not registered.
   Future<LoginResult> login(String email, String password) async {

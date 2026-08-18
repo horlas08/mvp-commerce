@@ -41,6 +41,7 @@ class CartItem(Base):
     quantity: Mapped[int] = mapped_column(Integer, default=1)
     is_selected: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=True)
 
     # Relationships
     user = relationship("User", back_populates="cart_items")
@@ -54,6 +55,7 @@ class CartItem(Base):
             "quantity": self.quantity,
             "is_selected": self.is_selected,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else (self.created_at.isoformat() if self.created_at else None),
         }
         if self.cart_type == CartType.INTERNAL and self.product:
             result["product"] = self.product.to_dict(lang)

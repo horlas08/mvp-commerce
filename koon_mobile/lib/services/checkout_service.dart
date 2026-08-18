@@ -16,9 +16,12 @@ class CheckoutService {
     return [];
   }
 
-  Future<List<Map<String, dynamic>>> getPaymentMethods() async {
+  Future<List<Map<String, dynamic>>> getPaymentMethods({String lang = 'ar'}) async {
     try {
-      final response = await _dio.get(ApiConstants.paymentMethods);
+      final response = await _dio.get(
+        ApiConstants.paymentMethods,
+        queryParameters: {'lang': lang},
+      );
       if (response.statusCode == 200) {
         return List<Map<String, dynamic>>.from(response.data);
       }
@@ -35,6 +38,16 @@ class CheckoutService {
       }
     } catch (_) {}
     return 0.0;
+  }
+
+  Future<Map<String, dynamic>> getAppSettings() async {
+    try {
+      final response = await _dio.get('${ApiConstants.baseUrl}/settings');
+      if (response.statusCode == 200 && response.data is Map) {
+        return Map<String, dynamic>.from(response.data);
+      }
+    } catch (_) {}
+    return {};
   }
 
   Future<Map<String, dynamic>?> placeOrder({

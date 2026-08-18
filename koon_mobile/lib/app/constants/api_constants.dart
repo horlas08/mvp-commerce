@@ -80,7 +80,10 @@ class ApiConstants {
   static String get cities => '$baseUrl/cities';
   static String get pickupStations => '$baseUrl/shipping/pickup-stations';
   static String get paymentMethods => '$baseUrl/payment-methods';
+  // Wallet
   static String get walletBalance => '$baseUrl/wallet/balance';
+  static String get walletTransactions => '$baseUrl/wallet/transactions';
+  static String get walletTopupCoupon => '$baseUrl/wallet/topup/coupon';
   static String get placeOrder => '$baseUrl/orders/place';
 
   // Support

@@ -5,10 +5,8 @@ import 'package:get/get.dart' hide Trans;
 import '../../app/theme/app_colors.dart';
 import '../../controllers/auth_controller.dart';
 import '../../controllers/cart_controller.dart';
-import '../../controllers/home_controller.dart';
-import '../../controllers/order_controller.dart';
 import '../home/home_screen.dart';
-import '../categories/categories_screen.dart';
+// import '../categories/categories_screen.dart';
 import '../cart/cart_screen.dart';
 import '../orders/orders_screen.dart';
 import '../profile/profile_screen.dart';
@@ -26,16 +24,11 @@ class _MainShellState extends State<MainShell> {
 
   final List<Widget> _screens = [
     const HomeScreen(),
-    const CategoriesScreen(),
+    // const CategoriesScreen(), // ── Commented out for now (can be restored later)
     const CartScreen(),
     const OrdersScreen(),
     const ProfileScreen(),
   ];
-
-  @override
-  void initState() {
-    super.initState();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -71,10 +64,10 @@ class _MainShellState extends State<MainShell> {
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
                   _buildNavItem(0, Icons.home_outlined, Icons.home_rounded, 'home'.tr()),
-                  _buildNavItem(1, Icons.grid_view_outlined, Icons.grid_view_rounded, 'categories'.tr()),
-                  _buildCartNavItem(),
-                  _buildNavItem(3, Icons.receipt_long_outlined, Icons.receipt_long_rounded, 'orders'.tr()),
-                  _buildNavItem(4, Icons.person_outline, Icons.person_rounded, 'profile'.tr()),
+                  // _buildNavItem(1, Icons.grid_view_outlined, Icons.grid_view_rounded, 'categories'.tr()),
+                  _buildCartNavItem(index: 1),
+                  _buildNavItem(2, Icons.receipt_long_outlined, Icons.receipt_long_rounded, 'orders'.tr()),
+                  _buildNavItem(3, Icons.person_outline, Icons.person_rounded, 'profile'.tr()),
                 ],
               ),
             ),
@@ -123,14 +116,14 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
-  Widget _buildCartNavItem() {
-    final isActive = _currentIndex == 2;
+  Widget _buildCartNavItem({int index = 1}) {
+    final isActive = _currentIndex == index;
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final unselectedColor = isDark ? Colors.grey[400]! : AppColors.textHint;
 
     return InkWell(
-      onTap: () => setState(() => _currentIndex = 2),
+      onTap: () => setState(() => _currentIndex = index),
       borderRadius: BorderRadius.circular(12),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),

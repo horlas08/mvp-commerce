@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -144,6 +145,7 @@ async def update_cart_item(
         item.is_selected = req.is_selected
     if req.price is not None:
         item.price = req.price
+        item.updated_at = datetime.now(timezone.utc)
 
     await db.commit()
     await db.refresh(item)

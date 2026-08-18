@@ -289,12 +289,14 @@ async def place_order(
     # ── Calculate dynamic shipping and commission fees ───────────────────
     from app.models.address import Address
     from app.models.location import State, City
+    from app.models.app_setting import AppSetting
 
     result_addr = await db.execute(select(Address).where(Address.id == address_id, Address.user_id == user.id))
     addr = result_addr.scalar_one_or_none()
 
     shipping_fee = 0.0
     commission = 0.0
+    team_review_fee = 0.0
 
     if addr:
         state_db = None
@@ -314,29 +316,35 @@ async def place_order(
                 shipping_fee = 0.0
             else:
                 if city_db and city_db.shipping_fee > 0:
-                    shipping_fee = city_db.shipping_fee
+                    shipping_fee = float(city_db.shipping_fee)
                 elif state_db and state_db.shipping_fee > 0:
-                    shipping_fee = state_db.shipping_fee
+                    shipping_fee = float(state_db.shipping_fee)
                 else:
                     shipping_fee = 0.0
 
-        if allow_team_review and cart_type != "internal":
-            if city_db and city_db.no_commission:
-                commission = 0.0
-            elif state_db and state_db.no_commission:
-                commission = 0.0
+        # Total Commission from City / State
+        if city_db and city_db.no_commission:
+            commission = 0.0
+        elif state_db and state_db.no_commission:
+            commission = 0.0
+        else:
+            if city_db and city_db.commission > 0:
+                commission = float(city_db.commission)
+            elif state_db and state_db.commission > 0:
+                commission = float(state_db.commission)
             else:
-                if city_db and city_db.commission > 0:
-                    commission = city_db.commission
-                elif state_db and state_db.commission > 0:
-                    commission = state_db.commission
-                else:
-                    commission = 5.0
-    else:
-        if allow_team_review and cart_type != "internal":
-            commission = 5.0
+                commission = 0.0
 
-    total += shipping_fee + commission
+    # Team Review Before Shipping Fee
+    if allow_team_review:
+        result_tr = await db.execute(select(AppSetting).where(AppSetting.key == "team_review_fee"))
+        setting_tr = result_tr.scalar_one_or_none()
+        try:
+            team_review_fee = float(setting_tr.value_en) if setting_tr and setting_tr.value_en else 5.0
+        except Exception:
+            team_review_fee = 5.0
+
+    total += shipping_fee + commission + team_review_fee
     total = round(total, 2)
 
     # ── Determine payment status based on method ──────────────────────────

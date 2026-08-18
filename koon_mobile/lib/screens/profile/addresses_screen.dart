@@ -26,15 +26,17 @@ class _AddressesScreenState extends State<AddressesScreen> {
   Future<void> _loadAddresses() async {
     setState(() => _isLoading = true);
     final data = await _addressService.getAddresses();
-    setState(() {
-      _addresses = data;
-      _isLoading = false;
-    });
+    if (mounted) {
+      setState(() {
+        _addresses = data;
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _deleteAddress(String id) async {
     final success = await _addressService.deleteAddress(id);
-    if (success) {
+    if (success && mounted) {
       AppSnackbar.success(context, 'address_deleted'.tr());
       _loadAddresses();
     }
@@ -48,14 +50,16 @@ class _AddressesScreenState extends State<AddressesScreen> {
     final streetCtrl = TextEditingController();
     final cityCtrl = TextEditingController();
     bool isDefault = false;
+    final lang = context.locale.languageCode;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (context) => StatefulBuilder(
+      builder: (bottomCtx) => StatefulBuilder(
         builder: (context, setModalState) => Padding(
-          padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
+          padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.of(context).viewInsets.bottom + 20),
           child: SingleChildScrollView(
             child: Form(
               key: formKey,
@@ -63,65 +67,107 @@ class _AddressesScreenState extends State<AddressesScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('Add New Address'.tr(), style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700)),
+                  // Drag handle
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.divider,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'add_address'.tr(),
+                    style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                    textAlign: TextAlign.center,
+                  ),
                   const SizedBox(height: 20),
                   TextFormField(
                     controller: labelCtrl,
-                    decoration: InputDecoration(labelText: 'Label (e.g. Home, Work)'.tr()),
-                    validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                    decoration: InputDecoration(
+                      labelText: lang == 'ar' ? 'تسمية العنوان (مثل: المنزل، العمل)' : 'Label (e.g. Home, Work)',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    validator: (v) => v == null || v.trim().isEmpty ? (lang == 'ar' ? 'هذا الحقل مطلوب' : 'Required') : null,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: nameCtrl,
-                    decoration: InputDecoration(labelText: 'Full Name'.tr()),
-                    validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                    decoration: InputDecoration(
+                      labelText: lang == 'ar' ? 'الاسم الكامل' : 'Full Name',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    validator: (v) => v == null || v.trim().isEmpty ? (lang == 'ar' ? 'هذا الحقل مطلوب' : 'Required') : null,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: phoneCtrl,
-                    decoration: InputDecoration(labelText: 'Phone'.tr()),
-                    validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                    keyboardType: TextInputType.phone,
+                    decoration: InputDecoration(
+                      labelText: lang == 'ar' ? 'رقم الهاتف' : 'Phone Number',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    validator: (v) => v == null || v.trim().isEmpty ? (lang == 'ar' ? 'هذا الحقل مطلوب' : 'Required') : null,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: streetCtrl,
-                    decoration: InputDecoration(labelText: 'Street Address'.tr()),
-                    validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                    decoration: InputDecoration(
+                      labelText: 'street'.tr(),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    validator: (v) => v == null || v.trim().isEmpty ? (lang == 'ar' ? 'هذا الحقل مطلوب' : 'Required') : null,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: cityCtrl,
-                    decoration: InputDecoration(labelText: 'City'.tr()),
-                    validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                    decoration: InputDecoration(
+                      labelText: 'city'.tr(),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    validator: (v) => v == null || v.trim().isEmpty ? (lang == 'ar' ? 'هذا الحقل مطلوب' : 'Required') : null,
                   ),
                   const SizedBox(height: 12),
                   SwitchListTile(
-                    title: Text('Set as Default Address'.tr()),
+                    title: Text(
+                      'set_as_default'.tr(),
+                      style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600),
+                    ),
                     value: isDefault,
                     activeColor: AppColors.primary,
+                    contentPadding: EdgeInsets.zero,
                     onChanged: (val) => setModalState(() => isDefault = val),
                   ),
                   const SizedBox(height: 20),
-                  ElevatedButton(
-                    onPressed: () async {
-                      if (!formKey.currentState!.validate()) return;
-                      Navigator.pop(context);
-                      setState(() => _isLoading = true);
-                      await _addressService.addAddress(
-                        label: labelCtrl.text.trim(),
-                        fullName: nameCtrl.text.trim(),
-                        phone: phoneCtrl.text.trim(),
-                        street: streetCtrl.text.trim(),
-                        city: cityCtrl.text.trim(),
-                        isDefault: isDefault,
-                      );
-                      _loadAddresses();
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  SizedBox(
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        if (!formKey.currentState!.validate()) return;
+                        Navigator.pop(bottomCtx);
+                        setState(() => _isLoading = true);
+                        await _addressService.addAddress(
+                          label: labelCtrl.text.trim(),
+                          fullName: nameCtrl.text.trim(),
+                          phone: phoneCtrl.text.trim(),
+                          street: streetCtrl.text.trim(),
+                          city: cityCtrl.text.trim(),
+                          isDefault: isDefault,
+                        );
+                        _loadAddresses();
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: Text(
+                        'add_address'.tr(),
+                        style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white),
+                      ),
                     ),
-                    child: Text('Add Address'.tr(), style: const TextStyle(color: Colors.white)),
                   ),
                 ],
               ),
@@ -136,7 +182,7 @@ class _AddressesScreenState extends State<AddressesScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Addresses'.tr(), style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+        title: Text('addresses'.tr(), style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
         centerTitle: true,
       ),
       body: _isLoading
@@ -148,7 +194,15 @@ class _AddressesScreenState extends State<AddressesScreen> {
                     children: [
                       const Icon(Icons.location_off_outlined, size: 64, color: AppColors.textHint),
                       const SizedBox(height: 16),
-                      Text('No addresses found'.tr(), style: GoogleFonts.inter(color: AppColors.textSecondary)),
+                      Text(
+                        'no_addresses_yet'.tr(),
+                        style: GoogleFonts.inter(fontSize: 16, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'add_first_address'.tr(),
+                        style: GoogleFonts.inter(fontSize: 13, color: AppColors.textHint),
+                      ),
                     ],
                   ),
                 )
@@ -174,7 +228,10 @@ class _AddressesScreenState extends State<AddressesScreen> {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                 decoration: BoxDecoration(color: AppColors.primarySurface, borderRadius: BorderRadius.circular(6)),
-                                child: Text('Default'.tr(), style: const TextStyle(color: AppColors.primary, fontSize: 10, fontWeight: FontWeight.bold)),
+                                child: Text(
+                                  context.locale.languageCode == 'ar' ? 'افتراضي' : 'Default',
+                                  style: const TextStyle(color: AppColors.primary, fontSize: 10, fontWeight: FontWeight.bold),
+                                ),
                               ),
                           ],
                         ),

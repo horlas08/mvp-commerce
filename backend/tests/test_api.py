@@ -396,7 +396,8 @@ def test_list_coupons():
 
 
 def test_validate_coupon():
-    response = client.post("/api/v1/coupons/validate", json={
+    headers = _get_auth_header()
+    response = client.post("/api/v1/coupons/validate", headers=headers, json={
         "code": "WELCOME10",
         "order_total": 200.0,
     })
@@ -406,11 +407,35 @@ def test_validate_coupon():
 
 
 def test_validate_invalid_coupon():
-    response = client.post("/api/v1/coupons/validate", json={
+    headers = _get_auth_header()
+    response = client.post("/api/v1/coupons/validate", headers=headers, json={
         "code": "INVALIDCODE",
         "order_total": 100.0,
     })
     assert response.status_code == 404
+
+
+def test_wallet_topup_coupon():
+    headers = _get_auth_header()
+    # Check balance before
+    res_before = client.get("/api/v1/wallet/balance", headers=headers)
+    bal_before = res_before.json()["balance"]
+
+    # Top up with SUMMER50 coupon (50.0 value)
+    res_topup = client.post("/api/v1/wallet/topup/coupon", headers=headers, json={
+        "code": "SUMMER50"
+    })
+    assert res_topup.status_code == 200
+    assert res_topup.json()["success"] is True
+    assert res_topup.json()["amount_added"] == 50.0
+    assert res_topup.json()["new_balance"] == round(bal_before + 50.0, 2)
+
+    # Check transactions
+    res_txs = client.get("/api/v1/wallet/transactions", headers=headers)
+    assert res_txs.status_code == 200
+    txs = res_txs.json()
+    assert len(txs) > 0
+    assert txs[0]["type"] == "credit"
 
 
 # ── Scraper Config ──────────────────────────────────────────────────────────

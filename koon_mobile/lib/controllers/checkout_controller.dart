@@ -90,8 +90,42 @@ class CheckoutController extends GetxController {
   // ── Payment ─────────────────────────────────────────────────────────────────
   Future<void> loadPaymentOptions() async {
     isLoadingPayment.value = true;
-    paymentMethods.value = await _checkoutService.getPaymentMethods();
+    final methods = await _checkoutService.getPaymentMethods(lang: 'ar');
+
+    // Filter out Cash on Delivery completely
+    final filtered = methods.where((m) {
+      final id = m['id']?.toString().toLowerCase() ?? '';
+      final title = (m['title']?.toString() ?? '').toLowerCase();
+      final titleEn = (m['title_en']?.toString() ?? '').toLowerCase();
+      final titleAr = (m['title_ar']?.toString() ?? '');
+      return !id.contains('cod') &&
+          !title.contains('cash') &&
+          !titleEn.contains('cash') &&
+          !titleAr.contains('نقداً');
+    }).toList();
+
+    paymentMethods.value = filtered;
     walletBalance.value = await _checkoutService.getWalletBalance();
+
+    // Auto-select Bank Transfer as the active default payment method
+    if (selectedPaymentMethod.value == null ||
+        selectedPaymentMethod.value?['id'] == 'payment-cod' ||
+        selectedPaymentMethod.value?['title']?.toString().toLowerCase().contains('cash') == true) {
+      final bankMethod = filtered.firstWhereOrNull((m) =>
+          m['id'] == 'payment-bank' ||
+          (m['bank_accounts'] is List && (m['bank_accounts'] as List).isNotEmpty)) ??
+          (filtered.isNotEmpty ? filtered.first : null);
+
+      selectedPaymentMethod.value = bankMethod ?? {
+        'id': 'payment-bank',
+        'title': 'حوالة بنكية 💳',
+        'title_ar': 'حوالة بنكية 💳',
+        'title_en': 'Bank Transfer 💳',
+        'fields': [
+          {'key': 'receipt_proof', 'label': 'Transfer Receipt Photo', 'type': 'file'}
+        ]
+      };
+    }
     isLoadingPayment.value = false;
   }
 
@@ -171,24 +205,39 @@ class CheckoutController extends GetxController {
 
   final RxDouble dynamicShippingFee = 0.0.obs;
   final RxDouble dynamicCommissionFee = 0.0.obs;
+  final RxDouble configuredTeamReviewFee = 5.0.obs;
 
   double get shippingFee => dynamicShippingFee.value;
-  double get teamReviewFee => dynamicCommissionFee.value;
-  double get orderTotal => subtotal + shippingFee + teamReviewFee;
+  double get commissionFee => dynamicCommissionFee.value;
+  double get teamReviewPrice => configuredTeamReviewFee.value;
+  double get teamReviewFee => allowTeamReview.value ? configuredTeamReviewFee.value : 0.0;
+  double get orderTotal => subtotal + shippingFee + commissionFee + teamReviewFee;
 
   Future<void> _updateDynamicFees() async {
+    // 1. Fetch configured team review fee from settings
+    try {
+      final settingsMap = await _checkoutService.getAppSettings();
+      if (settingsMap.containsKey('team_review_fee')) {
+        final val = settingsMap['team_review_fee']?['value_en'] ?? settingsMap['team_review_fee']?['value_ar'];
+        final parsed = double.tryParse(val?.toString() ?? '');
+        if (parsed != null && parsed >= 0) {
+          configuredTeamReviewFee.value = parsed;
+        }
+      }
+    } catch (_) {}
+
     final addr = selectedAddress.value;
     if (addr == null) {
       dynamicShippingFee.value = 0.0;
-      dynamicCommissionFee.value = (allowTeamReview.value && cartType != 'internal') ? 5.0 : 0.0;
+      dynamicCommissionFee.value = 0.0;
       return;
     }
 
-    final stateName = addr['state']?.toString();
-    final cityName = addr['city']?.toString();
+    final stateName = addr['state']?.toString().trim();
+    final cityName = addr['city']?.toString().trim();
 
     double sFee = 0.0;
-    double cFee = (allowTeamReview.value && cartType != 'internal') ? 5.0 : 0.0;
+    double cFee = 0.0;
 
     // Load states first if not loaded
     List<Map<String, dynamic>> statesList = [];
@@ -196,31 +245,37 @@ class CheckoutController extends GetxController {
       statesList = await _addressService.getStates();
     } catch (_) {}
 
-    final matchedState = statesList.firstWhereOrNull((s) =>
-        s['name_en'] == stateName || s['name_ar'] == stateName || s['name'] == stateName);
+    final matchedState = statesList.firstWhereOrNull((s) {
+      final nEn = s['name_en']?.toString().trim();
+      final nAr = s['name_ar']?.toString().trim();
+      final n = s['name']?.toString().trim();
+      return nEn == stateName || nAr == stateName || n == stateName;
+    });
 
     if (matchedState != null) {
       final bool stateFree = matchedState['free_shipping'] == true || matchedState['free_shipping'] == 1;
       final bool stateNoComm = matchedState['no_commission'] == true || matchedState['no_commission'] == 1;
       final double stateShipFee = double.tryParse(matchedState['shipping_fee']?.toString() ?? '0') ?? 0.0;
-      final double stateComm = double.tryParse(matchedState['commission']?.toString() ?? '5.0') ?? 5.0;
+      final double stateComm = double.tryParse(matchedState['commission']?.toString() ?? '0') ?? 0.0;
 
       sFee = stateFree ? 0.0 : stateShipFee;
-      if (allowTeamReview.value && cartType != 'internal') {
-        cFee = stateNoComm ? 0.0 : stateComm;
-      }
+      cFee = stateNoComm ? 0.0 : stateComm;
 
       // Check city overrides
       try {
         final citiesList = await _addressService.getCities(matchedState['id'].toString());
-        final matchedCity = citiesList.firstWhereOrNull((c) =>
-            c['name_en'] == cityName || c['name_ar'] == cityName || c['name'] == cityName);
+        final matchedCity = citiesList.firstWhereOrNull((c) {
+          final nEn = c['name_en']?.toString().trim();
+          final nAr = c['name_ar']?.toString().trim();
+          final n = c['name']?.toString().trim();
+          return nEn == cityName || nAr == cityName || n == cityName;
+        });
 
         if (matchedCity != null) {
           final bool cityFree = matchedCity['free_shipping'] == true || matchedCity['free_shipping'] == 1;
           final bool cityNoComm = matchedCity['no_commission'] == true || matchedCity['no_commission'] == 1;
           final double cityShipFee = double.tryParse(matchedCity['shipping_fee']?.toString() ?? '0') ?? 0.0;
-          final double cityComm = double.tryParse(matchedCity['commission']?.toString() ?? '5.0') ?? 5.0;
+          final double cityComm = double.tryParse(matchedCity['commission']?.toString() ?? '0') ?? 0.0;
 
           if (cityFree) {
             sFee = 0.0;
@@ -228,12 +283,10 @@ class CheckoutController extends GetxController {
             sFee = cityShipFee;
           }
 
-          if (allowTeamReview.value && cartType != 'internal') {
-            if (cityNoComm) {
-              cFee = 0.0;
-            } else if (cityComm > 0) {
-              cFee = cityComm;
-            }
+          if (cityNoComm) {
+            cFee = 0.0;
+          } else if (cityComm > 0) {
+            cFee = cityComm;
           }
         }
       } catch (_) {}

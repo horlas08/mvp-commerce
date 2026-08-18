@@ -196,8 +196,10 @@ export default function CouponsPage() {
                 const isActive = c.is_active && !isExpired;
 
                 let appLabel = t("allProducts");
+                const isWalletFunding = c.applicability === "wallet" || c.applicability === "funding";
                 if (c.applicability === "internal") appLabel = t("internalProducts");
                 if (c.applicability === "external") appLabel = t("externalProducts");
+                if (isWalletFunding) appLabel = t("walletFunding");
 
                 let discTypeLabel = c.discount_type === "percentage" ? t("percentage") : t("fixed");
 
@@ -208,11 +210,11 @@ export default function CouponsPage() {
                         fontFamily: "monospace",
                         fontSize: 13,
                         fontWeight: 700,
-                        background: "rgba(124, 90, 240, 0.1)",
-                        color: "var(--accent-light)",
+                        background: isWalletFunding ? "rgba(16, 185, 129, 0.1)" : "rgba(124, 90, 240, 0.1)",
+                        color: isWalletFunding ? "#10b981" : "var(--accent-light)",
                         padding: "4px 8px",
                         borderRadius: 6,
-                        border: "1px solid rgba(124, 90, 240, 0.2)"
+                        border: isWalletFunding ? "1px solid rgba(16, 185, 129, 0.25)" : "1px solid rgba(124, 90, 240, 0.2)"
                       }}>
                         {c.code}
                       </span>
@@ -229,7 +231,13 @@ export default function CouponsPage() {
                       {c.discount_type === "percentage" ? `${c.discount_value}%` : `﷼ ${c.discount_value.toFixed(2)}`}
                     </td>
                     <td>
-                      <span className="badge badge-secondary" style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", fontSize: 11 }}>
+                      <span className="badge" style={{
+                        background: isWalletFunding ? "rgba(16, 185, 129, 0.12)" : "var(--bg-secondary)",
+                        color: isWalletFunding ? "#10b981" : "inherit",
+                        border: isWalletFunding ? "1px solid rgba(16, 185, 129, 0.3)" : "1px solid var(--border)",
+                        fontSize: 11,
+                        fontWeight: isWalletFunding ? 600 : 500
+                      }}>
                         {appLabel}
                       </span>
                     </td>
@@ -317,15 +325,45 @@ export default function CouponsPage() {
                   <select
                     className="input"
                     value={form.applicability}
-                    onChange={e => setForm(f => ({ ...f, applicability: e.target.value as any }))}
+                    onChange={e => {
+                      const val = e.target.value;
+                      setForm(f => ({
+                        ...f,
+                        applicability: val as any,
+                        discount_type: (val === "wallet" || val === "funding") ? "fixed" : f.discount_type,
+                      }));
+                    }}
                     disabled={saving}
                   >
                     <option value="all">{t("allProducts")}</option>
                     <option value="internal">{t("internalProducts")}</option>
                     <option value="external">{t("externalProducts")}</option>
+                    <option value="wallet">{t("walletFunding")}</option>
                   </select>
                 </div>
               </div>
+
+              {/* Helper notice for Wallet Credit Funding */}
+              {(form.applicability === "wallet" || form.applicability === "funding") && (
+                <div style={{
+                  background: "rgba(16, 185, 129, 0.08)",
+                  border: "1px solid rgba(16, 185, 129, 0.25)",
+                  borderRadius: 10,
+                  padding: "10px 14px",
+                  fontSize: 12,
+                  color: "#10b981",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                }}>
+                  <span>💳</span>
+                  <span>
+                    {lang === "ar"
+                      ? "كوبون شحن رصيد: سيتمكن العميل من إدخال هذا الكود في صفحة (رصيدي) في تطبيق الجوال لشحن محفظته فوراً بالمبلغ المحدد."
+                      : "Wallet Funding Coupon: Customers can redeem this code in the (My Credit) screen in the mobile app to top up their wallet instantly."}
+                  </span>
+                </div>
+              )}
 
               {/* Row 2: Type & Value */}
               <div className="grid-2">
@@ -335,15 +373,19 @@ export default function CouponsPage() {
                     className="input"
                     value={form.discount_type}
                     onChange={e => setForm(f => ({ ...f, discount_type: e.target.value as any }))}
-                    disabled={saving}
+                    disabled={saving || form.applicability === "wallet" || form.applicability === "funding"}
                   >
-                    <option value="percentage">{t("percentage")}</option>
+                    {(form.applicability !== "wallet" && form.applicability !== "funding") && (
+                      <option value="percentage">{t("percentage")}</option>
+                    )}
                     <option value="fixed">{t("fixed")}</option>
                   </select>
                 </div>
                 <div className="form-group">
                   <label className="form-label">
-                    {t("discountValue")} * ({form.discount_type === "percentage" ? "%" : "SAR"})
+                    {(form.applicability === "wallet" || form.applicability === "funding")
+                      ? `${t("fundingAmount")} * (SAR)`
+                      : `${t("discountValue")} * (${form.discount_type === "percentage" ? "%" : "SAR"})`}
                   </label>
                   <input
                     type="number"

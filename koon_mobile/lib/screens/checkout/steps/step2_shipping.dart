@@ -296,6 +296,7 @@ class _TeamReviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final settings = Get.find<SettingsController>();
     return Obx(() => Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
@@ -389,7 +390,7 @@ class _TeamReviewCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        '${'review_fee'.tr()}: ${'team_review_fee_label'.tr()}',
+                        '${'review_fee'.tr()}: ${settings.formatPrice(ctrl.teamReviewPrice, 'SAR')}',
                         style: GoogleFonts.inter(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
@@ -415,41 +416,57 @@ class _PriceBreakdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Obx(() => Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: AppColors.secondaryGradient,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(
-        children: [
-          _priceRow('subtotal'.tr(), settings.formatPrice(ctrl.subtotal, 'SAR'),
-              Colors.white70),
-          if (ctrl.shippingFee > 0)
+    return Obx(() {
+      final shippingDisplay = ctrl.shippingFee > 0
+          ? settings.formatPrice(ctrl.shippingFee, 'SAR')
+          : 'free'.tr();
+      final commissionDisplay = ctrl.commissionFee > 0
+          ? settings.formatPrice(ctrl.commissionFee, 'SAR')
+          : settings.formatPrice(0.0, 'SAR');
+
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: AppColors.secondaryGradient,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Column(
+          children: [
             _priceRow(
-              'shipping_fee'.tr(),
-              settings.formatPrice(ctrl.shippingFee, 'SAR'),
+              'subtotal'.tr(),
+              settings.formatPrice(ctrl.subtotal, 'SAR'),
               Colors.white70,
             ),
-          if (ctrl.teamReviewFee > 0)
             _priceRow(
-              'service_fee'.tr(),
-              settings.formatPrice(ctrl.teamReviewFee, 'SAR'),
+              'shipping_cost'.tr(),
+              shippingDisplay,
               Colors.white70,
             ),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 10),
-            child: Divider(color: Colors.white24, height: 1),
-          ),
-          _priceRow(
-            'order_total'.tr(),
-            settings.formatPrice(ctrl.orderTotal, 'SAR'),
-            Colors.white,
-            isTotal: true,
-          ),
-        ],
-      ),
-    ));
+            _priceRow(
+              'commission_fee'.tr(),
+              commissionDisplay,
+              Colors.white70,
+            ),
+            if (ctrl.allowTeamReview.value)
+              _priceRow(
+                'team_review'.tr(),
+                settings.formatPrice(ctrl.teamReviewFee, 'SAR'),
+                Colors.white70,
+              ),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 10),
+              child: Divider(color: Colors.white24, height: 1),
+            ),
+            _priceRow(
+              'order_total'.tr(),
+              settings.formatPrice(ctrl.orderTotal, 'SAR'),
+              Colors.white,
+              isTotal: true,
+            ),
+          ],
+        ),
+      );
+    });
   }
 
   Widget _priceRow(String label, String value, Color color,

@@ -17,10 +17,11 @@ export default function SettingsPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  // Policies form state
+  // Policies & Checkout fees form state
   const [shippingConfirmation, setShippingConfirmation] = useState<PolicyState>({ value_en: "", value_ar: "" });
   const [inspectionPolicy, setInspectionPolicy] = useState<PolicyState>({ value_en: "", value_ar: "" });
   const [pickupDelivery, setPickupDelivery] = useState<PolicyState>({ value_en: "", value_ar: "" });
+  const [teamReviewFee, setTeamReviewFee] = useState<PolicyState>({ value_en: "5.0", value_ar: "5.0" });
 
   const loadSettings = useCallback(async () => {
     setLoading(true);
@@ -46,6 +47,12 @@ export default function SettingsPage() {
           value_ar: res.pickup_delivery.value_ar,
         });
       }
+      if (res.team_review_fee) {
+        setTeamReviewFee({
+          value_en: res.team_review_fee.value_en,
+          value_ar: res.team_review_fee.value_ar,
+        });
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load settings");
     } finally {
@@ -63,11 +70,11 @@ export default function SettingsPage() {
     setSuccess("");
     try {
       await adminApi.updateAppSetting(key, data);
-      setSuccess("Settings updated successfully!");
+      setSuccess(t("settingsUpdatedSuccess"));
       // Auto clear success message after 3 seconds
       setTimeout(() => setSuccess(""), 3000);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to update settings");
+      setError(e instanceof Error ? e.message : t("failedToUpdate"));
     } finally {
       setSaving(null);
     }
@@ -85,14 +92,14 @@ export default function SettingsPage() {
     <div className="page-container">
       <div className="page-header" style={{ marginBottom: 20 }}>
         <div>
-          <h1 className="page-title">App Settings & Policies</h1>
+          <h1 className="page-title">{t("appSettingsPolicies")}</h1>
           <p className="page-subtitle" style={{ color: "var(--text-muted)", fontSize: 13, marginTop: 4 }}>
-            Customize policies and informational content displayed in the mobile app.
+            {t("appSettingsSubtitle")}
           </p>
         </div>
         <button className="btn btn-secondary btn-sm" onClick={loadSettings}>
           <RefreshCw size={14} style={{ marginRight: 6 }} />
-          Reload
+          {t("refresh")}
         </button>
       </div>
 
@@ -110,10 +117,51 @@ export default function SettingsPage() {
       )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+        {/* Team Review Before Shipping Fee */}
+        <div className="card" style={{ padding: 20, background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <div>
+              <h3 style={{ fontSize: 16, fontWeight: 700 }}>{t("teamReviewBeforeShippingFee")}</h3>
+              <p style={{ color: "var(--text-muted)", fontSize: 12, marginTop: 2 }}>
+                {t("teamReviewFeeDesc")}
+              </p>
+            </div>
+            <button
+              className="btn btn-primary btn-sm"
+              disabled={saving !== null}
+              onClick={() => handleSave("team_review_fee", { value_en: teamReviewFee.value_en, value_ar: teamReviewFee.value_en })}
+            >
+              {saving === "team_review_fee" ? (
+                <div className="spinner" style={{ width: 14, height: 14 }} />
+              ) : (
+                <>
+                  <Save size={14} style={{ marginRight: 6 }} />
+                  {t("saveFee")}
+                </>
+              )}
+            </button>
+          </div>
+
+          <div style={{ maxWidth: 320 }}>
+            <div className="form-group">
+              <label className="form-label">{t("reviewFeeSar")}</label>
+              <input
+                type="number"
+                step="0.5"
+                min="0"
+                className="input"
+                value={teamReviewFee.value_en}
+                onChange={e => setTeamReviewFee({ value_en: e.target.value, value_ar: e.target.value })}
+                placeholder="5.0"
+              />
+            </div>
+          </div>
+        </div>
+
         {/* Shipping & Confirmation Policy */}
         <div className="card" style={{ padding: 20, background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <h3 style={{ fontSize: 16, fontWeight: 700 }}>Shipping & Confirmation Policy</h3>
+            <h3 style={{ fontSize: 16, fontWeight: 700 }}>{t("shippingConfirmationPolicy")}</h3>
             <button
               className="btn btn-primary btn-sm"
               disabled={saving !== null}
@@ -124,7 +172,7 @@ export default function SettingsPage() {
               ) : (
                 <>
                   <Save size={14} style={{ marginRight: 6 }} />
-                  Save Section
+                  {t("saveSection")}
                 </>
               )}
             </button>
@@ -132,24 +180,24 @@ export default function SettingsPage() {
 
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div className="form-group">
-              <label className="form-label">Policy Text (English)</label>
+              <label className="form-label">{t("policyTextEn")}</label>
               <textarea
                 className="input"
                 style={{ minHeight: 120, fontFamily: "inherit", padding: 10, fontSize: 13 }}
                 value={shippingConfirmation.value_en}
                 onChange={e => setShippingConfirmation(f => ({ ...f, value_en: e.target.value }))}
-                placeholder="Markdown supported..."
+                placeholder={t("markdownSupported")}
               />
             </div>
             <div className="form-group">
-              <label className="form-label">Policy Text (Arabic)</label>
+              <label className="form-label">{t("policyTextAr")}</label>
               <textarea
                 className="input"
                 dir="rtl"
                 style={{ minHeight: 120, fontFamily: "inherit", padding: 10, fontSize: 13 }}
                 value={shippingConfirmation.value_ar}
                 onChange={e => setShippingConfirmation(f => ({ ...f, value_ar: e.target.value }))}
-                placeholder="دعم لغة المارك داون..."
+                placeholder={t("markdownSupported")}
               />
             </div>
           </div>
@@ -158,7 +206,7 @@ export default function SettingsPage() {
         {/* Inspection Policy */}
         <div className="card" style={{ padding: 20, background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <h3 style={{ fontSize: 16, fontWeight: 700 }}>Inspection Policy</h3>
+            <h3 style={{ fontSize: 16, fontWeight: 700 }}>{t("inspectionPolicyTitle")}</h3>
             <button
               className="btn btn-primary btn-sm"
               disabled={saving !== null}
@@ -169,7 +217,7 @@ export default function SettingsPage() {
               ) : (
                 <>
                   <Save size={14} style={{ marginRight: 6 }} />
-                  Save Section
+                  {t("saveSection")}
                 </>
               )}
             </button>
@@ -177,24 +225,24 @@ export default function SettingsPage() {
 
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div className="form-group">
-              <label className="form-label">Policy Text (English)</label>
+              <label className="form-label">{t("policyTextEn")}</label>
               <textarea
                 className="input"
                 style={{ minHeight: 120, fontFamily: "inherit", padding: 10, fontSize: 13 }}
                 value={inspectionPolicy.value_en}
                 onChange={e => setInspectionPolicy(f => ({ ...f, value_en: e.target.value }))}
-                placeholder="Markdown supported..."
+                placeholder={t("markdownSupported")}
               />
             </div>
             <div className="form-group">
-              <label className="form-label">Policy Text (Arabic)</label>
+              <label className="form-label">{t("policyTextAr")}</label>
               <textarea
                 className="input"
                 dir="rtl"
                 style={{ minHeight: 120, fontFamily: "inherit", padding: 10, fontSize: 13 }}
                 value={inspectionPolicy.value_ar}
                 onChange={e => setInspectionPolicy(f => ({ ...f, value_ar: e.target.value }))}
-                placeholder="دعم لغة المارك داون..."
+                placeholder={t("markdownSupported")}
               />
             </div>
           </div>
@@ -203,7 +251,7 @@ export default function SettingsPage() {
         {/* Pickup & Delivery Policy */}
         <div className="card" style={{ padding: 20, background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <h3 style={{ fontSize: 16, fontWeight: 700 }}>Pickup & Delivery Policy</h3>
+            <h3 style={{ fontSize: 16, fontWeight: 700 }}>{t("pickupDeliveryPolicy")}</h3>
             <button
               className="btn btn-primary btn-sm"
               disabled={saving !== null}
@@ -214,7 +262,7 @@ export default function SettingsPage() {
               ) : (
                 <>
                   <Save size={14} style={{ marginRight: 6 }} />
-                  Save Section
+                  {t("saveSection")}
                 </>
               )}
             </button>
@@ -222,24 +270,24 @@ export default function SettingsPage() {
 
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div className="form-group">
-              <label className="form-label">Policy Text (English)</label>
+              <label className="form-label">{t("policyTextEn")}</label>
               <textarea
                 className="input"
                 style={{ minHeight: 120, fontFamily: "inherit", padding: 10, fontSize: 13 }}
                 value={pickupDelivery.value_en}
                 onChange={e => setPickupDelivery(f => ({ ...f, value_en: e.target.value }))}
-                placeholder="Markdown supported..."
+                placeholder={t("markdownSupported")}
               />
             </div>
             <div className="form-group">
-              <label className="form-label">Policy Text (Arabic)</label>
+              <label className="form-label">{t("policyTextAr")}</label>
               <textarea
                 className="input"
                 dir="rtl"
                 style={{ minHeight: 120, fontFamily: "inherit", padding: 10, fontSize: 13 }}
                 value={pickupDelivery.value_ar}
                 onChange={e => setPickupDelivery(f => ({ ...f, value_ar: e.target.value }))}
-                placeholder="دعم لغة المارك داون..."
+                placeholder={t("markdownSupported")}
               />
             </div>
           </div>

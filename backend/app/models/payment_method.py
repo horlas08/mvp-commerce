@@ -21,6 +21,8 @@ class PaymentMethod(Base):
     
     # Store JSON array of fields like: [{"key": "bank_name", "label_en": "Bank Name", "label_ar": "اسم البنك"}]
     fields_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default="[]")
+    # Store JSON array of bank accounts for bank transfer methods
+    bank_accounts_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default="[]")
 
     def to_dict(self, lang: str = "en"):
         try:
@@ -40,6 +42,24 @@ class PaymentMethod(Base):
                 item["options"] = field["options"]
             localized_fields.append(item)
 
+        try:
+            bank_accounts_list = json.loads(self.bank_accounts_json or "[]")
+        except Exception:
+            bank_accounts_list = []
+
+        localized_bank_accounts = []
+        for acc in bank_accounts_list:
+            localized_bank_accounts.append({
+                "id": acc.get("id", ""),
+                "bank_name": acc.get("bank_name_en" if lang == "en" else "bank_name_ar", acc.get("bank_name", "")),
+                "bank_name_en": acc.get("bank_name_en", ""),
+                "bank_name_ar": acc.get("bank_name_ar", ""),
+                "account_number": acc.get("account_number", ""),
+                "account_name": acc.get("account_name", ""),
+                "iban": acc.get("iban", ""),
+                "logo_url": acc.get("logo_url", ""),
+            })
+
         return {
             "id": self.id,
             "title": self.title_en if lang == "en" else self.title_ar,
@@ -55,4 +75,6 @@ class PaymentMethod(Base):
             "is_active": self.is_active,
             "fields": localized_fields,
             "raw_fields": fields_list,  # Raw list with localized labels for admin panel
+            "bank_accounts": localized_bank_accounts,
+            "raw_bank_accounts": bank_accounts_list,
         }

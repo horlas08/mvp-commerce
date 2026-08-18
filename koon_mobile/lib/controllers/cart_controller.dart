@@ -13,7 +13,7 @@ enum AddToCartStatus {
 class CartController extends GetxController {
   final CartService _cartService = CartService();
 
-  final RxString selectedCartType = 'internal'.obs;
+  final RxString selectedCartType = 'amazon'.obs;
   final RxList<Map<String, dynamic>> cartItems = <Map<String, dynamic>>[].obs;
   final RxBool isLoading = false.obs;
   final RxInt totalCartCount = 0.obs;
@@ -21,12 +21,13 @@ class CartController extends GetxController {
   // ── Cart Auto-Update Refresh States & Queue ─────────────────────────────
   final RxList<Map<String, dynamic>> refreshQueue = <Map<String, dynamic>>[].obs;
   final RxMap<String, String> itemStatuses = <String, String>{}.obs;
+  final RxMap<String, String> itemErrors = <String, String>{}.obs;
   final RxMap<String, String> itemUpdatedPrices = <String, String>{}.obs;
   final Rxn<Map<String, dynamic>> currentRefreshItem = Rxn<Map<String, dynamic>>();
   Timer? _refreshTimeout;
 
   final List<Map<String, String>> cartTypes = [
-    {'key': 'internal', 'label_en': 'Internal Cart', 'label_ar': 'السلة الداخلية'},
+    // {'key': 'internal', 'label_en': 'Internal Cart', 'label_ar': 'السلة الداخلية'},
     {'key': 'amazon', 'label_en': 'Amazon Cart', 'label_ar': 'سلة أمازون'},
     {'key': 'aliexpress', 'label_en': 'AliExpress Cart', 'label_ar': 'سلة علي إكسبريس'},
     {'key': 'shein', 'label_en': 'Shein Cart', 'label_ar': 'سلة شي إن'},
@@ -47,31 +48,81 @@ class CartController extends GetxController {
     super.onClose();
   }
 
-  Future<void> loadCart() async {
+  Future<void> loadCart({bool autoRefresh = true}) async {
     isLoading.value = true;
     final lang = Get.locale?.languageCode ?? 'en';
     cartItems.value = await _cartService.getCart(cartType: selectedCartType.value, lang: lang);
     isLoading.value = false;
     _refreshTotalCount();
 
-    if (selectedCartType.value != 'internal') {
+    if (autoRefresh && selectedCartType.value != 'internal') {
       startCartRefresh();
     }
   }
 
-  void startCartRefresh() {
+  bool isItemFresh(Map<String, dynamic> item) {
+    final rawPrice = item['price'] ?? item['product']?['price'];
+    final parsedPrice = KoonCurrencyService.parsePriceToDouble(rawPrice);
+    // If price is missing or 0 or unknown, it is NOT fresh -> needs refresh
+    if (parsedPrice <= 0 || rawPrice == null || rawPrice.toString().toLowerCase().contains('unknown')) {
+      return false;
+    }
+
+    final now = DateTime.now();
+
+    // Check updated_at
+    final updatedAtStr = item['updated_at']?.toString();
+    if (updatedAtStr != null && updatedAtStr.isNotEmpty) {
+      final updatedAt = DateTime.tryParse(updatedAtStr)?.toLocal();
+      if (updatedAt != null) {
+        final isToday = updatedAt.year == now.year && updatedAt.month == now.month && updatedAt.day == now.day;
+        if (isToday) return true; // Price updated today -> fresh!
+      }
+    }
+
+    // Check created_at (added to cart today)
+    final createdAtStr = item['created_at']?.toString();
+    if (createdAtStr != null && createdAtStr.isNotEmpty) {
+      final createdAt = DateTime.tryParse(createdAtStr)?.toLocal();
+      if (createdAt != null) {
+        final isToday = createdAt.year == now.year && createdAt.month == now.month && createdAt.day == now.day;
+        if (isToday) return true; // Added to cart today -> fresh!
+      }
+    }
+
+    return false; // Stale or from previous day -> needs refresh
+  }
+
+  void startCartRefresh({bool forceAll = false}) {
     _refreshTimeout?.cancel();
     refreshQueue.clear();
     itemStatuses.clear();
+    itemErrors.clear();
     itemUpdatedPrices.clear();
     currentRefreshItem.value = null;
 
     final externalItems = cartItems.where((item) {
       final extUrl = item['external_url']?.toString() ?? '';
-      return extUrl.isNotEmpty;
+      if (extUrl.isEmpty) return false;
+      if (forceAll) return true;
+      // Only refresh items that were NOT updated today or NOT added today
+      return !isItemFresh(item);
     }).toList();
 
-    if (externalItems.isEmpty) return;
+    // For items that ARE fresh, mark them as 'success' immediately
+    for (var item in cartItems) {
+      final extUrl = item['external_url']?.toString() ?? '';
+      if (extUrl.isNotEmpty && isItemFresh(item) && !forceAll) {
+        itemStatuses[item['id']] = 'success';
+      }
+    }
+
+    if (externalItems.isEmpty) {
+      Get.log('[CartAutoUpdate] All items are fresh (added or updated today). No refresh needed.');
+      return;
+    }
+
+    Get.log('[CartAutoUpdate] Found ${externalItems.length} stale items needing refresh in $selectedCartType cart');
 
     for (var item in externalItems) {
       itemStatuses[item['id']] = 'pending';
@@ -80,20 +131,35 @@ class CartController extends GetxController {
     _nextQueueItem();
   }
 
+  void retryItemRefresh(String itemId) {
+    final item = cartItems.firstWhereOrNull((i) => i['id'] == itemId);
+    if (item == null) return;
+    itemStatuses[itemId] = 'pending';
+    itemErrors.remove(itemId);
+    refreshQueue.add(item);
+    if (currentRefreshItem.value == null) {
+      _nextQueueItem();
+    }
+  }
+
   void _nextQueueItem() {
     _refreshTimeout?.cancel();
     if (refreshQueue.isEmpty) {
       currentRefreshItem.value = null;
+      Get.log('[CartAutoUpdate] All items finished refreshing.');
       return;
     }
     final item = refreshQueue.removeAt(0);
     currentRefreshItem.value = item;
     itemStatuses[item['id']] = 'updating';
+    itemErrors.remove(item['id']);
 
-    _refreshTimeout = Timer(const Duration(seconds: 15), () {
+    Get.log('[CartAutoUpdate] ⏳ Refreshing item ${item['id']} (${item['title']})...');
+
+    _refreshTimeout = Timer(const Duration(seconds: 18), () {
       if (currentRefreshItem.value?['id'] == item['id']) {
-        Get.log("Timeout refreshing cart item ${item['id']}");
-        onRefreshFailed(item['id']);
+        Get.log('[CartAutoUpdate] ⏱️ Timeout refreshing cart item ${item['id']}');
+        onRefreshFailed(item['id'], reason: 'Page load timed out (18s)');
       }
     });
   }
@@ -102,29 +168,37 @@ class CartController extends GetxController {
     _refreshTimeout?.cancel();
     if (outOfStock) {
       itemStatuses[itemId] = 'out_of_stock';
+      itemErrors.remove(itemId);
+      Get.log('[CartAutoUpdate] ⚠️ Item $itemId marked as Out of Stock');
       await updateItemPrice(itemId, "Out of Stock");
     } else if (newPrice != null && newPrice.isNotEmpty && !newPrice.toLowerCase().contains('unknown')) {
       final parsed = KoonCurrencyService.parsePriceToDouble(newPrice);
       if (parsed > 0) {
         itemStatuses[itemId] = 'success';
+        itemErrors.remove(itemId);
         itemUpdatedPrices[itemId] = newPrice;
         final sarPrice = await KoonCurrencyService.convertToSar(newPrice);
+        Get.log('[CartAutoUpdate] ✅ Item $itemId refreshed: original=$newPrice -> SAR=$sarPrice');
         await updateItemPrice(itemId, sarPrice);
       } else {
         itemStatuses[itemId] = 'error';
+        itemErrors[itemId] = 'Could not parse price: $newPrice';
+        Get.log('[CartAutoUpdate] ❌ Failed parsing price for $itemId: $newPrice');
       }
     } else {
       itemStatuses[itemId] = 'success';
+      itemErrors.remove(itemId);
     }
     _nextQueueItem();
   }
 
-  void onRefreshFailed(String itemId) {
+  void onRefreshFailed(String itemId, {String? reason}) {
     _refreshTimeout?.cancel();
     itemStatuses[itemId] = 'error';
+    itemErrors[itemId] = reason ?? 'Auto-update scrape failed';
+    Get.log('[CartAutoUpdate] ❌ Item $itemId refresh failed: $reason');
     _nextQueueItem();
   }
-
 
   Future<void> _refreshTotalCount() async {
     // Get total count across all cart types
@@ -168,7 +242,7 @@ class CartController extends GetxController {
         // screen shows the correct site's cart (e.g. Alibaba) instead of staying
         // on whatever was manually selected in the dropdown.
         selectedCartType.value = cartType;
-        await loadCart();
+        await loadCart(autoRefresh: true);
         return AddToCartStatus.success;
       }
       return AddToCartStatus.error;
@@ -183,28 +257,58 @@ class CartController extends GetxController {
   }
 
   Future<void> updateQuantity(String itemId, int quantity) async {
-    final success = await _cartService.updateCartItem(itemId, quantity: quantity);
-    if (success) await loadCart();
+    final item = cartItems.firstWhereOrNull((i) => i['id'] == itemId);
+    final minQty = (item?['min_quantity'] is int)
+        ? item!['min_quantity'] as int
+        : int.tryParse(item?['min_quantity']?.toString() ?? '1') ?? 1;
+    final safeQty = quantity < minQty ? minQty : quantity;
+
+    final index = cartItems.indexWhere((i) => i['id'] == itemId);
+    if (index != -1) {
+      final updated = Map<String, dynamic>.from(cartItems[index]);
+      updated['quantity'] = safeQty;
+      cartItems[index] = updated;
+      cartItems.refresh();
+    }
+    await _cartService.updateCartItem(itemId, quantity: safeQty);
   }
 
   Future<void> updateItemPrice(String itemId, String price) async {
-    final success = await _cartService.updateCartItem(itemId, price: price);
-    if (success) await loadCart();
+    final index = cartItems.indexWhere((i) => i['id'] == itemId);
+    if (index != -1) {
+      final updated = Map<String, dynamic>.from(cartItems[index]);
+      updated['price'] = price;
+      updated['updated_at'] = DateTime.now().toUtc().toIso8601String();
+      if (updated['product'] is Map) {
+        final prod = Map<String, dynamic>.from(updated['product']);
+        prod['price'] = price;
+        updated['product'] = prod;
+      }
+      cartItems[index] = updated;
+      cartItems.refresh();
+    }
+    await _cartService.updateCartItem(itemId, price: price);
   }
 
   Future<void> toggleSelection(String itemId, bool isSelected) async {
-    final success = await _cartService.updateCartItem(itemId, isSelected: isSelected);
-    if (success) await loadCart();
+    final index = cartItems.indexWhere((i) => i['id'] == itemId);
+    if (index != -1) {
+      final updated = Map<String, dynamic>.from(cartItems[index]);
+      updated['is_selected'] = isSelected;
+      cartItems[index] = updated;
+      cartItems.refresh();
+    }
+    await _cartService.updateCartItem(itemId, isSelected: isSelected);
   }
 
   Future<void> removeItem(String itemId) async {
     final success = await _cartService.removeFromCart(itemId);
-    if (success) await loadCart();
+    if (success) await loadCart(autoRefresh: false);
   }
 
   Future<void> clearCurrentCart() async {
     final success = await _cartService.clearCart(cartType: selectedCartType.value);
-    if (success) await loadCart();
+    if (success) await loadCart(autoRefresh: false);
   }
 
   double get totalAmount {

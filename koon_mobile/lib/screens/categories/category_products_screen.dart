@@ -24,6 +24,7 @@ class CategoryProductsScreen extends StatefulWidget {
 }
 
 class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
+  final ApiService _apiService = ApiService();
   final SettingsController _settingsController = Get.find<SettingsController>();
   List<Map<String, dynamic>> _products = [];
   bool _isLoading = true;

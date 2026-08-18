@@ -287,97 +287,97 @@ class _HomeScreenState extends State<HomeScreen> {
                     : _buildStoresScrollList(),
               ),
 
-              // Featured Categories
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
-                  child: Row(
-                    children: [
-                      Text('featured_categories'.tr(),
-                          style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-                      const Spacer(),
-                      TextButton(
-                        onPressed: () {},
-                        child: Text('see_all'.tr(), style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600)),
-                      ),
-                    ],
-                  ),
-                ).animate(delay: 500.ms).fadeIn(duration: 400.ms),
-              ),
-              SliverToBoxAdapter(
-                child: SizedBox(
-                  height: 110,
-                  child: Obx(() => ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: _homeController.categories.length,
-                        itemBuilder: (context, index) {
-                          final cat = _homeController.categories[index];
-                          return Container(
-                            width: 90,
-                            margin: const EdgeInsets.symmetric(horizontal: 6),
-                            child: Column(
-                              children: [
-                                Container(
-                                  width: 68, height: 68,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.surfaceVariant,
-                                    borderRadius: BorderRadius.circular(18),
-                                    border: Border.all(color: AppColors.divider, width: 0.5),
-                                  ),
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(18),
-                                    child: cat['image_url'] != null
-                                        ? CachedNetworkImage(imageUrl: cat['image_url'], fit: BoxFit.cover)
-                                        : Center(child: Text(cat['icon'] ?? '📦', style: const TextStyle(fontSize: 28))),
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                Text(cat['name'] ?? '', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w500),
-                                    textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
-                              ],
-                            ),
-                          ).animate(delay: Duration(milliseconds: 550 + (index * 60))).fadeIn(duration: 300.ms).slideY(begin: 0.1);
-                        },
-                      )),
-                ),
-              ),
+              // ── Featured Categories (commented out – external-product focus) ──
+              // SliverToBoxAdapter(
+              //   child: Padding(
+              //     padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
+              //     child: Row(
+              //       children: [
+              //         Text('featured_categories'.tr(),
+              //             style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+              //         const Spacer(),
+              //         TextButton(
+              //           onPressed: () {},
+              //           child: Text('see_all'.tr(), style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600)),
+              //         ),
+              //       ],
+              //     ),
+              //   ).animate(delay: 500.ms).fadeIn(duration: 400.ms),
+              // ),
+              // SliverToBoxAdapter(
+              //   child: SizedBox(
+              //     height: 110,
+              //     child: Obx(() => ListView.builder(
+              //           scrollDirection: Axis.horizontal,
+              //           padding: const EdgeInsets.symmetric(horizontal: 16),
+              //           itemCount: _homeController.categories.length,
+              //           itemBuilder: (context, index) {
+              //             final cat = _homeController.categories[index];
+              //             return Container(
+              //               width: 90,
+              //               margin: const EdgeInsets.symmetric(horizontal: 6),
+              //               child: Column(
+              //                 children: [
+              //                   Container(
+              //                     width: 68, height: 68,
+              //                     decoration: BoxDecoration(
+              //                       color: AppColors.surfaceVariant,
+              //                       borderRadius: BorderRadius.circular(18),
+              //                       border: Border.all(color: AppColors.divider, width: 0.5),
+              //                     ),
+              //                     child: ClipRRect(
+              //                       borderRadius: BorderRadius.circular(18),
+              //                       child: cat['image_url'] != null
+              //                           ? CachedNetworkImage(imageUrl: cat['image_url'], fit: BoxFit.cover)
+              //                           : Center(child: Text(cat['icon'] ?? '📦', style: const TextStyle(fontSize: 28))),
+              //                     ),
+              //                   ),
+              //                   const SizedBox(height: 6),
+              //                   Text(cat['name'] ?? '', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w500),
+              //                       textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
+              //                 ],
+              //               ),
+              //             ).animate(delay: Duration(milliseconds: 550 + (index * 60))).fadeIn(duration: 300.ms).slideY(begin: 0.1);
+              //           },
+              //         )),
+              //   ),
+              // ),
 
-              // Top Selling Products
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-                  child: Row(
-                    children: [
-                      Text('top_selling'.tr(),
-                          style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-                      const Spacer(),
-                      TextButton(
-                        onPressed: () {},
-                        child: Text('see_all'.tr(), style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600)),
-                      ),
-                    ],
-                  ),
-                ).animate(delay: 650.ms).fadeIn(duration: 400.ms),
-              ),
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                sliver: Obx(() => SliverGrid(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          final product = _homeController.topSelling[index];
-                          return _buildProductCard(product);
-                        },
-                        childCount: _homeController.topSelling.length,
-                      ),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        childAspectRatio: 0.7,
-                        crossAxisSpacing: 12,
-                        mainAxisSpacing: 12,
-                      ),
-                    )),
-              ),
+              // ── Top Selling Products (commented out – external-product focus) ──
+              // SliverToBoxAdapter(
+              //   child: Padding(
+              //     padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+              //     child: Row(
+              //       children: [
+              //         Text('top_selling'.tr(),
+              //             style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+              //         const Spacer(),
+              //         TextButton(
+              //           onPressed: () {},
+              //           child: Text('see_all'.tr(), style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600)),
+              //         ),
+              //       ],
+              //     ),
+              //   ).animate(delay: 650.ms).fadeIn(duration: 400.ms),
+              // ),
+              // SliverPadding(
+              //   padding: const EdgeInsets.symmetric(horizontal: 16),
+              //   sliver: Obx(() => SliverGrid(
+              //         delegate: SliverChildBuilderDelegate(
+              //           (context, index) {
+              //             final product = _homeController.topSelling[index];
+              //             return _buildProductCard(product);
+              //           },
+              //           childCount: _homeController.topSelling.length,
+              //         ),
+              //         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              //           crossAxisCount: 2,
+              //           childAspectRatio: 0.7,
+              //           crossAxisSpacing: 12,
+              //           mainAxisSpacing: 12,
+              //         ),
+              //       )),
+              // ),
               const SliverToBoxAdapter(child: SizedBox(height: 20)),
             ],
           ),

@@ -17,6 +17,7 @@ async def list_coupons(lang: str = Query("en"), db: AsyncSession = Depends(get_d
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     query = select(Coupon).where(
         Coupon.is_active == True,
+        Coupon.applicability.notin_(["wallet", "funding"]),
         (Coupon.expires_at == None) | (Coupon.expires_at > now),
     )
     result = await db.execute(query)
@@ -46,6 +47,11 @@ async def validate_coupon(
         raise HTTPException(status_code=400, detail="Coupon has expired")
     if coupon.usage_limit and coupon.used_count >= coupon.usage_limit:
         raise HTTPException(status_code=400, detail="Coupon usage limit reached")
+    if coupon.applicability in ["wallet", "funding"]:
+        raise HTTPException(
+            status_code=400,
+            detail="This coupon is a wallet funding voucher. Please redeem it in 'My Credit' (رصيدي) to add balance."
+        )
 
     # ── Fetch user active cart items to compute eligible subtotal ─────────
     from app.models.cart import CartItem

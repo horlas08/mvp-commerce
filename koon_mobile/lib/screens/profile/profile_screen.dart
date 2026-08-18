@@ -13,6 +13,7 @@ import '../../controllers/home_controller.dart';
 import '../../controllers/cart_controller.dart';
 import '../../services/seller_service.dart';
 import '../auth/login_screen.dart';
+import '../../app/utils/currency_bottom_sheet.dart';
 
 // Import sub-screens
 import 'edit_profile_screen.dart';
@@ -221,20 +222,7 @@ class ProfileScreen extends StatelessWidget {
                       iconColor: Colors.teal,
                       title: 'language'.tr(),
                       trailingText: context.locale.languageCode == 'en' ? 'English' : 'العربية',
-                      onTap: () async {
-                        final currentLocale = context.locale;
-                        final nextLocale = currentLocale.languageCode == 'en' ? const Locale('ar') : const Locale('en');
-                        await context.setLocale(nextLocale);
-                        Get.updateLocale(nextLocale);
-
-                        // Reload home and cart data in selected language
-                        if (Get.isRegistered<HomeController>()) {
-                          Get.find<HomeController>().loadHomeData(lang: nextLocale.languageCode);
-                        }
-                        if (Get.isRegistered<CartController>()) {
-                          Get.find<CartController>().loadCart();
-                        }
-                      },
+                      onTap: () => _showLanguageSelector(context),
                     ),
                     _buildDivider(),
                     _buildSettingsTile(
@@ -266,18 +254,17 @@ class ProfileScreen extends StatelessWidget {
 
                   const SizedBox(height: 20),
 
-                  // Sellers card
-                  _buildSectionHeader('explore'.tr()),
-                  _buildCardContainer([
-                    _buildSettingsTile(
-                      icon: Icons.storefront_outlined,
-                      iconColor: Colors.deepPurple,
-                      title: 'browse_all_sellers'.tr(),
-                      onTap: () => _showSellersDialog(context, sellerService),
-                    ),
-                  ]),
-
-                  const SizedBox(height: 20),
+                  // ── Sellers card (commented out – external-product focus) ──
+                  // _buildSectionHeader('explore'.tr()),
+                  // _buildCardContainer([
+                  //   _buildSettingsTile(
+                  //     icon: Icons.storefront_outlined,
+                  //     iconColor: Colors.deepPurple,
+                  //     title: 'browse_all_sellers'.tr(),
+                  //     onTap: () => _showSellersDialog(context, sellerService),
+                  //   ),
+                  // ]),
+                  // const SizedBox(height: 20),
 
                   // Policies Card
                   _buildSectionHeader('policies'.tr()),
@@ -330,14 +317,14 @@ class ProfileScreen extends StatelessWidget {
 
                   const SizedBox(height: 24),
 
-                  // Become Seller Banner or Dashboard Card
-                  if (isLoggedIn) ...[
-                    if (isSeller)
-                      _buildSellerDashboardCard(context, user!)
-                    else
-                      _buildBecomeSellerPromoCard(context),
-                    const SizedBox(height: 32),
-                  ],
+                  // ── Become Seller / Seller Dashboard (commented out – external-product focus) ──
+                  // if (isLoggedIn) ...[
+                  //   if (isSeller)
+                  //     _buildSellerDashboardCard(context, user!)
+                  //   else
+                  //     _buildBecomeSellerPromoCard(context),
+                  //   const SizedBox(height: 32),
+                  // ],
 
                   // Logout button
                   if (isLoggedIn)
@@ -576,54 +563,185 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  void _showCurrencySelector(BuildContext context, SettingsController settingsController) {
+  void _showLanguageSelector(BuildContext context) {
+    final lang = context.locale.languageCode;
+
+    final languages = [
+      {
+        'code': 'ar',
+        'flag': '🇸🇦',
+        'title': 'arabic'.tr(),
+        'subtitle': 'العربية • Arabic',
+      },
+      {
+        'code': 'en',
+        'flag': '🇺🇸',
+        'title': 'english'.tr(),
+        'subtitle': 'English • الإنجليزية',
+      },
+    ];
+
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (context) => Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('select_currency'.tr(), style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 20),
-            ListTile(
-              title: Text('saudi_riyal'.tr()),
-              trailing: settingsController.currentCurrency.value == 'SAR' ? const Icon(Icons.check, color: AppColors.primary) : null,
-              onTap: () {
-                settingsController.setCurrency('SAR');
-                Navigator.pop(context);
-              },
-            ),
-            ListTile(
-              title: Text('yemeni_rial_old'.tr()),
-              trailing: settingsController.currentCurrency.value == 'YER_OLD' ? const Icon(Icons.check, color: AppColors.primary) : null,
-              onTap: () {
-                settingsController.setCurrency('YER_OLD');
-                Navigator.pop(context);
-              },
-            ),
-            ListTile(
-              title: Text('yemeni_rial_new'.tr()),
-              trailing: settingsController.currentCurrency.value == 'YER_NEW' ? const Icon(Icons.check, color: AppColors.primary) : null,
-              onTap: () {
-                settingsController.setCurrency('YER_NEW');
-                Navigator.pop(context);
-              },
-            ),
-            ListTile(
-              title: Text('us_dollar'.tr()),
-              trailing: settingsController.currentCurrency.value == 'USD' ? const Icon(Icons.check, color: AppColors.primary) : null,
-              onTap: () {
-                settingsController.setCurrency('USD');
-                Navigator.pop(context);
-              },
-            ),
-          ],
+      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (bottomCtx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Drag handle
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.divider,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Header icon & title
+              Center(
+                child: Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: Colors.teal.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.translate_outlined, color: Colors.teal, size: 26),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'select_language'.tr(),
+                style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'select_language_desc'.tr(),
+                style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+
+              // Language List
+              ...languages.map((item) {
+                final isSelected = lang == item['code'];
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  child: InkWell(
+                    onTap: () async {
+                      Navigator.pop(bottomCtx);
+                      if (lang != item['code']) {
+                        final nextLocale = Locale(item['code']!);
+                        await context.setLocale(nextLocale);
+                        Get.updateLocale(nextLocale);
+
+                        // Reload home and cart data in selected language
+                        if (Get.isRegistered<HomeController>()) {
+                          Get.find<HomeController>().loadHomeData(lang: nextLocale.languageCode);
+                        }
+                        if (Get.isRegistered<CartController>()) {
+                          Get.find<CartController>().loadCart();
+                        }
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(16),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: isSelected ? AppColors.primary.withOpacity(0.06) : Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isSelected ? AppColors.primary : AppColors.divider.withOpacity(0.6),
+                          width: isSelected ? 1.8 : 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceVariant.withOpacity(0.5),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Center(
+                              child: Text(
+                                item['flag']!,
+                                style: const TextStyle(fontSize: 22),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  item['title']!,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 14,
+                                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                                    color: isSelected ? AppColors.primary : AppColors.textPrimary,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  item['subtitle']!,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 12,
+                                    color: isSelected ? AppColors.primary.withOpacity(0.8) : AppColors.textSecondary,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (isSelected)
+                            Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: const BoxDecoration(
+                                color: AppColors.primary,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.check, size: 14, color: Colors.white),
+                            )
+                          else
+                            Container(
+                              width: 20,
+                              height: 20,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(color: AppColors.divider, width: 1.5),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  void _showCurrencySelector(BuildContext context, SettingsController settingsController) {
+    showCurrencyBottomSheet(context, settingsController);
   }
 
   void _showSellersDialog(BuildContext context, SellerService sellerService) async {

@@ -30,7 +30,7 @@ class CompareListScreen extends StatelessWidget {
             return TextButton(
               onPressed: () => compareController.clearCompareList(),
               child: Text(
-                'Clear All'.tr(),
+                'clear_all'.tr(),
                 style: const TextStyle(color: AppColors.error, fontWeight: FontWeight.bold),
               ),
             );
@@ -50,13 +50,13 @@ class CompareListScreen extends StatelessWidget {
                   const Icon(Icons.compare_arrows_outlined, size: 64, color: AppColors.textHint),
                   const SizedBox(height: 16),
                   Text(
-                    'No products to compare'.tr(),
+                    'no_products_to_compare'.tr(),
                     style: GoogleFonts.inter(fontSize: 16, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Add products from detail screens to start comparing specs and prices.'.tr(),
+                    'compare_empty_desc'.tr(),
                     style: GoogleFonts.inter(fontSize: 13, color: AppColors.textHint),
                     textAlign: TextAlign.center,
                   ),
@@ -96,15 +96,15 @@ class CompareListScreen extends StatelessWidget {
   Widget _buildLabelsColumn() {
     return Container(
       width: 120,
-      margin: const EdgeInsets.only(left: 16, right: 8),
+      margin: const EdgeInsetsDirectional.only(start: 16, end: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 140), // Spacing aligned with product image
-          _buildLabelCell('Price'.tr()),
-          _buildLabelCell('Rating'.tr()),
-          _buildLabelCell('Stock'.tr()),
-          _buildLabelCell('Description'.tr(), height: 120),
+          _buildLabelCell('price_label'.tr()),
+          _buildLabelCell('rating_label'.tr()),
+          _buildLabelCell('stock_label'.tr()),
+          _buildLabelCell('description'.tr(), height: 120),
         ],
       ),
     );
@@ -113,7 +113,7 @@ class CompareListScreen extends StatelessWidget {
   Widget _buildLabelCell(String text, {double height = 48}) {
     return Container(
       height: height,
-      alignment: Alignment.centerLeft,
+      alignment: AlignmentDirectional.centerStart,
       decoration: const BoxDecoration(
         border: Border(bottom: BorderSide(color: AppColors.divider, width: 0.5)),
       ),
@@ -238,7 +238,7 @@ class CompareListScreen extends StatelessWidget {
           _buildValueCell(
             SingleChildScrollView(
               child: Text(
-                product['description'] ?? product['description_en'] ?? 'No description available.'.tr(),
+                product['description'] ?? product['description_en'] ?? 'no_description'.tr(),
                 style: GoogleFonts.inter(fontSize: 11, color: AppColors.textSecondary, height: 1.3),
                 textAlign: TextAlign.center,
               ),
@@ -269,14 +269,14 @@ class CompareListScreen extends StatelessWidget {
                             imageUrl: imageUrl ?? '',
                           );
                           if (result == AddToCartStatus.success) {
-                            Get.snackbar('Cart', 'Added to your cart!'.tr(), snackPosition: SnackPosition.BOTTOM);
+                            Get.snackbar('cart'.tr(), 'added_to_cart'.tr(), snackPosition: SnackPosition.BOTTOM);
                           } else if (result == AddToCartStatus.unauthorized) {
                             final loginRes = await Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
                             if (loginRes == true) {
                               await performAdd();
                             }
                           } else {
-                            Get.snackbar('Error', 'Failed to add to cart'.tr(), snackPosition: SnackPosition.BOTTOM);
+                            Get.snackbar('error'.tr(), 'failed_to_add_to_cart'.tr(), snackPosition: SnackPosition.BOTTOM);
                           }
                         }
 
@@ -288,7 +288,7 @@ class CompareListScreen extends StatelessWidget {
                   padding: EdgeInsets.zero,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                child: Text('Add to Cart'.tr(), style: const TextStyle(fontSize: 11, color: Colors.white)),
+                child: Text('add_to_cart'.tr(), style: const TextStyle(fontSize: 11, color: Colors.white)),
               ),
             ),
           ),

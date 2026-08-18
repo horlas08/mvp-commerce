@@ -1072,6 +1072,7 @@ class PaymentMethodRequest(BaseModel):
     image_url: Optional[str] = None
     is_active: bool = True
     fields: Optional[list] = None  # list of field dicts: [{"key": "...", "label_en": "...", "label_ar": "..."}]
+    bank_accounts: Optional[list] = None  # list of bank account dicts: [{"bank_name_en": "...", "bank_name_ar": "...", "account_number": "...", "logo_url": "..."}]
 
 
 @router.get("/payment-methods")
@@ -1095,6 +1096,7 @@ async def create_payment_method_admin(
     import json
     import uuid
     fields_str = json.dumps(req.fields or [])
+    bank_accounts_str = json.dumps(req.bank_accounts or [])
     method = PaymentMethod(
         id=str(uuid.uuid4()),
         title_en=req.title_en,
@@ -1105,7 +1107,8 @@ async def create_payment_method_admin(
         details_ar=req.details_ar,
         image_url=req.image_url,
         is_active=req.is_active,
-        fields_json=fields_str
+        fields_json=fields_str,
+        bank_accounts_json=bank_accounts_str
     )
     db.add(method)
     await db.commit()
@@ -1137,6 +1140,8 @@ async def update_payment_method_admin(
     method.is_active = req.is_active
     if req.fields is not None:
         method.fields_json = json.dumps(req.fields)
+    if req.bank_accounts is not None:
+        method.bank_accounts_json = json.dumps(req.bank_accounts)
         
     await db.commit()
     await db.refresh(method)
