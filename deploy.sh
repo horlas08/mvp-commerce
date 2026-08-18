@@ -8,6 +8,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 echo -e "${BLUE}==============================================${NC}"
@@ -21,8 +22,8 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
-# Ask for domain configurations
-echo -e "${YELLOW}Please enter configuration domains (e.g. yourdomain.com):${NC}"
+# ----------------- Domain Configuration -----------------
+echo -e "\n${YELLOW}Please enter configuration domains (e.g. yourdomain.com):${NC}"
 read -p "API Domain (e.g. api.yourdomain.com): " API_DOMAIN
 read -p "Admin Domain (e.g. admin.yourdomain.com): " ADMIN_DOMAIN
 
@@ -31,28 +32,166 @@ if [ -z "$API_DOMAIN" ] || [ -z "$ADMIN_DOMAIN" ]; then
   exit 1
 fi
 
+# Helper function to generate a secure random password
+generate_random_password() {
+  if command -v python3 &>/dev/null; then
+    python3 -c "import secrets; print(secrets.token_urlsafe(16))"
+  else
+    head /dev/urandom | tr -dc A-Za-z0-9 | head -c 20
+  fi
+}
+
+# ----------------- Database Selection & Setup -----------------
+echo -e "\n${CYAN}==============================================${NC}"
+echo -e "${CYAN}          Select Database Engine              ${NC}"
+echo -e "${CYAN}==============================================${NC}"
+echo "1) SQLite      (File-based, zero setup, self-contained)"
+echo "2) PostgreSQL  (Recommended for high concurrency / production)"
+echo "3) MySQL / MariaDB (High performance relational database)"
+echo -e "----------------------------------------------"
+
+read -p "Select option [1-3] (Default: 1): " DB_CHOICE
+DB_CHOICE=${DB_CHOICE:-1}
+
+DATABASE_TYPE="sqlite"
+DATABASE_URL="sqlite+aiosqlite:///./koon.db"
+DB_NAME=""
+DB_USER=""
+DB_PASS=""
+DB_HOST="127.0.0.1"
+DB_PORT=""
+
+case "$DB_CHOICE" in
+  2)
+    DATABASE_TYPE="postgresql"
+    DB_PORT="5432"
+    echo -e "\n${GREEN}Configuring PostgreSQL Database...${NC}"
+    
+    echo "1) Install and configure local PostgreSQL on this server (Default)"
+    echo "2) Connect to an existing / remote PostgreSQL instance"
+    read -p "Choose installation mode [1-2] (Default: 1): " PG_MODE
+    PG_MODE=${PG_MODE:-1}
+
+    DEFAULT_PASS=$(generate_random_password)
+    
+    read -p "Database Name [default: koon_db]: " INPUT_DB_NAME
+    DB_NAME=${INPUT_DB_NAME:-koon_db}
+
+    read -p "Database Username [default: koon_user]: " INPUT_DB_USER
+    DB_USER=${INPUT_DB_USER:-koon_user}
+
+    read -p "Database Password [default: $DEFAULT_PASS]: " INPUT_DB_PASS
+    DB_PASS=${INPUT_DB_PASS:-$DEFAULT_PASS}
+
+    if [ "$PG_MODE" = "2" ]; then
+      read -p "Database Host [default: 127.0.0.1]: " INPUT_DB_HOST
+      DB_HOST=${INPUT_DB_HOST:-127.0.0.1}
+
+      read -p "Database Port [default: 5432]: " INPUT_DB_PORT
+      DB_PORT=${INPUT_DB_PORT:-5432}
+    else
+      DB_HOST="127.0.0.1"
+      DB_PORT="5432"
+    fi
+
+    DATABASE_URL="postgresql+asyncpg://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
+    ;;
+
+  3)
+    DATABASE_TYPE="mysql"
+    DB_PORT="3306"
+    echo -e "\n${GREEN}Configuring MySQL / MariaDB Database...${NC}"
+    
+    echo "1) Install and configure local MariaDB/MySQL on this server (Default)"
+    echo "2) Connect to an existing / remote MySQL instance"
+    read -p "Choose installation mode [1-2] (Default: 1): " MYSQL_MODE
+    MYSQL_MODE=${MYSQL_MODE:-1}
+
+    DEFAULT_PASS=$(generate_random_password)
+
+    read -p "Database Name [default: koon_db]: " INPUT_DB_NAME
+    DB_NAME=${INPUT_DB_NAME:-koon_db}
+
+    read -p "Database Username [default: koon_user]: " INPUT_DB_USER
+    DB_USER=${INPUT_DB_USER:-koon_user}
+
+    read -p "Database Password [default: $DEFAULT_PASS]: " INPUT_DB_PASS
+    DB_PASS=${INPUT_DB_PASS:-$DEFAULT_PASS}
+
+    if [ "$MYSQL_MODE" = "2" ]; then
+      read -p "Database Host [default: 127.0.0.1]: " INPUT_DB_HOST
+      DB_HOST=${INPUT_DB_HOST:-127.0.0.1}
+
+      read -p "Database Port [default: 3306]: " INPUT_DB_PORT
+      DB_PORT=${INPUT_DB_PORT:-3306}
+    else
+      DB_HOST="127.0.0.1"
+      DB_PORT="3306"
+    fi
+
+    DATABASE_URL="mysql+aiomysql://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}?charset=utf8mb4"
+    ;;
+
+  *)
+    DATABASE_TYPE="sqlite"
+    DATABASE_URL="sqlite+aiosqlite:///./koon.db"
+    echo -e "\n${GREEN}Selected SQLite file database: ./koon.db${NC}"
+    ;;
+esac
+
 # Get the directory where the deploy script is located (root of repository)
 ROOT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 cd "$ROOT_DIR"
 
+# ----------------- 1. System Package Updates -----------------
 echo -e "\n${GREEN}[1/6] Updating System Packages...${NC}"
 apt-get update && apt-get upgrade -y
 
-echo -e "\n${GREEN}[2/6] Installing Python and Virtualenv...${NC}"
-apt-get install -y python3-pip python3-venv python3-dev
+# ----------------- 2. Python & Build Prerequisites -----------------
+echo -e "\n${GREEN}[2/6] Installing Python and System Tools...${NC}"
+apt-get install -y python3-pip python3-venv python3-dev build-essential libssl-dev libffi-dev curl wget git
 
-echo -e "\n${GREEN}[3/6] Installing Node.js, PNPM, and PM2...${NC}"
-# Install Node.js LTS (v20) via NodeSource
+# ----------------- 3. Database Server Installation (If Local) -----------------
+if [ "$DATABASE_TYPE" = "postgresql" ] && [ "$PG_MODE" = "1" ]; then
+  echo -e "\n${BLUE}Installing & Configuring local PostgreSQL server...${NC}"
+  apt-get install -y postgresql postgresql-contrib
+  systemctl enable postgresql
+  systemctl start postgresql
+
+  echo -e "${BLUE}Provisioning PostgreSQL user & database...${NC}"
+  sudo -u postgres psql -c "DO \$\$ BEGIN IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '${DB_USER}') THEN CREATE USER ${DB_USER} WITH PASSWORD '${DB_PASS}'; ELSE ALTER USER ${DB_USER} WITH PASSWORD '${DB_PASS}'; END IF; END \$\$;"
+  sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname = '${DB_NAME}'" | grep -q 1 || sudo -u postgres psql -c "CREATE DATABASE ${DB_NAME} OWNER ${DB_USER};"
+  sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE ${DB_NAME} TO ${DB_USER};"
+  sudo -u postgres psql -d "${DB_NAME}" -c "GRANT ALL ON SCHEMA public TO ${DB_USER};" 2>/dev/null || true
+  echo -e "${GREEN}✓ PostgreSQL database '${DB_NAME}' created successfully.${NC}"
+
+elif [ "$DATABASE_TYPE" = "mysql" ] && [ "$MYSQL_MODE" = "1" ]; then
+  echo -e "\n${BLUE}Installing & Configuring local MariaDB/MySQL server...${NC}"
+  apt-get install -y mariadb-server mariadb-client || apt-get install -y mysql-server mysql-client
+  systemctl enable mariadb 2>/dev/null || systemctl enable mysql 2>/dev/null || true
+  systemctl start mariadb 2>/dev/null || systemctl start mysql 2>/dev/null || true
+
+  echo -e "${BLUE}Provisioning MySQL user & database...${NC}"
+  mysql -u root -e "CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+  mysql -u root -e "CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED BY '${DB_PASS}';"
+  mysql -u root -e "ALTER USER '${DB_USER}'@'localhost' IDENTIFIED BY '${DB_PASS}';"
+  mysql -u root -e "GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'localhost'; FLUSH PRIVILEGES;"
+  mysql -u root -e "CREATE USER IF NOT EXISTS '${DB_USER}'@'127.0.0.1' IDENTIFIED BY '${DB_PASS}';"
+  mysql -u root -e "ALTER USER '${DB_USER}'@'127.0.0.1' IDENTIFIED BY '${DB_PASS}';"
+  mysql -u root -e "GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'127.0.0.1'; FLUSH PRIVILEGES;"
+  echo -e "${GREEN}✓ MySQL/MariaDB database '${DB_NAME}' created successfully.${NC}"
+fi
+
+# ----------------- 4. Node.js, PNPM, PM2, Nginx, Certbot -----------------
+echo -e "\n${GREEN}[3/6] Installing Node.js LTS, PNPM, and PM2...${NC}"
 curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
 apt-get install -y nodejs
-
-# Install pnpm and pm2 globally
 npm install -g pnpm pm2
 
 echo -e "\n${GREEN}[4/6] Installing Nginx and Certbot...${NC}"
 apt-get install -y nginx certbot python3-certbot-nginx
 
-# ----------------- Deploys Backend -----------------
+# ----------------- 5. Deploys Backend -----------------
 echo -e "\n${GREEN}[5/6] Deploying FastAPI Backend...${NC}"
 cd "$ROOT_DIR/backend"
 
@@ -67,39 +206,47 @@ source venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
 
-# Install database driver dependencies (Defaulting to SQLite, ready for PostgreSQL/MySQL)
-pip install asyncpg aiomysql
+# Ensure DB-specific async drivers are installed
+if [ "$DATABASE_TYPE" = "postgresql" ]; then
+  pip install asyncpg
+elif [ "$DATABASE_TYPE" = "mysql" ]; then
+  pip install aiomysql cryptography
+elif [ "$DATABASE_TYPE" = "sqlite" ]; then
+  pip install aiosqlite
+fi
 
-# Setup basic environment variables if no .env exists
-if [ ! -f ".env" ]; then
-  echo -e "${BLUE}Generating default .env config...${NC}"
-  JWT_SECRET=$(python3 -c "import secrets; print(secrets.token_hex(32))")
-  cat <<EOT > .env
-DATABASE_URL="sqlite+aiosqlite:///./koon.db"
+# Generate JWT secret key
+JWT_SECRET=$(python3 -c "import secrets; print(secrets.token_hex(32))")
+
+# Backup existing .env if present
+if [ -f ".env" ]; then
+  cp .env ".env.backup.$(date +%s)"
+fi
+
+# Write .env configuration
+cat <<EOT > .env
+DATABASE_URL="$DATABASE_URL"
 SECRET_KEY="$JWT_SECRET"
 ALGORITHM="HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES=1440
 EOT
-  echo -e "${YELLOW}Warning: Generated default sqlite database in .env. Review .env to swap to MySQL/PostgreSQL.${NC}"
-fi
+
+echo -e "${GREEN}✓ Backend .env generated with DATABASE_URL=${DATABASE_URL}${NC}"
 
 # Start/Restart Backend via PM2
 echo -e "${BLUE}Starting FastAPI Backend via PM2...${NC}"
-# Delete previous process if it exists to avoid duplication
 pm2 delete koon-backend 2>/dev/null || true
 pm2 start "venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000" --name "koon-backend"
 deactivate
 
-# ----------------- Deploys Next.js Admin -----------------
+# ----------------- 6. Deploys Next.js Admin -----------------
 echo -e "\n${GREEN}[6/6] Deploying Next.js Admin Panel...${NC}"
 cd "$ROOT_DIR/admin"
 
-# Setup default Next.js build environment variables
-if [ ! -f ".env" ]; then
-  cat <<EOT > .env
+# Setup Next.js environment variables
+cat <<EOT > .env
 NEXT_PUBLIC_API_URL="https://$API_DOMAIN"
 EOT
-fi
 
 echo -e "${BLUE}Installing NPM packages via PNPM...${NC}"
 pnpm install
@@ -114,9 +261,9 @@ pm2 start "pnpm start" --name "koon-admin" -- --port 3000
 
 # Save PM2 state to auto-start on server reboot
 pm2 save
-pm2 startup | tail -n 1 # Prints the system service command instructions
+pm2 startup | tail -n 1 || true
 
-# ----------------- Nginx Reverse Proxy Setup -----------------
+# ----------------- 7. Nginx Reverse Proxy Setup -----------------
 echo -e "\n${GREEN}Configuring Nginx Reverse Proxy...${NC}"
 
 # Backend API site block
@@ -124,6 +271,8 @@ cat <<EOT > /etc/nginx/sites-available/koon-backend
 server {
     listen 80;
     server_name $API_DOMAIN;
+
+    client_max_body_size 50M;
 
     location / {
         proxy_pass http://127.0.0.1:8000;
@@ -144,6 +293,8 @@ cat <<EOT > /etc/nginx/sites-available/koon-admin
 server {
     listen 80;
     server_name $ADMIN_DOMAIN;
+
+    client_max_body_size 50M;
 
     location / {
         proxy_pass http://127.0.0.1:3000;
@@ -167,12 +318,25 @@ ln -sf /etc/nginx/sites-available/koon-admin /etc/nginx/sites-enabled/
 nginx -t
 systemctl restart nginx
 
-echo -e "\n${GREEN}==============================================${NC}"
-echo -e "${GREEN}      Koon Services Deployed Successfully!    ${NC}"
-echo -e "${GREEN}==============================================${NC}"
+echo -e "\n${GREEN}======================================================${NC}"
+echo -e "${GREEN}        Koon Services Deployed Successfully!          ${NC}"
+echo -e "${GREEN}======================================================${NC}"
 pm2 status
+
+echo -e "\n${CYAN}----------------- Deployment Summary -----------------${NC}"
+echo -e "API Domain:       ${BLUE}https://$API_DOMAIN${NC}"
+echo -e "Admin Domain:     ${BLUE}https://$ADMIN_DOMAIN${NC}"
+echo -e "Database Engine:  ${YELLOW}${DATABASE_TYPE^^}${NC}"
+if [ "$DATABASE_TYPE" != "sqlite" ]; then
+  echo -e "Database Name:    ${GREEN}$DB_NAME${NC}"
+  echo -e "Database User:    ${GREEN}$DB_USER${NC}"
+  echo -e "Database Pass:    ${GREEN}$DB_PASS${NC}"
+  echo -e "Database Host:    ${GREEN}$DB_HOST:$DB_PORT${NC}"
+fi
+echo -e "Database URL:     ${YELLOW}$DATABASE_URL${NC}"
+echo -e "${CYAN}------------------------------------------------------${NC}"
 
 echo -e "\n${YELLOW}To secure your websites with Let's Encrypt SSL, run:${NC}"
 echo -e "sudo certbot --nginx -d $API_DOMAIN -d $ADMIN_DOMAIN"
 echo -e "\nReview backend environment config: ${BLUE}nano $ROOT_DIR/backend/.env${NC}"
-echo -e "Review admin environment config: ${BLUE}nano $ROOT_DIR/admin/.env${NC}"
+echo -e "Review admin environment config:   ${BLUE}nano $ROOT_DIR/admin/.env${NC}"
