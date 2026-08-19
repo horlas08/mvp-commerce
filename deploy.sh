@@ -22,13 +22,93 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
-# ----------------- Domain Configuration -----------------
-echo -e "\n${YELLOW}Please enter configuration domains (e.g. yourdomain.com):${NC}"
-read -p "API Domain (e.g. api.yourdomain.com): " API_DOMAIN
-read -p "Admin Domain (e.g. admin.yourdomain.com): " ADMIN_DOMAIN
+# Get the directory where the deploy script is located (root of repository)
+ROOT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+cd "$ROOT_DIR"
+
+# ----------------- Smart Domain Detection & Configuration -----------------
+API_CONSTANTS_FILE="$ROOT_DIR/koon_mobile/lib/app/constants/api_constants.dart"
+DEFAULT_BASE_DOMAIN="koonapp.com"
+
+# Extract production host from api_constants.dart if available
+if [ -f "$API_CONSTANTS_FILE" ]; then
+  EXTRACTED_HOST=$(grep -oE "https?://[a-zA-Z0-9.-]+" "$API_CONSTANTS_FILE" | head -1 | sed -e 's|^https\?://||')
+  if [ -n "$EXTRACTED_HOST" ]; then
+    EXTRACTED_BASE=$(echo "$EXTRACTED_HOST" | sed -e 's/^api\.//')
+    if [ -n "$EXTRACTED_BASE" ]; then
+      DEFAULT_BASE_DOMAIN="$EXTRACTED_BASE"
+    fi
+  fi
+fi
+
+echo -e "\n${YELLOW}==============================================${NC}"
+echo -e "${YELLOW}           Domain Configuration               ${NC}"
+echo -e "${YELLOW}==============================================${NC}"
+
+read -p "Are you configuring custom domains? (Y/n) [default: y]: " USE_CUSTOM_DOMAIN
+USE_CUSTOM_DOMAIN=${USE_CUSTOM_DOMAIN:-y}
+
+if [[ "$USE_CUSTOM_DOMAIN" =~ ^[Yy]$ ]]; then
+  echo -e "Detected default base domain from api_constants.dart: ${CYAN}${DEFAULT_BASE_DOMAIN}${NC}"
+  
+  read -p "Enter Base Domain [default: $DEFAULT_BASE_DOMAIN]: " INPUT_BASE_DOMAIN
+  BASE_DOMAIN=${INPUT_BASE_DOMAIN:-$DEFAULT_BASE_DOMAIN}
+
+  read -p "Enter API Subdomain [default: api]: " INPUT_API_SUB
+  API_SUB=${INPUT_API_SUB:-api}
+
+  read -p "Enter Admin Subdomain [default: admin]: " INPUT_ADMIN_SUB
+  ADMIN_SUB=${INPUT_ADMIN_SUB:-admin}
+
+  # Build full domains (handling root domain '@' or empty subdomains)
+  if [ -z "$API_SUB" ] || [ "$API_SUB" = "@" ]; then
+    API_DOMAIN="$BASE_DOMAIN"
+  else
+    API_DOMAIN="${API_SUB}.${BASE_DOMAIN}"
+  fi
+
+  if [ -z "$ADMIN_SUB" ] || [ "$ADMIN_SUB" = "@" ]; then
+    ADMIN_DOMAIN="$BASE_DOMAIN"
+  else
+    ADMIN_DOMAIN="${ADMIN_SUB}.${BASE_DOMAIN}"
+  fi
+
+  echo -e "\n${GREEN}Calculated Domain Endpoints:${NC}"
+  echo -e "  • API Domain:   ${CYAN}https://${API_DOMAIN}${NC}"
+  echo -e "  • Admin Domain: ${CYAN}https://${ADMIN_DOMAIN}${NC}"
+
+  read -p "Do you want to manually override any of these domains? (y/N) [default: n]: " OVERRIDE_DOMAINS
+  OVERRIDE_DOMAINS=${OVERRIDE_DOMAINS:-n}
+
+  if [[ "$OVERRIDE_DOMAINS" =~ ^[Yy]$ ]]; then
+    read -p "Enter Full API Domain [current: $API_DOMAIN]: " CUSTOM_API_DOMAIN
+    API_DOMAIN=${CUSTOM_API_DOMAIN:-$API_DOMAIN}
+    read -p "Enter Full Admin Domain [current: $ADMIN_DOMAIN]: " CUSTOM_ADMIN_DOMAIN
+    ADMIN_DOMAIN=${CUSTOM_ADMIN_DOMAIN:-$ADMIN_DOMAIN}
+  fi
+
+  # Auto-sync api_constants.dart if the production URL changed
+  if [ -f "$API_CONSTANTS_FILE" ]; then
+    CURRENT_PROD_URL=$(grep -oE "https?://[^']+/api/v1" "$API_CONSTANTS_FILE" | head -1 || true)
+    TARGET_PROD_URL="https://${API_DOMAIN}/api/v1"
+    if [ -n "$CURRENT_PROD_URL" ] && [ "$CURRENT_PROD_URL" != "$TARGET_PROD_URL" ]; then
+      echo -e "${BLUE}Syncing production URL in api_constants.dart to '${TARGET_PROD_URL}'...${NC}"
+      sed -i.bak "s|$CURRENT_PROD_URL|$TARGET_PROD_URL|g" "$API_CONSTANTS_FILE" 2>/dev/null || sed -i "" "s|$CURRENT_PROD_URL|$TARGET_PROD_URL|g" "$API_CONSTANTS_FILE"
+      rm -f "${API_CONSTANTS_FILE}.bak"
+    fi
+  fi
+
+else
+  # IP / Local testing mode
+  DETECTED_IP=$(curl -s https://api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}' || echo "127.0.0.1")
+  read -p "Enter Server IP / Hostname [default: $DETECTED_IP]: " INPUT_SERVER_IP
+  SERVER_IP=${INPUT_SERVER_IP:-$DETECTED_IP}
+  API_DOMAIN="$SERVER_IP"
+  ADMIN_DOMAIN="$SERVER_IP"
+fi
 
 if [ -z "$API_DOMAIN" ] || [ -z "$ADMIN_DOMAIN" ]; then
-  echo -e "${RED}Error: Domains are required to complete the Nginx configuration.${NC}"
+  echo -e "${RED}Error: Valid domains or IP addresses are required to complete the configuration.${NC}"
   exit 1
 fi
 
@@ -139,10 +219,6 @@ case "$DB_CHOICE" in
     ;;
 esac
 
-# Get the directory where the deploy script is located (root of repository)
-ROOT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-cd "$ROOT_DIR"
-
 # ----------------- 1. System Package Updates -----------------
 echo -e "\n${GREEN}[1/6] Updating System Packages...${NC}"
 apt-get update && apt-get upgrade -y
@@ -244,8 +320,14 @@ echo -e "\n${GREEN}[6/6] Deploying Next.js Admin Panel...${NC}"
 cd "$ROOT_DIR/admin"
 
 # Setup Next.js environment variables
+if [[ "$USE_CUSTOM_DOMAIN" =~ ^[Yy]$ ]]; then
+  ADMIN_API_ENDPOINT="https://$API_DOMAIN"
+else
+  ADMIN_API_ENDPOINT="http://$API_DOMAIN:8000"
+fi
+
 cat <<EOT > .env
-NEXT_PUBLIC_API_URL="https://$API_DOMAIN"
+NEXT_PUBLIC_API_URL="$ADMIN_API_ENDPOINT"
 EOT
 
 echo -e "${BLUE}Installing NPM packages via PNPM...${NC}"
@@ -336,7 +418,10 @@ fi
 echo -e "Database URL:     ${YELLOW}$DATABASE_URL${NC}"
 echo -e "${CYAN}------------------------------------------------------${NC}"
 
-echo -e "\n${YELLOW}To secure your websites with Let's Encrypt SSL, run:${NC}"
-echo -e "sudo certbot --nginx -d $API_DOMAIN -d $ADMIN_DOMAIN"
+if [[ "$USE_CUSTOM_DOMAIN" =~ ^[Yy]$ ]]; then
+  echo -e "\n${YELLOW}To secure your websites with Let's Encrypt SSL, run:${NC}"
+  echo -e "sudo certbot --nginx -d $API_DOMAIN -d $ADMIN_DOMAIN"
+fi
+
 echo -e "\nReview backend environment config: ${BLUE}nano $ROOT_DIR/backend/.env${NC}"
 echo -e "Review admin environment config:   ${BLUE}nano $ROOT_DIR/admin/.env${NC}"
