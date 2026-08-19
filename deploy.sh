@@ -28,7 +28,7 @@ cd "$ROOT_DIR"
 
 # ----------------- Smart Domain Detection & Configuration -----------------
 API_CONSTANTS_FILE="$ROOT_DIR/koon_mobile/lib/app/constants/api_constants.dart"
-DEFAULT_BASE_DOMAIN="koonapp.com"
+DEFAULT_BASE_DOMAIN="widdistore.com"
 
 # Extract production host from api_constants.dart if available
 if [ -f "$API_CONSTANTS_FILE" ]; then

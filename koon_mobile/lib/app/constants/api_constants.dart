@@ -6,7 +6,7 @@ class ApiConstants {
 
   static String get baseUrl {
     if (kReleaseMode) {
-      return 'https://api.koonapp.com/api/v1';
+      return 'https://api.widdistore.com/api/v1';
     }
     try {
       if (Platform.isAndroid) {
