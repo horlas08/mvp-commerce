@@ -339,7 +339,7 @@ pnpm build
 # Start/Restart Admin via PM2
 echo -e "${BLUE}Starting Next.js Admin via PM2...${NC}"
 pm2 delete koon-admin 2>/dev/null || true
-pm2 start "pnpm start" --name "koon-admin" -- --port 3000
+pm2 start "node_modules/.bin/next start -p 3000" --name "koon-admin" || pm2 start "pnpm start -- -p 3000" --name "koon-admin"
 
 # Save PM2 state to auto-start on server reboot
 pm2 save
@@ -347,6 +347,9 @@ pm2 startup | tail -n 1 || true
 
 # ----------------- 7. Nginx Reverse Proxy Setup -----------------
 echo -e "\n${GREEN}Configuring Nginx Reverse Proxy...${NC}"
+
+# Disable default Nginx welcome site to prevent it from capturing traffic
+rm -f /etc/nginx/sites-enabled/default
 
 # Backend API site block
 cat <<EOT > /etc/nginx/sites-available/koon-backend
@@ -398,7 +401,7 @@ ln -sf /etc/nginx/sites-available/koon-admin /etc/nginx/sites-enabled/
 
 # Test and reload Nginx
 nginx -t
-systemctl restart nginx
+systemctl reload nginx || systemctl restart nginx
 
 echo -e "\n${GREEN}======================================================${NC}"
 echo -e "${GREEN}        Koon Services Deployed Successfully!          ${NC}"
