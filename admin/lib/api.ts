@@ -1,25 +1,25 @@
-const getApiBase = (): string => {
-  let url = "";
-  if (typeof window !== "undefined") {
-    if (process.env.NEXT_PUBLIC_API_URL) {
-      url = process.env.NEXT_PUBLIC_API_URL;
+export const getApiBase = (): string => {
+  let url = process.env.NEXT_PUBLIC_API_URL || "";
+  if (!url && typeof window !== "undefined") {
+    const hostname = window.location.hostname;
+    const protocol = window.location.protocol;
+    if (hostname === "localhost" || hostname === "127.0.0.1") {
+      url = `http://${hostname}:8000/api/v1`;
+    } else if (hostname.startsWith("admin.")) {
+      url = `${protocol}//${hostname.replace(/^admin\./, "api.")}/api/v1`;
     } else {
-      const hostname = window.location.hostname;
-      return `http://${hostname}:8000/api/v1`;
+      url = `${protocol}//api.${hostname}/api/v1`;
     }
-  } else {
-    url = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api/v1";
+  } else if (!url) {
+    url = "http://127.0.0.1:8000/api/v1";
   }
 
   // Ensure it ends with /api/v1 if it doesn't already
-  if (url) {
-    const cleanUrl = url.endsWith("/") ? url.slice(0, -1) : url;
-    if (!cleanUrl.endsWith("/api/v1")) {
-      return `${cleanUrl}/api/v1`;
-    }
-    return cleanUrl;
+  const cleanUrl = url.endsWith("/") ? url.slice(0, -1) : url;
+  if (!cleanUrl.endsWith("/api/v1")) {
+    return `${cleanUrl}/api/v1`;
   }
-  return url;
+  return cleanUrl;
 };
 
 export const API_BASE = getApiBase();
@@ -33,7 +33,8 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  const base = getApiBase();
+  const res = await fetch(`${base}${path}`, { ...options, headers });
   if (!res.ok) {
     if (res.status === 401 && typeof window !== "undefined") {
       localStorage.removeItem("admin_token");

@@ -56,18 +56,31 @@ static_dir = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(os.path.join(static_dir, "uploads", "avatars"), exist_ok=True)
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
-# Enable CORS for mobile development
+# Enable CORS for admin dashboard, web, and mobile applications
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://admin.widdistore.com",
+        "https://widdistore.com",
+        "https://api.widdistore.com",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ],
+    allow_origin_regex=r"^https?:\/\/.*$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Middleware to dynamically convert relative static paths to absolute URLs
 @app.middleware("http")
 async def add_base_url_to_static_files(request: Request, call_next):
+    if request.method == "OPTIONS":
+        return await call_next(request)
+        
     response = await call_next(request)
     content_type = response.headers.get("content-type", "")
     
