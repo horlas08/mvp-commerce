@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { RefreshCw, ChevronDown, Mail, Image as ImageIcon, ExternalLink } from "lucide-react";
-import { adminApi, Order } from "@/lib/api";
+import { adminApi, Order, getMediaUrl } from "@/lib/api";
 import { useLang } from "@/lib/lang-context";
 
 const ORDER_STATUSES = ["pending", "confirmed", "processing", "shipped", "delivered", "cancelled"];
@@ -262,11 +262,7 @@ export default function OrdersPage() {
           {(() => {
             const order = orders.find(o => o.id === expandedOrder);
             if (!order) return null;
-            const proofUrl = order.payment_proof_url
-              ? order.payment_proof_url.startsWith("http")
-                ? order.payment_proof_url
-                : `http://localhost:8000${order.payment_proof_url}`
-              : null;
+            const proofUrl = getMediaUrl(order.payment_proof_url);
 
             return (
               <div style={{
@@ -343,7 +339,7 @@ export default function OrdersPage() {
                           <div key={k} style={{ fontSize: 12, marginBottom: 4 }}>
                             <span style={{ fontWeight: 600 }}>{k}:</span>{" "}
                             {typeof v === "string" && v.startsWith("/static/") ? (
-                              <a href={`http://localhost:8000${v}`} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent-light)", textDecoration: "none" }}>
+                              <a href={getMediaUrl(v)} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent-light)", textDecoration: "none" }}>
                                 {lang === "ar" ? "تحميل الملف" : "View File"}
                               </a>
                             ) : (

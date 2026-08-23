@@ -24,6 +24,19 @@ export const getApiBase = (): string => {
 
 export const API_BASE = getApiBase();
 
+export const getApiOrigin = (): string => {
+  const base = getApiBase();
+  const index = base.indexOf("/api/v1");
+  return index !== -1 ? base.substring(0, index) : base;
+};
+
+export const getMediaUrl = (path?: string | null): string => {
+  if (!path) return "";
+  if (path.startsWith("http://") || path.startsWith("https://")) return path;
+  const origin = getApiOrigin();
+  return `${origin}${path.startsWith("/") ? "" : "/"}${path}`;
+};
+
 // Generic fetch helper
 async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = typeof window !== "undefined" ? localStorage.getItem("admin_token") : null;

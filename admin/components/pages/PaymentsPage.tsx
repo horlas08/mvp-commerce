@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { RefreshCw, Check, X, ShieldAlert, Image as ImageIcon } from "lucide-react";
-import { adminApi, Order } from "@/lib/api";
+import { adminApi, Order, getMediaUrl } from "@/lib/api";
 import { useLang } from "@/lib/lang-context";
 
 export default function PaymentsPage() {
@@ -111,11 +111,7 @@ export default function PaymentsPage() {
                 const dateStr = new Date(order.created_at).toLocaleDateString(
                   lang === "ar" ? "ar-EG" : "en-US"
                 );
-                const proofUrl = order.payment_proof_url
-                  ? order.payment_proof_url.startsWith("http")
-                    ? order.payment_proof_url
-                    : `http://localhost:8000${order.payment_proof_url}`
-                  : null;
+                const proofUrl = getMediaUrl(order.payment_proof_url);
 
                 return (
                   <tr key={order.id}>

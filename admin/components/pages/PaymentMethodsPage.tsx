@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Plus, Pencil, Trash2, CheckCircle, XCircle, RefreshCw, Layers, Building2, Copy, Image as ImageIcon } from "lucide-react";
-import { adminApi, PaymentMethod, BankAccount } from "@/lib/api";
+import { adminApi, PaymentMethod, BankAccount, getMediaUrl } from "@/lib/api";
 import { useLang } from "@/lib/lang-context";
 
 interface DynamicField {
@@ -341,7 +341,7 @@ export default function PaymentMethodsPage() {
                         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                           {method.image_url ? (
                             <img
-                              src={method.image_url.startsWith("/static/") ? `http://localhost:8000${method.image_url}` : method.image_url}
+                              src={getMediaUrl(method.image_url)}
                               alt={method.title_en}
                               style={{ width: 44, height: 44, objectFit: "contain", borderRadius: 8, border: "1px solid var(--border)", padding: 4, background: "#fff" }}
                             />
@@ -597,7 +597,7 @@ export default function PaymentMethodsPage() {
                           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                             {acc.logo_url ? (
                               <img
-                                src={acc.logo_url.startsWith("/static/") ? `http://localhost:8000${acc.logo_url}` : acc.logo_url}
+                                src={getMediaUrl(acc.logo_url)}
                                 alt={acc.bank_name_en}
                                 style={{ width: 36, height: 36, objectFit: "contain", borderRadius: 6, background: "#fff", padding: 2, border: "1px solid var(--border)" }}
                               />
