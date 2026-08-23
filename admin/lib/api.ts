@@ -36,7 +36,7 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
   const base = getApiBase();
   const res = await fetch(`${base}${path}`, { ...options, headers });
   if (!res.ok) {
-    if (res.status === 401 && typeof window !== "undefined") {
+    if (res.status === 401 && token && !path.includes("/login") && typeof window !== "undefined") {
       localStorage.removeItem("admin_token");
       localStorage.removeItem("admin_user");
       window.location.reload();
