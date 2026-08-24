@@ -71,7 +71,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               children: [
-                pw.Text('Koon Commerce', style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
+                pw.Text('Widdi Commerce', style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
                 pw.Text('INVOICE', style: pw.TextStyle(fontSize: 20, color: const PdfColor.fromInt(0xFFFF6B00))),
               ],
             ),

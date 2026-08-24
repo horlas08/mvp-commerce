@@ -51,7 +51,7 @@ class KoonApp extends StatelessWidget {
         initTheme: initTheme,
         builder: (context, theme) {
           return GetMaterialApp(
-            title: 'Koon',
+            title: 'Widdi',
             debugShowCheckedModeBanner: false,
             theme: theme,
             builder: (context, child) => ThemeSwitchingArea(child: child!),

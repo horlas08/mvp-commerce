@@ -113,7 +113,7 @@ class _SplashScreenState extends State<SplashScreen> {
               const SizedBox(height: 24),
               // App Name
               Text(
-                'Koon',
+                'Widdi',
                 style: GoogleFonts.poppins(
                   fontSize: 42,
                   fontWeight: FontWeight.w700,
@@ -126,7 +126,7 @@ class _SplashScreenState extends State<SplashScreen> {
                   .slideY(begin: 0.3, end: 0),
               const SizedBox(height: 8),
               Text(
-                'كون',
+                'ودي',
                 style: GoogleFonts.cairo(
                   fontSize: 28,
                   fontWeight: FontWeight.w600,

@@ -78,7 +78,7 @@ class _BecomeSellerScreenState extends State<BecomeSellerScreen> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      'Open your shop and start selling internal products directly on Koon.'.tr(),
+                      'Open your shop and start selling internal products directly on Widdi.'.tr(),
                       style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary),
                       textAlign: TextAlign.center,
                     ),
