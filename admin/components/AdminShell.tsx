@@ -107,7 +107,7 @@ export default function AdminShell() {
       <aside className={`sidebar${sidebarOpen ? " open" : ""}`}>
         {/* Logo */}
         <div className="sidebar-logo">
-          <div className="logo-icon">K</div>
+          <div className="logo-icon">W</div>
           <div>
             <div className="logo-text">{t("koonAdmin")}</div>
             <div className="logo-sub">{t("commercePlatform")}</div>

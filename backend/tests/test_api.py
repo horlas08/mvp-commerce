@@ -48,7 +48,7 @@ def setup_database():
 def test_read_root():
     response = client.get("/")
     assert response.status_code == 200
-    assert "Koon Commerce API" in response.json()["message"]
+    assert "Widdi Commerce API" in response.json()["message"]
 
 
 # ── Auth Endpoints ──────────────────────────────────────────────────────────

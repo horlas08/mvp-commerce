@@ -45,7 +45,7 @@ async def lifespan(application: FastAPI):
 
 
 app = FastAPI(
-    title="Koon Commerce API",
+    title="Widdi Commerce API",
     description="Full e-commerce API with internal products + external store aggregation",
     version="2.0.0",
     lifespan=lifespan,
@@ -159,7 +159,7 @@ async def get_public_settings(
 
 @app.get("/")
 def read_root():
-    return {"message": "Koon Commerce API v2.0 is running.", "docs": "/docs"}
+    return {"message": "Widdi Commerce API v2.0 is running.", "docs": "/docs"}
 
 
 # ── Seed demo data ──────────────────────────────────────────────────────────

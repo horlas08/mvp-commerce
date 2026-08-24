@@ -22,8 +22,8 @@ SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER = os.getenv("SMTP_USER", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD") or os.getenv("SMTP_PASS", "")
-ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "admin@koon.com")
-APP_NAME = os.getenv("APP_NAME", "Koon Commerce")
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "admin@widdistore.com")
+APP_NAME = os.getenv("APP_NAME", "Widdi Commerce")
 
 
 def _send_email_sync(to: str, subject: str, html_body: str) -> None:

@@ -3,8 +3,8 @@ import { LangProvider } from "@/lib/lang-context";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Koon Admin Dashboard",
-  description: "Professional admin dashboard for Koon Commerce Platform",
+  title: "Widdi Admin Dashboard",
+  description: "Professional admin dashboard for Widdi Commerce Platform",
 };
 
 export default function RootLayout({

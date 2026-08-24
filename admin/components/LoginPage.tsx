@@ -9,7 +9,7 @@ import LangSwitcher from "@/components/LangSwitcher";
 export default function LoginPage() {
   const { login } = useAuth();
   const { t, lang } = useLang();
-  const [email, setEmail] = useState("admin@koon.sa");
+  const [email, setEmail] = useState("admin@widdistore.com");
   const [password, setPassword] = useState("admin123");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -59,7 +59,7 @@ export default function LoginPage() {
       <div className="login-card">
         {/* Logo */}
         <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 32 }}>
-          <div className="logo-icon" style={{ width: 52, height: 52, fontSize: 24, borderRadius: 14 }}>K</div>
+          <div className="logo-icon" style={{ width: 52, height: 52, fontSize: 24, borderRadius: 14 }}>W</div>
           <div>
             <div style={{ fontSize: 22, fontWeight: 800, color: "var(--text-primary)", letterSpacing: -0.5 }}>
               {t("koonAdmin")}
@@ -84,7 +84,7 @@ export default function LoginPage() {
               className="input"
               value={email}
               onChange={e => setEmail(e.target.value)}
-              placeholder="admin@koon.sa"
+              placeholder="admin@widdistore.com"
               required
             />
           </div>

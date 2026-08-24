@@ -903,16 +903,16 @@ async def seed_admin(db: AsyncSession = Depends(get_db)):
 
     password_hash = hash_password("admin123")
     admin = User(
-        email="admin@koon.sa",
+        email="admin@widdistore.com",
         password_hash=password_hash,
-        name="Koon Admin",
+        name="Widdi Admin",
         role="admin",
         is_active=True,
         is_verified=True,
     )
     db.add(admin)
     await db.commit()
-    return {"message": "Admin created", "email": "admin@koon.sa", "password": "admin123"}
+    return {"message": "Admin created", "email": "admin@widdistore.com", "password": "admin123"}
 
 
 # ── States & Cities ──────────────────────────────────────────────────────────

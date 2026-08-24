@@ -40,7 +40,7 @@ export const translations = {
     signIn: "Sign In",
     firstTimeTitle: "First time? Create the default admin account:",
     createAdminAccount: "Create Admin Account",
-    koonAdmin: "Koon Admin",
+    koonAdmin: "Widdi Admin",
     commerceDashboard: "Commerce Dashboard",
 
     // Sidebar / Header
@@ -331,7 +331,7 @@ export const translations = {
     signIn: "تسجيل الدخول",
     firstTimeTitle: "أول مرة هنا؟ أنشئ حساب المشرف الافتراضي:",
     createAdminAccount: "إنشاء حساب المشرف",
-    koonAdmin: "كون أدمن",
+    koonAdmin: "ودي أدمن",
     commerceDashboard: "لوحة تحكم التجارة",
 
     // Sidebar / Header
