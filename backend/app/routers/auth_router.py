@@ -152,26 +152,21 @@ async def google_auth(req: GoogleAuthRequest, db: AsyncSession = Depends(get_db)
         # Link Google ID if not already linked
         if not user.google_id:
             user.google_id = google_id
-            if google_info.get("picture") and not user.avatar_url:
-                user.avatar_url = google_info["picture"]
-            await db.commit()
-            await db.refresh(user)
-        if not user.is_verified:
-            if not user.verification_code:
-                user.verification_code = "".join(random.choices("0123456789", k=6))
-                await db.commit()
-                await db.refresh(user)
-            code = user.verification_code
+        if google_info.get("picture") and not user.avatar_url:
+            user.avatar_url = google_info["picture"]
+        user.is_verified = True
+        user.is_active = True
+        await db.commit()
+        await db.refresh(user)
     else:
-        code = "".join(random.choices("0123456789", k=6))
-        # Create new user
+        # Create new user pre-verified via Google
         user = User(
             email=email,
             name=google_info["name"],
             google_id=google_id,
             avatar_url=google_info.get("picture"),
-            is_verified=False,
-            verification_code=code,
+            is_active=True,
+            is_verified=True,
         )
         db.add(user)
         await db.commit()
