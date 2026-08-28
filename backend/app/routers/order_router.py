@@ -335,6 +335,34 @@ async def place_order(
             else:
                 commission = 0.0
 
+    # ── Apply global pricing policy as fallback if no state/city rates ────────
+    import json
+    result_policy = await db.execute(select(AppSetting).where(AppSetting.key == "pricing_policy"))
+    policy_setting = result_policy.scalar_one_or_none()
+    policy = {}
+    if policy_setting:
+        try:
+            policy = json.loads(policy_setting.value_en)
+        except Exception:
+            policy = {}
+
+    if shipping_type == "home" and shipping_fee == 0.0 and policy:
+        mode = policy.get("shipping_mode", "fixed")
+        val = float(policy.get("shipping_value", 0.0))
+        if mode == "fixed":
+            shipping_fee = val
+        elif mode == "formula":
+            # val is a multiplier applied to subtotal
+            shipping_fee = round(total * val, 2)
+
+    if commission == 0.0 and policy:
+        mode = policy.get("commission_mode", "fixed")
+        val = float(policy.get("commission_value", 0.0))
+        if mode == "fixed":
+            commission = val
+        elif mode == "formula":
+            commission = round(total * val, 2)
+
     # Team Review Before Shipping Fee
     if allow_team_review:
         result_tr = await db.execute(select(AppSetting).where(AppSetting.key == "team_review_fee"))

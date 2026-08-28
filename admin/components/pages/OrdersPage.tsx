@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { RefreshCw, ChevronDown, Mail, Image as ImageIcon, ExternalLink } from "lucide-react";
+import { RefreshCw, ChevronDown, Mail, Image as ImageIcon, ExternalLink, Download, X } from "lucide-react";
 import { adminApi, Order, getMediaUrl } from "@/lib/api";
 import { useLang } from "@/lib/lang-context";
 
@@ -26,6 +26,13 @@ export default function OrdersPage() {
   const [contactOrder, setContactOrder] = useState<Order | null>(null);
   const [contactMessage, setContactMessage] = useState("");
   const [submittingContact, setSubmittingContact] = useState(false);
+
+  // Export Excel state
+  const [showExport, setShowExport] = useState(false);
+  const [exportDateFrom, setExportDateFrom] = useState("");
+  const [exportDateTo, setExportDateTo] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
 
   const LIMIT = 12;
 
@@ -56,6 +63,23 @@ export default function OrdersPage() {
       setLoading(false);
     }
   }, [page, statusFilter, cartTypeFilter, debouncedSearch, t]);
+
+  const handleExport = async () => {
+    setExporting(true);
+    setExportError("");
+    try {
+      await adminApi.exportOrdersExcel({
+        date_from: exportDateFrom || undefined,
+        date_to: exportDateTo || undefined,
+        status: statusFilter || undefined,
+      });
+      setShowExport(false);
+    } catch (e: unknown) {
+      setExportError(e instanceof Error ? e.message : "Export failed");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   useEffect(() => {
     load();
@@ -133,10 +157,78 @@ export default function OrdersPage() {
               ))}
             </select>
           </div>
-          <button className="btn btn-ghost btn-icon" onClick={load} title={t("refresh")}>
-            <RefreshCw size={16} />
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              className="btn btn-secondary btn-sm"
+              style={{ display: "flex", alignItems: "center", gap: 6 }}
+              onClick={() => { setShowExport(v => !v); setExportError(""); }}
+              title="Export to Excel"
+            >
+              <Download size={14} />
+              Export Excel
+            </button>
+            <button className="btn btn-ghost btn-icon" onClick={load} title={t("refresh")}>
+              <RefreshCw size={16} />
+            </button>
+          </div>
         </div>
+
+        {/* Export date-range panel */}
+        {showExport && (
+          <div style={{
+            background: "var(--bg-card)",
+            border: "1px solid var(--border)",
+            borderRadius: 10,
+            padding: "16px 20px",
+            display: "flex",
+            alignItems: "flex-end",
+            gap: 16,
+            flexWrap: "wrap",
+          }}>
+            <div>
+              <label className="form-label" style={{ fontSize: 12 }}>From Date</label>
+              <input
+                type="date"
+                className="input"
+                style={{ width: 170 }}
+                value={exportDateFrom}
+                onChange={e => setExportDateFrom(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="form-label" style={{ fontSize: 12 }}>To Date</label>
+              <input
+                type="date"
+                className="input"
+                style={{ width: 170 }}
+                value={exportDateTo}
+                onChange={e => setExportDateTo(e.target.value)}
+              />
+            </div>
+            <button
+              className="btn btn-primary btn-sm"
+              disabled={exporting}
+              onClick={handleExport}
+              style={{ display: "flex", alignItems: "center", gap: 6 }}
+            >
+              {exporting ? (
+                <div className="spinner" style={{ width: 14, height: 14 }} />
+              ) : (
+                <><Download size={14} /> Download .xlsx</>
+              )}
+            </button>
+            <button
+              className="btn btn-ghost btn-icon btn-sm"
+              onClick={() => setShowExport(false)}
+              title="Close"
+            >
+              <X size={14} />
+            </button>
+            {exportError && (
+              <span style={{ color: "var(--danger)", fontSize: 12 }}>{exportError}</span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Table */}

@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Save, RefreshCw, AlertCircle } from "lucide-react";
-import { adminApi } from "@/lib/api";
+import { Save, RefreshCw, AlertCircle, Truck, Percent } from "lucide-react";
+import { adminApi, PricingPolicy } from "@/lib/api";
 import { useLang } from "@/lib/lang-context";
 
 interface PolicyState {
@@ -22,6 +22,17 @@ export default function SettingsPage() {
   const [inspectionPolicy, setInspectionPolicy] = useState<PolicyState>({ value_en: "", value_ar: "" });
   const [pickupDelivery, setPickupDelivery] = useState<PolicyState>({ value_en: "", value_ar: "" });
   const [teamReviewFee, setTeamReviewFee] = useState<PolicyState>({ value_en: "5.0", value_ar: "5.0" });
+
+  // Pricing Policy
+  const [pricingPolicy, setPricingPolicy] = useState<PricingPolicy>({
+    shipping_mode: "fixed",
+    shipping_value: 0,
+    shipping_hidden: false,
+    commission_mode: "fixed",
+    commission_value: 0,
+    commission_hidden: false,
+  });
+  const [savingPolicy, setSavingPolicy] = useState(false);
 
   const loadSettings = useCallback(async () => {
     setLoading(true);
@@ -53,12 +64,30 @@ export default function SettingsPage() {
           value_ar: res.team_review_fee.value_ar,
         });
       }
+      // Load pricing policy
+      const policy = await adminApi.getPricingPolicy();
+      setPricingPolicy(policy);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load settings");
     } finally {
       setLoading(false);
     }
   }, []);
+
+  const handleSavePricingPolicy = async () => {
+    setSavingPolicy(true);
+    setError("");
+    setSuccess("");
+    try {
+      await adminApi.savePricingPolicy(pricingPolicy);
+      setSuccess("Pricing policy saved successfully");
+      setTimeout(() => setSuccess(""), 3000);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to save pricing policy");
+    } finally {
+      setSavingPolicy(false);
+    }
+  };
 
   useEffect(() => {
     loadSettings();
@@ -289,6 +318,121 @@ export default function SettingsPage() {
                 onChange={e => setPickupDelivery(f => ({ ...f, value_ar: e.target.value }))}
                 placeholder={t("markdownSupported")}
               />
+            </div>
+          </div>
+        </div>
+
+        {/* ── Pricing Policy ── */}
+        <div className="card" style={{ padding: 20, background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+            <div>
+              <h3 style={{ fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
+                <Truck size={16} /> Pricing Policy
+              </h3>
+              <p style={{ color: "var(--text-muted)", fontSize: 12, marginTop: 2 }}>
+                Global default shipping &amp; commission applied when no state/city rate is configured.
+              </p>
+            </div>
+            <button
+              className="btn btn-primary btn-sm"
+              disabled={savingPolicy}
+              onClick={handleSavePricingPolicy}
+            >
+              {savingPolicy ? (
+                <div className="spinner" style={{ width: 14, height: 14 }} />
+              ) : (
+                <><Save size={14} style={{ marginRight: 6 }} />Save Policy</>
+              )}
+            </button>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+            {/* Shipping */}
+            <div style={{ background: "var(--bg-subtle, rgba(0,0,0,0.03))", borderRadius: 10, padding: 16, border: "1px solid var(--border)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                <Truck size={14} style={{ color: "var(--primary)" }} />
+                <span style={{ fontWeight: 600, fontSize: 14 }}>Shipping Fee</span>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 12 }}>
+                <label className="form-label">Mode</label>
+                <select
+                  className="input"
+                  value={pricingPolicy.shipping_mode}
+                  onChange={e => setPricingPolicy(p => ({ ...p, shipping_mode: e.target.value as "fixed" | "formula" }))}
+                >
+                  <option value="fixed">Fixed Amount (e.g. 200 YER)</option>
+                  <option value="formula">Formula — Price × factor (e.g. 0.05)</option>
+                </select>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 12 }}>
+                <label className="form-label">
+                  {pricingPolicy.shipping_mode === "fixed" ? "Amount" : "Multiplier (e.g. 0.05 = 5%)"}
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  className="input"
+                  value={pricingPolicy.shipping_value}
+                  onChange={e => setPricingPolicy(p => ({ ...p, shipping_value: parseFloat(e.target.value) || 0 }))}
+                  placeholder={pricingPolicy.shipping_mode === "fixed" ? "e.g. 200" : "e.g. 0.05"}
+                />
+              </div>
+
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13 }}>
+                <input
+                  type="checkbox"
+                  checked={pricingPolicy.shipping_hidden}
+                  onChange={e => setPricingPolicy(p => ({ ...p, shipping_hidden: e.target.checked }))}
+                />
+                Hide shipping statement on product page
+              </label>
+            </div>
+
+            {/* Commission */}
+            <div style={{ background: "var(--bg-subtle, rgba(0,0,0,0.03))", borderRadius: 10, padding: 16, border: "1px solid var(--border)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                <Percent size={14} style={{ color: "var(--primary)" }} />
+                <span style={{ fontWeight: 600, fontSize: 14 }}>Commission</span>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 12 }}>
+                <label className="form-label">Mode</label>
+                <select
+                  className="input"
+                  value={pricingPolicy.commission_mode}
+                  onChange={e => setPricingPolicy(p => ({ ...p, commission_mode: e.target.value as "fixed" | "formula" }))}
+                >
+                  <option value="fixed">Fixed Amount</option>
+                  <option value="formula">Formula — Price × factor</option>
+                </select>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 12 }}>
+                <label className="form-label">
+                  {pricingPolicy.commission_mode === "fixed" ? "Amount" : "Multiplier (e.g. 0.05 = 5%)"}
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  className="input"
+                  value={pricingPolicy.commission_value}
+                  onChange={e => setPricingPolicy(p => ({ ...p, commission_value: parseFloat(e.target.value) || 0 }))}
+                  placeholder={pricingPolicy.commission_mode === "fixed" ? "e.g. 50" : "e.g. 0.05"}
+                />
+              </div>
+
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13 }}>
+                <input
+                  type="checkbox"
+                  checked={pricingPolicy.commission_hidden}
+                  onChange={e => setPricingPolicy(p => ({ ...p, commission_hidden: e.target.checked }))}
+                />
+                Hide commission statement on product page
+              </label>
             </div>
           </div>
         </div>

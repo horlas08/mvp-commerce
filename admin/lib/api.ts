@@ -243,7 +243,40 @@ export const adminApi = {
       method: "PUT",
       body: JSON.stringify(data),
     }),
+
+  // Pricing Policy
+  getPricingPolicy: () =>
+    apiFetch<PricingPolicy>("/admin/pricing-policy"),
+  savePricingPolicy: (data: PricingPolicy) =>
+    apiFetch<PricingPolicy>("/admin/pricing-policy", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  // Export Orders to Excel
+  exportOrdersExcel: async (params?: { date_from?: string; date_to?: string; status?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.date_from) q.set("date_from", params.date_from);
+    if (params?.date_to) q.set("date_to", params.date_to);
+    if (params?.status) q.set("status", params.status);
+    const token = typeof window !== "undefined" ? localStorage.getItem("admin_token") : null;
+    const headers: Record<string, string> = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    const base = getApiBase();
+    const res = await fetch(`${base}/admin/orders/export?${q}`, { headers });
+    if (!res.ok) throw new Error("Export failed");
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `orders_${params?.date_from || "all"}_${params?.date_to || "all"}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  },
 };
+
 
 export interface BankAccount {
   id?: string;
@@ -256,7 +289,17 @@ export interface BankAccount {
   logo_url?: string;
 }
 
+export interface PricingPolicy {
+  shipping_mode: "fixed" | "formula";
+  shipping_value: number;
+  shipping_hidden: boolean;
+  commission_mode: "fixed" | "formula";
+  commission_value: number;
+  commission_hidden: boolean;
+}
+
 export interface PaymentMethod {
+
   id: string;
   title_en: string;
   title_ar: string;

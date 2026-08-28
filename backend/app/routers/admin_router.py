@@ -328,6 +328,183 @@ async def list_orders_admin(
     return {"orders": [order_dict(o) for o in orders], "total": total, "page": page, "limit": limit}
 
 
+@router.get("/orders/export")
+async def export_orders_excel(
+    date_from: Optional[str] = Query(None, description="Start date YYYY-MM-DD"),
+    date_to: Optional[str] = Query(None, description="End date YYYY-MM-DD"),
+    status: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user),
+):
+    """Export orders as an Excel (.xlsx) file for a given date range."""
+    import io
+    from datetime import date
+    from fastapi.responses import StreamingResponse
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.utils import get_column_letter
+
+    query = select(Order).options(selectinload(Order.items), selectinload(Order.user))
+
+    if date_from:
+        try:
+            df = datetime.strptime(date_from, "%Y-%m-%d")
+            query = query.where(Order.created_at >= df)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date_from format, use YYYY-MM-DD")
+
+    if date_to:
+        try:
+            dt = datetime.strptime(date_to, "%Y-%m-%d")
+            # Include the full day_to
+            from datetime import timedelta
+            dt = dt + timedelta(days=1)
+            query = query.where(Order.created_at < dt)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date_to format, use YYYY-MM-DD")
+
+    if status:
+        try:
+            query = query.where(Order.status == OrderStatus(status))
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid status: {status}")
+
+    query = query.order_by(Order.created_at.desc())
+    result = await db.execute(query)
+    orders = result.scalars().all()
+
+    # Build workbook
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Orders"
+
+    header_fill = PatternFill(start_color="1E3A5F", end_color="1E3A5F", fill_type="solid")
+    header_font = Font(color="FFFFFF", bold=True, size=11)
+    center = Alignment(horizontal="center", vertical="center")
+
+    headers = [
+        "Order ID", "Date", "Customer Name", "Customer Email",
+        "Status", "Payment Status", "Cart Type",
+        "Shipping Type", "Items Count", "Subtotal",
+        "Shipping Fee", "Commission", "Discount", "Total", "Currency"
+    ]
+    ws.append(headers)
+    for col_idx, _ in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col_idx)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = center
+
+    for order in orders:
+        items_count = sum(i.quantity for i in order.items) if order.items else 0
+        items_total = sum(i.price * i.quantity for i in order.items) if order.items else 0.0
+        shipping_fee = 0.0
+        commission = 0.0
+        discount = order.discount_amount or 0.0
+        total = order.total or 0.0
+        # Derive shipping/commission from total breakdown
+        shipping_fee = round(total - items_total + discount, 2) if total else 0.0
+
+        ws.append([
+            order.id[:8].upper(),
+            order.created_at.strftime("%Y-%m-%d %H:%M") if order.created_at else "",
+            order.user.name if order.user else "",
+            order.user.email if order.user else "",
+            order.status.value if order.status else "",
+            order.payment_status.value if order.payment_status else "",
+            order.cart_type or "",
+            order.shipping_type or "",
+            items_count,
+            round(items_total, 2),
+            shipping_fee,
+            commission,
+            discount,
+            total,
+            order.currency or "SAR",
+        ])
+
+    # Auto-fit columns
+    for col_idx in range(1, len(headers) + 1):
+        col_letter = get_column_letter(col_idx)
+        max_len = max(
+            len(str(ws.cell(row=row_idx, column=col_idx).value or ""))
+            for row_idx in range(1, ws.max_row + 1)
+        )
+        ws.column_dimensions[col_letter].width = min(max_len + 4, 40)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    filename = f"orders_{date_from or 'all'}_{date_to or 'all'}.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# ── Pricing Policy ────────────────────────────────────────────────────────────
+
+PRICING_POLICY_KEY = "pricing_policy"
+
+
+class PricingPolicyRequest(BaseModel):
+    shipping_mode: str  # "fixed" | "formula"
+    shipping_value: float  # fixed amount OR multiplier (e.g. 0.05)
+    shipping_hidden: bool  # hide shipping statement on product page
+    commission_mode: str  # "fixed" | "formula"
+    commission_value: float
+    commission_hidden: bool
+
+
+@router.get("/pricing-policy")
+async def get_pricing_policy(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user),
+):
+    """Get global pricing policy (shipping & commission defaults)."""
+    import json
+    from app.models.app_setting import AppSetting
+    result = await db.execute(select(AppSetting).where(AppSetting.key == PRICING_POLICY_KEY))
+    setting = result.scalar_one_or_none()
+    if not setting:
+        return {
+            "shipping_mode": "fixed",
+            "shipping_value": 0.0,
+            "shipping_hidden": False,
+            "commission_mode": "fixed",
+            "commission_value": 0.0,
+            "commission_hidden": False,
+        }
+    try:
+        return json.loads(setting.value_en)
+    except Exception:
+        return json.loads("{}")
+
+
+@router.post("/pricing-policy")
+async def save_pricing_policy(
+    req: PricingPolicyRequest,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user),
+):
+    """Save global pricing policy (shipping & commission defaults)."""
+    import json
+    from app.models.app_setting import AppSetting
+    payload = json.dumps(req.dict())
+    result = await db.execute(select(AppSetting).where(AppSetting.key == PRICING_POLICY_KEY))
+    setting = result.scalar_one_or_none()
+    if not setting:
+        setting = AppSetting(key=PRICING_POLICY_KEY, value_en=payload, value_ar=payload)
+        db.add(setting)
+    else:
+        setting.value_en = payload
+        setting.value_ar = payload
+    await db.commit()
+    return req.dict()
+
+
 # ── Payment Approval ──────────────────────────────────────────────────────────
 
 class PaymentActionRequest(BaseModel):
