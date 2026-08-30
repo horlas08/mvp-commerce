@@ -2285,7 +2285,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   Widget _buildWebView() {
     return InAppWebView(
-      initialUrlRequest: null,
+      initialUrlRequest: URLRequest(url: WebUri(widget.initialUrl)),
       initialUserScripts: UnmodifiableListView<UserScript>([
         UserScript(
           source: """
@@ -2308,44 +2308,59 @@ class _WebViewScreenState extends State<WebViewScreen> {
                   if (window.location.hostname.includes('amazon.sa') || window.location.href.includes('amazon')) {
                     if (cookieStr.includes('lc-acbsa=')) {
                       cookieStr = cookieStr.replace(/lc-acbsa=[a-zA-Z_]+/g, 'lc-acbsa=ar_AE');
-                    } else {
-                      cookieStr += '; lc-acbsa=ar_AE';
                     }
                     if (cookieStr.includes('i18n-prefs=')) {
-                      cookieStr = cookieStr.replace(/i18n-prefs=[a-zA-Z]+/g, 'i18n-prefs=SAR');
-                    } else {
-                      cookieStr += '; i18n-prefs=SAR';
+                      cookieStr = cookieStr.replace(/i18n-prefs=[a-zA-Z_]+/g, 'i18n-prefs=SAR');
                     }
                   }
                   return cookieStr;
                 }
-                const proto = Document.prototype;
-                const desc = Object.getOwnPropertyDescriptor(proto, 'cookie') ||
-                             Object.getOwnPropertyDescriptor(HTMLDocument.prototype, 'cookie');
-                if (desc && desc.configurable) {
+
+                const originalCookieDescriptor = Object.getOwnPropertyDescriptor(Document.prototype, 'cookie') ||
+                                                 Object.getOwnPropertyDescriptor(HTMLDocument.prototype, 'cookie');
+
+                if (originalCookieDescriptor && originalCookieDescriptor.set) {
                   Object.defineProperty(document, 'cookie', {
-                    get() {
-                      return forceArabicAndSar(desc.get.call(document));
+                    get: function() {
+                      return originalCookieDescriptor.get.call(document);
                     },
-                    set(val) {
-                      desc.set.call(document, forceArabicAndSar(val));
+                    set: function(val) {
+                      originalCookieDescriptor.set.call(document, forceArabicAndSar(val));
                     },
                     configurable: true
                   });
                 }
               } catch(e) {}
 
-              // 2. Intercept new shopper welcome/leave configurations
-              function sanitizeTheme(theme) {
-                if (theme) {
-                  if (theme.welcomeNeedShow !== undefined) theme.welcomeNeedShow = "false";
-                  if (theme.leaveNeedShow !== undefined) theme.leaveNeedShow = "false";
+              // 2. Intercept & Clean Shein Dark Theme JSON Data before it executes
+              function sanitizeTheme(themeObj) {
+                if (!themeObj || typeof themeObj !== 'object') return;
+                for (const k in themeObj) {
+                  if (typeof themeObj[k] === 'string' && themeObj[k].toLowerCase().includes('dark')) {
+                    themeObj[k] = '';
+                  } else if (typeof themeObj[k] === 'object') {
+                    sanitizeTheme(themeObj[k]);
+                  }
                 }
               }
-              function sanitizeData(data) {
-                if (data && typeof data === 'object') {
-                  for (const key in data) {
-                    const item = data[key];
+
+              function sanitizeData(dataObj) {
+                if (!dataObj || typeof dataObj !== 'object') return;
+                if (dataObj.theme) sanitizeTheme(dataObj.theme);
+                if (dataObj.info && dataObj.info.theme) sanitizeTheme(dataObj.info.theme);
+                if (dataObj.productIntroData && dataObj.productIntroData.theme) sanitizeTheme(dataObj.productIntroData.theme);
+                if (Array.isArray(dataObj.components)) {
+                  for (const comp of dataObj.components) {
+                    if (comp && comp.theme) sanitizeTheme(comp.theme);
+                  }
+                }
+                if (Array.isArray(dataObj.elements)) {
+                  for (const el of dataObj.elements) {
+                    if (el && el.theme) sanitizeTheme(el.theme);
+                  }
+                }
+                if (Array.isArray(dataObj.list)) {
+                  for (const item of dataObj.list) {
                     if (item && item.fields && item.fields.theme) {
                       sanitizeTheme(item.fields.theme);
                     }
@@ -2361,7 +2376,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
               const streamingHandler = {
                 set(target, prop, value) {
                   if (value && typeof value === 'object') {
-                    sanitizeTheme(value.theme);
+                    sanitizeData(value);
                   }
                   target[prop] = value;
                   return true;
@@ -2400,20 +2415,27 @@ class _WebViewScreenState extends State<WebViewScreen> {
       initialSettings: InAppWebViewSettings(
         javaScriptEnabled: true,
         domStorageEnabled: true,
+        databaseEnabled: true,
+        cacheEnabled: true,
+        cacheMode: CacheMode.LOAD_DEFAULT,
         transparentBackground: true,
         useShouldOverrideUrlLoading: true,
-        mediaPlaybackRequiresUserGesture: false,
+        mediaPlaybackRequiresUserGesture: true,
+        allowsInlineMediaPlayback: true,
         supportZoom: true,
-        // Alibaba/AliExpress open product pages via target="_blank" (new
-        // window). Without these, those clicks are silently dropped and the
-        // page never navigates. We catch the new-window request in
-        // onCreateWindow and load it in this same webview instead.
+        hardwareAcceleration: true,
+        useHybridComposition: true,
+        offscreenPreRaster: true,
+        safeBrowsingEnabled: false,
+        mixedContentMode: MixedContentMode.MIXED_CONTENT_ALWAYS_ALLOW,
+        thirdPartyCookiesEnabled: true,
+        sharedCookiesEnabled: true,
+        preferredContentMode: UserPreferredContentMode.MOBILE,
+        allowsBackForwardNavigationGestures: true,
+        verticalScrollBarEnabled: false,
+        horizontalScrollBarEnabled: false,
         supportMultipleWindows: true,
         javaScriptCanOpenWindowsAutomatically: true,
-        // Block the scripts that auto-evoke the native app and render the
-        // "open in app" popup. Alibaba uses @alife/sc-callapp ("换端"/switch-
-        // to-app) which fires enalibaba://...&ck=wap_auto_evoke. Killing the
-        // script removes BOTH the popup and the redirect attempt at the root.
         contentBlockers: [
           ContentBlocker(
             trigger: ContentBlockerTrigger(urlFilter: '.*sc-callapp.*'),
@@ -2425,6 +2447,54 @@ class _WebViewScreenState extends State<WebViewScreen> {
           ),
           ContentBlocker(
             trigger: ContentBlockerTrigger(urlFilter: '.*wakeup.*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*google-analytics\\.com.*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*googletagmanager\\.com.*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*doubleclick\\.net.*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*facebook\\.net.*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*connect\\.facebook\\.net.*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*criteo\\.(com|net).*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*tiktok\\.com/i18n/pixel.*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*hotjar\\.com.*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*clarity\\.ms.*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*appsflyer\\.com.*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*branch\\.io.*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*scorecardresearch\\.com.*'),
             action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
           ),
         ],
