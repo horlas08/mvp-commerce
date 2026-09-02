@@ -43,30 +43,18 @@ post_install do |installer|
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.6'
       config.build_settings['SWIFT_VERSION'] = '5.0'
       config.build_settings['SWIFT_STRICT_CONCURRENCY'] = 'minimal'
-    end
-  end
 
-  # Automatically patch flutter_osm_plugin for Swift 6 / Xcode 16 concurrency isolation
-  osm_dir = File.expand_path(".symlinks/plugins/flutter_osm_plugin/ios/flutter_osm_plugin/Sources/flutter_osm_plugin", __dir__)
-  if Dir.exist?(osm_dir)
-    factory_file = File.join(osm_dir, "MapviewFactory.swift")
-    if File.exist?(factory_file)
-      content = File.read(factory_file)
-      if content.include?("public class MapviewFactory") && !content.include?("@MainActor")
-        content.gsub!("public class MapviewFactory", "@MainActor public class MapviewFactory")
-        File.write(factory_file, content)
-      end
-    end
-
-    map_file = File.join(osm_dir, "map_view/osm_map.swift")
-    if File.exist?(map_file)
-      content = File.read(map_file)
-      if content.include?("public class MyOSMView") && !content.include?("@MainActor public class MyOSMView")
-        content.gsub!("public class MyOSMView", "@MainActor public class MyOSMView")
-        File.write(map_file, content)
+      # Fix all Swift 6 / Xcode 16 actor isolation errors in flutter_osm_plugin
+      # by making its entire module implicitly @MainActor isolated.
+      if target.name == 'flutter_osm_plugin'
+        existing = config.build_settings['OTHER_SWIFT_FLAGS'] || '$(inherited)'
+        unless existing.include?('-default-isolation')
+          config.build_settings['OTHER_SWIFT_FLAGS'] = "#{existing} -Xfrontend -default-isolation -Xfrontend MainActor"
+        end
       end
     end
   end
 end
+
 
 
