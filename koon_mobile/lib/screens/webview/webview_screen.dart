@@ -163,6 +163,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
   DateTime? _firstProgressTime;
   int _lastReportedProgress = 0;
   DateTime? _loadStopTime;
+  Timer? _progressFallbackTimer;
 
   String _timeFromClick([DateTime? target]) {
     final t = target ?? DateTime.now();
@@ -2465,6 +2466,22 @@ class _WebViewScreenState extends State<WebViewScreen> {
             trigger: ContentBlockerTrigger(urlFilter: '.*wakeup.*'),
             action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
           ),
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*google-analytics\\.com.*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*googletagmanager\\.com.*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*doubleclick\\.net.*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*clarity\\.ms.*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
         ],
       ),
       onWebViewCreated: (controller) async {
@@ -2530,7 +2547,14 @@ class _WebViewScreenState extends State<WebViewScreen> {
         }
         return NavigationActionPolicy.ALLOW;
       },
+      onPageCommitVisible: (_, url) {
+        final timeFromClick = _timeFromClick();
+        debugPrint('[PERF] 🚀 ON_PAGE_COMMIT_VISIBLE (First pixels rendered): $timeFromClick -> URL: $url');
+        _applyHidingAndScraping();
+      },
       onLoadStart: (_, url) {
+        _progressFallbackTimer?.cancel();
+        _progressFallbackTimer = null;
         _loadStartTime = DateTime.now();
         final timeFromClick = _timeFromClick(_loadStartTime);
         final timeFromCreated = _createdTime != null ? '+${_loadStartTime!.difference(_createdTime!).inMilliseconds}ms' : '';
@@ -2558,42 +2582,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
         }
       },
       onLoadStop: (_, url) async {
-        _loadStopTime = DateTime.now();
-        final start = widget.clickTime ?? _initTime ?? _loadStopTime!;
-        final totalMs = _loadStopTime!.difference(start).inMilliseconds;
-        final tMount = _initTime != null ? _initTime!.difference(start).inMilliseconds : 0;
-        final tCreated = (_createdTime != null && _initTime != null) ? _createdTime!.difference(_initTime!).inMilliseconds : 0;
-        final tLoadStart = (_loadStartTime != null && _createdTime != null) ? _loadStartTime!.difference(_createdTime!).inMilliseconds : 0;
-        final tFirstBar = (_firstProgressTime != null && _loadStartTime != null) ? _firstProgressTime!.difference(_loadStartTime!).inMilliseconds : 0;
-        final tBarToEnd = (_firstProgressTime != null) ? _loadStopTime!.difference(_firstProgressTime!).inMilliseconds : 0;
-
-        debugPrint('\n================ [PERF TIMELINE FINISHED] ================');
-        debugPrint('[PERF] 8. ON_LOAD_STOP: Page loaded! URL: $url');
-        debugPrint('📊 SUMMARY BREAKDOWN:');
-        debugPrint('   • [Card Tap -> Route Mount]:         ${tMount}ms');
-        debugPrint('   • [Route Mount -> WebKit Ready]:      ${tCreated}ms');
-        debugPrint('   • [WebKit Ready -> Load Started]:     ${tLoadStart}ms');
-        debugPrint('   • [Load Started -> First Progress]:   ${tFirstBar}ms (Delay before progress bar showed)');
-        debugPrint('   • [First Progress -> 100% Loaded]:    ${tBarToEnd}ms (Progress bar duration)');
-        debugPrint('   👉 TOTAL TIME (Tap to Finish):        ${(totalMs / 1000).toStringAsFixed(2)}s (${totalMs}ms)');
-        debugPrint('==========================================================\n');
-
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-            if (url != null) _currentUrl = url.toString();
-            // Reset injection flag when navigating to a new page
-            _preselectInjected = false;
-          });
-        }
-        _applyHidingAndScraping(force: true);
-        _refreshNavButtons();
-        // Dump HTML for offline analysis (dev tool, off by default — toggle via
-        // the code icon in the app bar).
-        _dumpHtml();
-        // Auto-select variants from the originating cart item (if provided).
-        // We wait briefly for the page's JS/SKU module to mount before clicking.
-        await _injectPreselectedVariants();
+        _handlePageFinished(url, reason: 'onLoadStop');
       },
       onReceivedError: (controller, request, error) {
         if (request.isForMainFrame != true) return;
@@ -2623,6 +2612,19 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
         if (mounted) setState(() => _progress = progress / 100);
         if (progress > 50) _applyHidingAndScraping();
+
+        if (progress >= 100) {
+          _handlePageFinished(null, reason: 'progress 100%');
+        } else if (progress >= 85) {
+          // If stuck at 85-99% because of background analytics/trackers,
+          // auto-complete gracefully after 750ms so user is never stuck.
+          _progressFallbackTimer?.cancel();
+          _progressFallbackTimer = Timer(const Duration(milliseconds: 750), () {
+            if (mounted && _isLoading) {
+              _handlePageFinished(null, reason: 'progress reached $progress% (auto-finish fallback)');
+            }
+          });
+        }
       },
       onUpdateVisitedHistory: (_, url, __) {
         if (url != null && mounted) {
@@ -2631,6 +2633,46 @@ class _WebViewScreenState extends State<WebViewScreen> {
         _refreshNavButtons();
       },
     );
+  }
+
+  void _handlePageFinished(WebUri? url, {required String reason}) async {
+    _progressFallbackTimer?.cancel();
+    _progressFallbackTimer = null;
+
+    if (!_isLoading && _progress >= 1.0) return;
+
+    _loadStopTime = DateTime.now();
+    final start = widget.clickTime ?? _initTime ?? _loadStopTime!;
+    final totalMs = _loadStopTime!.difference(start).inMilliseconds;
+    final tMount = _initTime != null ? _initTime!.difference(start).inMilliseconds : 0;
+    final tCreated = (_createdTime != null && _initTime != null) ? _createdTime!.difference(_initTime!).inMilliseconds : 0;
+    final tLoadStart = (_loadStartTime != null && _createdTime != null) ? _loadStartTime!.difference(_createdTime!).inMilliseconds : 0;
+    final tFirstBar = (_firstProgressTime != null && _loadStartTime != null) ? _firstProgressTime!.difference(_loadStartTime!).inMilliseconds : 0;
+    final tBarToEnd = (_firstProgressTime != null) ? _loadStopTime!.difference(_firstProgressTime!).inMilliseconds : 0;
+
+    debugPrint('\n================ [PERF TIMELINE FINISHED] ================');
+    debugPrint('[PERF] 8. PAGE READY ($reason)! URL: ${url ?? _currentUrl}');
+    debugPrint('📊 SUMMARY BREAKDOWN:');
+    debugPrint('   • [Card Tap -> Route Mount]:         ${tMount}ms');
+    debugPrint('   • [Route Mount -> WebKit Ready]:      ${tCreated}ms');
+    debugPrint('   • [WebKit Ready -> Load Started]:     ${tLoadStart}ms');
+    debugPrint('   • [Load Started -> First Progress]:   ${tFirstBar}ms (Delay before progress bar showed)');
+    debugPrint('   • [First Progress -> Finished]:       ${tBarToEnd}ms');
+    debugPrint('   👉 TOTAL TIME (Tap to Finish):        ${(totalMs / 1000).toStringAsFixed(2)}s (${totalMs}ms)');
+    debugPrint('==========================================================\n');
+
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+        _progress = 1.0;
+        if (url != null) _currentUrl = url.toString();
+        _preselectInjected = false;
+      });
+    }
+    _applyHidingAndScraping(force: true);
+    _refreshNavButtons();
+    _dumpHtml();
+    await _injectPreselectedVariants();
   }
 
   Widget _buildLoadErrorOverlay() {
@@ -2997,6 +3039,13 @@ class _WebViewScreenState extends State<WebViewScreen> {
         size: 22,
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _progressFallbackTimer?.cancel();
+    _progressFallbackTimer = null;
+    super.dispose();
   }
 }
 

@@ -108,7 +108,6 @@
 				A4E65F3E66821FC7107EDF88 /* Pods-RunnerTests.release.xcconfig */,
 				BADB23ED81956959A2B16CC1 /* Pods-RunnerTests.profile.xcconfig */,
 			);
-			name = Pods;
 			path = Pods;
 			sourceTree = "<group>";
 		};
@@ -241,6 +240,7 @@
 			knownRegions = (
 				en,
 				Base,
+				ar,
 			);
 			mainGroup = 97C146E51CF9000F007C117D;
 			productRefGroup = 97C146EF1CF9000F007C117D /* Products */;
