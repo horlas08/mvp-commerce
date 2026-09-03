@@ -497,6 +497,9 @@ class _HomeScreenState extends State<HomeScreen> {
     return GestureDetector(
       onTap: store['enabled']
           ? () {
+              final clickTime = DateTime.now();
+              debugPrint('\n================ [PERF TIMELINE START] ================');
+              debugPrint('[PERF] 1. CARD CLICKED: "${store['name']}" -> ${store['url']} at ${clickTime.toIso8601String()}');
               final arabicUrl = UrlHelper.convertToArabicUrl(store['url']);
               WebViewScreen.setupCurrencyCookies(arabicUrl);
               Navigator.push(
@@ -505,6 +508,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   builder: (_) => WebViewScreen(
                     initialUrl: arabicUrl,
                     siteName: store['name'],
+                    clickTime: clickTime,
                   ),
                 ),
               );

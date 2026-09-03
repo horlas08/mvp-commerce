@@ -28,12 +28,14 @@ class WebViewScreen extends StatefulWidget {
   /// When set, the WebView will automatically click the matching variant swatches
   /// after the product page has loaded.
   final Map<String, String>? preselectedVariants;
+  final DateTime? clickTime;
 
   const WebViewScreen({
     super.key,
     required this.initialUrl,
     required this.siteName,
     this.preselectedVariants,
+    this.clickTime,
   });
 
   // ── Currency Cookie Setter (force SAR display on the website itself) ──────
@@ -154,9 +156,25 @@ class _WebViewScreenState extends State<WebViewScreen> {
   int _lastDumpBytes = 0;
   DateTime? _lastDumpAt;
 
+  // ── Performance Profiling Timers ─────────────────────────────────────────
+  DateTime? _initTime;
+  DateTime? _createdTime;
+  DateTime? _loadStartTime;
+  DateTime? _firstProgressTime;
+  int _lastReportedProgress = 0;
+  DateTime? _loadStopTime;
+
+  String _timeFromClick([DateTime? target]) {
+    final t = target ?? DateTime.now();
+    final start = widget.clickTime ?? _initTime ?? t;
+    return '+${t.difference(start).inMilliseconds}ms';
+  }
+
   @override
   void initState() {
     super.initState();
+    _initTime = DateTime.now();
+    debugPrint('[PERF] 2. WEBVIEW_SCREEN initState: ${_timeFromClick(_initTime)} from card click');
     _currentUrl = widget.initialUrl;
 
     // Set cookies to force SAR currency display on the website itself
@@ -2450,6 +2468,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
         ],
       ),
       onWebViewCreated: (controller) async {
+        _createdTime = DateTime.now();
+        final timeFromClick = _timeFromClick(_createdTime);
+        final timeFromInit = _initTime != null ? '+${_createdTime!.difference(_initTime!).inMilliseconds}ms' : '';
+        debugPrint('[PERF] 3. ON_WEBVIEW_CREATED (Controller ready): $timeFromClick from card click ($timeFromInit since initState)');
         _webViewController = controller;
         controller.addJavaScriptHandler(
           handlerName: 'onProductDetected',
@@ -2473,7 +2495,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
             }
           },
         );
-        // Load the initial URL now that controller and handlers are ready
+        debugPrint('[PERF] 4. CALLING controller.loadUrl(${widget.initialUrl}): ${_timeFromClick()} from card click');
         await controller.loadUrl(urlRequest: URLRequest(url: WebUri(widget.initialUrl)));
       },
       // Some sites (Alibaba, AliExpress, Amazon) open product links in a new
@@ -2509,6 +2531,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
         return NavigationActionPolicy.ALLOW;
       },
       onLoadStart: (_, url) {
+        _loadStartTime = DateTime.now();
+        final timeFromClick = _timeFromClick(_loadStartTime);
+        final timeFromCreated = _createdTime != null ? '+${_loadStartTime!.difference(_createdTime!).inMilliseconds}ms' : '';
+        debugPrint('[PERF] 5. ON_LOAD_START (Browser engine network request begun): $timeFromClick from card click ($timeFromCreated since loadUrl) -> URL: $url');
         if (mounted) {
           setState(() {
             _isLoading = true;
@@ -2532,6 +2558,26 @@ class _WebViewScreenState extends State<WebViewScreen> {
         }
       },
       onLoadStop: (_, url) async {
+        _loadStopTime = DateTime.now();
+        final start = widget.clickTime ?? _initTime ?? _loadStopTime!;
+        final totalMs = _loadStopTime!.difference(start).inMilliseconds;
+        final tMount = _initTime != null ? _initTime!.difference(start).inMilliseconds : 0;
+        final tCreated = (_createdTime != null && _initTime != null) ? _createdTime!.difference(_initTime!).inMilliseconds : 0;
+        final tLoadStart = (_loadStartTime != null && _createdTime != null) ? _loadStartTime!.difference(_createdTime!).inMilliseconds : 0;
+        final tFirstBar = (_firstProgressTime != null && _loadStartTime != null) ? _firstProgressTime!.difference(_loadStartTime!).inMilliseconds : 0;
+        final tBarToEnd = (_firstProgressTime != null) ? _loadStopTime!.difference(_firstProgressTime!).inMilliseconds : 0;
+
+        debugPrint('\n================ [PERF TIMELINE FINISHED] ================');
+        debugPrint('[PERF] 8. ON_LOAD_STOP: Page loaded! URL: $url');
+        debugPrint('📊 SUMMARY BREAKDOWN:');
+        debugPrint('   • [Card Tap -> Route Mount]:         ${tMount}ms');
+        debugPrint('   • [Route Mount -> WebKit Ready]:      ${tCreated}ms');
+        debugPrint('   • [WebKit Ready -> Load Started]:     ${tLoadStart}ms');
+        debugPrint('   • [Load Started -> First Progress]:   ${tFirstBar}ms (Delay before progress bar showed)');
+        debugPrint('   • [First Progress -> 100% Loaded]:    ${tBarToEnd}ms (Progress bar duration)');
+        debugPrint('   👉 TOTAL TIME (Tap to Finish):        ${(totalMs / 1000).toStringAsFixed(2)}s (${totalMs}ms)');
+        debugPrint('==========================================================\n');
+
         if (mounted) {
           setState(() {
             _isLoading = false;
@@ -2561,6 +2607,20 @@ class _WebViewScreenState extends State<WebViewScreen> {
         );
       },
       onProgressChanged: (_, progress) {
+        final now = DateTime.now();
+        if (_firstProgressTime == null && progress > 0) {
+          _firstProgressTime = now;
+          final timeFromClick = _timeFromClick(now);
+          final timeFromLoadStart = _loadStartTime != null ? '+${now.difference(_loadStartTime!).inMilliseconds}ms' : '';
+          debugPrint('>>> [PERF] 6. 🚀 FIRST PROGRESS BAR APPEARED ($progress%): $timeFromClick from card click ($timeFromLoadStart since load start)');
+          debugPrint('>>>        (User waited $timeFromClick before seeing any progress bar!)');
+        }
+
+        if (progress == 100 || (progress - _lastReportedProgress) >= 20) {
+          _lastReportedProgress = progress;
+          debugPrint('[PERF] 7. PROGRESS $progress%: ${_timeFromClick(now)} from card click');
+        }
+
         if (mounted) setState(() => _progress = progress / 100);
         if (progress > 50) _applyHidingAndScraping();
       },
