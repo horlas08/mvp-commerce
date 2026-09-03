@@ -2296,7 +2296,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   Widget _buildWebView() {
     return InAppWebView(
-      initialUrlRequest: URLRequest(url: WebUri(widget.initialUrl)),
+      initialUrlRequest: null,
       initialUserScripts: UnmodifiableListView<UserScript>([
         UserScript(
           source: """
@@ -2428,23 +2428,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
         domStorageEnabled: true,
         databaseEnabled: true,
         cacheEnabled: true,
-        cacheMode: CacheMode.LOAD_DEFAULT,
         transparentBackground: true,
         useShouldOverrideUrlLoading: true,
-        mediaPlaybackRequiresUserGesture: true,
-        allowsInlineMediaPlayback: true,
+        mediaPlaybackRequiresUserGesture: false,
         supportZoom: true,
-        hardwareAcceleration: true,
-        useHybridComposition: true,
-        offscreenPreRaster: true,
-        safeBrowsingEnabled: false,
-        mixedContentMode: MixedContentMode.MIXED_CONTENT_ALWAYS_ALLOW,
-        thirdPartyCookiesEnabled: true,
-        sharedCookiesEnabled: true,
-        preferredContentMode: UserPreferredContentMode.MOBILE,
-        allowsBackForwardNavigationGestures: true,
-        verticalScrollBarEnabled: false,
-        horizontalScrollBarEnabled: false,
         supportMultipleWindows: true,
         javaScriptCanOpenWindowsAutomatically: true,
         contentBlockers: [
@@ -2458,54 +2445,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
           ),
           ContentBlocker(
             trigger: ContentBlockerTrigger(urlFilter: '.*wakeup.*'),
-            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
-          ),
-          ContentBlocker(
-            trigger: ContentBlockerTrigger(urlFilter: '.*google-analytics\\.com.*'),
-            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
-          ),
-          ContentBlocker(
-            trigger: ContentBlockerTrigger(urlFilter: '.*googletagmanager\\.com.*'),
-            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
-          ),
-          ContentBlocker(
-            trigger: ContentBlockerTrigger(urlFilter: '.*doubleclick\\.net.*'),
-            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
-          ),
-          ContentBlocker(
-            trigger: ContentBlockerTrigger(urlFilter: '.*facebook\\.net.*'),
-            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
-          ),
-          ContentBlocker(
-            trigger: ContentBlockerTrigger(urlFilter: '.*connect\\.facebook\\.net.*'),
-            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
-          ),
-          ContentBlocker(
-            trigger: ContentBlockerTrigger(urlFilter: '.*criteo\\.(com|net).*'),
-            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
-          ),
-          ContentBlocker(
-            trigger: ContentBlockerTrigger(urlFilter: '.*tiktok\\.com/i18n/pixel.*'),
-            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
-          ),
-          ContentBlocker(
-            trigger: ContentBlockerTrigger(urlFilter: '.*hotjar\\.com.*'),
-            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
-          ),
-          ContentBlocker(
-            trigger: ContentBlockerTrigger(urlFilter: '.*clarity\\.ms.*'),
-            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
-          ),
-          ContentBlocker(
-            trigger: ContentBlockerTrigger(urlFilter: '.*appsflyer\\.com.*'),
-            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
-          ),
-          ContentBlocker(
-            trigger: ContentBlockerTrigger(urlFilter: '.*branch\\.io.*'),
-            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
-          ),
-          ContentBlocker(
-            trigger: ContentBlockerTrigger(urlFilter: '.*scorecardresearch\\.com.*'),
             action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
           ),
         ],
@@ -2534,6 +2473,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
             }
           },
         );
+        // Load the initial URL now that controller and handlers are ready
+        await controller.loadUrl(urlRequest: URLRequest(url: WebUri(widget.initialUrl)));
       },
       // Some sites (Alibaba, AliExpress, Amazon) open product links in a new
       // window via target="_blank" or window.open(). Capture that here and
