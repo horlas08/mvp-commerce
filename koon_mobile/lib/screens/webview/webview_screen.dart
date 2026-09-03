@@ -2523,9 +2523,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
             }
           },
         );
-        // Load initial cookies and then initial URL
-        await WebViewScreen.setupCurrencyCookies(widget.initialUrl);
-        await controller.loadUrl(urlRequest: URLRequest(url: WebUri(widget.initialUrl)));
+        // Cookies are already set in initState; load the URL immediately
+        // without waiting for another round of cookie IPC calls.
+        controller.loadUrl(urlRequest: URLRequest(url: WebUri(widget.initialUrl)));
       },
       // Some sites (Alibaba, AliExpress, Amazon) open product links in a new
       // window via target="_blank" or window.open(). Capture that here and
