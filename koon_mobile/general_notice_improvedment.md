@@ -112,11 +112,34 @@ Run the app with `flutter run` and tap any external store card. You will see:
 | 2026-09-03 | **SHEIN** | 9.26s | — | `progress 100%` ✅ | Redirect `ar.shein.com`→`m.shein.com` costs 2.6s |
 | 2026-09-03 | **iHerb** | ~14.7s (stuck prev.) | — | Auto-fallback ✅ | Fixed: was infinite before |
 | 2026-09-03 | **AliExpress** | 6.87s | 4.55s | Auto-fallback (86-89%) ✅ | WebKit real 100% only at ~12s; fallback saves ~5-7s |
-| 2026-09-03 | Amazon | — | — | — | To be tested |
-| 2026-09-03 | Alibaba | — | — | — | To be tested |
+| 2026-09-03 | **Amazon** | 5.44s | — | `progress 100%` ✅ | Best performer! 224ms first progress bar, 1.86s first pixels. No fallback needed |
+| 2026-09-03 | **Alibaba** | 12.54s | — | Auto-fallback (89%) ✅ | WebKit real 100% at 14s. Heavy JS/images. Fallback saves ~1.5s |
 
 ### AliExpress Notes
 - AliExpress has very heavy background analytics that push WebKit's "true 100%" to ~10-12s.
 - The **auto-fallback at 85%+ fires at 4.5–7s**, giving the user a snappy experience.
 - `onProgressChanged` fires before `onLoadStart` on iOS (WKWebView internal ordering), causing negative delta in "Load Started → First Progress" — this is expected and harmless.
 - **No further action needed** for AliExpress — the fallback handles it cleanly.
+
+---
+
+### Alibaba Notes
+- Heaviest loader of all 5 stores (12.5s user-facing, 14s WebKit real 100%).
+- Root cause: Alibaba loads massive amounts of product JS, images, and tracking scripts.
+- The URL  →  redirect was eliminated by pointing directly to  (saves ~1-2s).
+- The auto-fallback at 89% saves ~1.5s compared to waiting for true completion.
+- Further optimization would require blocking more Alibaba-specific tracking domains.
+
+---
+
+## 📊 Final Benchmark Summary (iPhone 16 Simulator, iOS 18.6)
+
+| Store | User-Facing Load | WebKit True 100% | Savings from Fallback |
+|---|---|---|---|
+| **Amazon** | **5.44s** ⭐ | 5.44s | — (reached 100% naturally) |
+| **AliExpress** | **4.55s** (warm) / 6.87s | ~10-12s | ~5-7s |
+| **SHEIN** | **9.26s** → ~6.5s* | ~9s | — |
+| **iHerb** | Was stuck ∞ → now ~9s | ~15s | ~6s |
+| **Alibaba** | **12.54s** | ~14s | ~1.5s |
+
+*SHEIN redirect fix (ar.shein.com → m.shein.com/ar-en/) applied — retest needed.
