@@ -33,13 +33,15 @@ class _SplashScreenState extends State<SplashScreen> {
       final homeController = Get.find<HomeController>();
       final cartController = Get.find<CartController>();
 
-      // Prefetch all required APIs and cookies in parallel
+      // Pre-warm cookies in background without blocking splash navigation
+      WebViewScreen.preloadAllCurrencyCookies().catchError((_) {});
+
+      // Prefetch all required APIs in parallel with a strict timeout so splash NEVER gets stuck
       await Future.wait([
         configController.fetchConfigs(),
         homeController.loadHomeData(lang: context.locale.languageCode),
         cartController.loadCart(),
-        WebViewScreen.preloadAllCurrencyCookies(),
-      ]);
+      ]).timeout(const Duration(seconds: 4), onTimeout: () => []);
     } catch (e) {
       debugPrint('[splash] Pre-fetching failed: $e');
     }

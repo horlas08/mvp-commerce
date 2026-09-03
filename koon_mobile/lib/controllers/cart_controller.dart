@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:get/get.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/cart_service.dart';
 import '../services/currency_service.dart';
 
@@ -49,6 +50,15 @@ class CartController extends GetxController {
   }
 
   Future<void> loadCart({bool autoRefresh = true}) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('access_token');
+    if (token == null) {
+      cartItems.clear();
+      totalCartCount.value = 0;
+      isLoading.value = false;
+      return;
+    }
+
     isLoading.value = true;
     final lang = Get.locale?.languageCode ?? 'en';
     cartItems.value = await _cartService.getCart(cartType: selectedCartType.value, lang: lang);
