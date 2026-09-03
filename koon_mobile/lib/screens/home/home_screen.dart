@@ -471,10 +471,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildStoreCard(Map<String, dynamic> store, int index, {required bool isGrid}) {
     return GestureDetector(
       onTap: store['enabled']
-          ? () async {
+          ? () {
               final arabicUrl = UrlHelper.convertToArabicUrl(store['url']);
-              await WebViewScreen.setupCurrencyCookies(arabicUrl);
-              if (!mounted) return;
+              WebViewScreen.setupCurrencyCookies(arabicUrl);
               Navigator.push(
                 context,
                 MaterialPageRoute(

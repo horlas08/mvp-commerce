@@ -7,6 +7,7 @@ import '../../controllers/config_controller.dart';
 import '../../controllers/home_controller.dart';
 import '../../controllers/cart_controller.dart';
 import '../main/main_shell.dart';
+import '../webview/webview_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -32,11 +33,12 @@ class _SplashScreenState extends State<SplashScreen> {
       final homeController = Get.find<HomeController>();
       final cartController = Get.find<CartController>();
 
-      // Prefetch all required APIs in parallel
+      // Prefetch all required APIs and cookies in parallel
       await Future.wait([
         configController.fetchConfigs(),
         homeController.loadHomeData(lang: context.locale.languageCode),
         cartController.loadCart(),
+        WebViewScreen.preloadAllCurrencyCookies(),
       ]);
     } catch (e) {
       debugPrint('[splash] Pre-fetching failed: $e');

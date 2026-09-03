@@ -37,6 +37,17 @@ class WebViewScreen extends StatefulWidget {
   });
 
   // ── Currency Cookie Setter (force SAR display on the website itself) ──────
+  static Future<void> preloadAllCurrencyCookies() async {
+    try {
+      await Future.wait([
+        setupCurrencyCookies('https://arabic.alibaba.com'),
+        setupCurrencyCookies('https://ar.aliexpress.com'),
+        setupCurrencyCookies('https://sa.iherb.com'),
+        setupCurrencyCookies('https://www.amazon.sa'),
+      ]);
+    } catch (_) {}
+  }
+
   static Future<void> setupCurrencyCookies(String url) async {
     try {
       final uri = Uri.parse(url);
@@ -2523,9 +2534,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
             }
           },
         );
-        // Cookies are already set in initState; load the URL immediately
-        // without waiting for another round of cookie IPC calls.
-        controller.loadUrl(urlRequest: URLRequest(url: WebUri(widget.initialUrl)));
       },
       // Some sites (Alibaba, AliExpress, Amazon) open product links in a new
       // window via target="_blank" or window.open(). Capture that here and
