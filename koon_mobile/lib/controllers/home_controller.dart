@@ -7,15 +7,12 @@ class HomeController extends GetxController {
   final RxList<Map<String, dynamic>> banners = <Map<String, dynamic>>[].obs;
   final RxList<Map<String, dynamic>> categories = <Map<String, dynamic>>[].obs;
   final RxList<Map<String, dynamic>> topSelling = <Map<String, dynamic>>[].obs;
-  final RxBool isLoading = true.obs;
+  final RxBool isLoading = false.obs;
 
-  @override
-  void onInit() {
-    super.onInit();
-    loadHomeData();
-  }
+  bool get isEmpty => banners.isEmpty && categories.isEmpty && topSelling.isEmpty;
 
   Future<void> loadHomeData({String lang = 'en'}) async {
+    if (isLoading.value) return;
     isLoading.value = true;
     try {
       final results = await Future.wait([
@@ -30,7 +27,9 @@ class HomeController extends GetxController {
     isLoading.value = false;
   }
 
-  Future<void> refresh({String lang = 'en'}) async {
-    await loadHomeData(lang: lang);
+  Future<void> refreshData({String lang = 'en', bool force = false}) async {
+    if (force || isEmpty) {
+      await loadHomeData(lang: lang);
+    }
   }
 }

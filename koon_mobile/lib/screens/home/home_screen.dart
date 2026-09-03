@@ -9,6 +9,7 @@ import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../app/theme/app_colors.dart';
 import '../../controllers/home_controller.dart';
+import '../../controllers/config_controller.dart';
 import '../../controllers/settings_controller.dart';
 import '../search/search_screen.dart';
 import '../webview/webview_screen.dart';
@@ -44,6 +45,22 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadStoreViewPreference();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _fetchIfEmpty();
+    });
+  }
+
+  Future<void> _fetchIfEmpty() async {
+    final lang = context.locale.languageCode;
+    // If splash screen failed to load scraper configs, fetch once again
+    final configController = Get.find<ConfigController>();
+    if (configController.configs.isEmpty) {
+      configController.fetchConfigs();
+    }
+    // If splash screen failed and home data is empty, fetch once again
+    if (_homeController.isEmpty) {
+      await _homeController.loadHomeData(lang: lang);
+    }
   }
 
   Future<void> _loadStoreViewPreference() async {
@@ -67,7 +84,15 @@ class _HomeScreenState extends State<HomeScreen> {
         child: RefreshIndicator(
           color: AppColors.primary,
           onRefresh: () async {
-            await _homeController.refresh(lang: lang);
+            final configController = Get.find<ConfigController>();
+            if (configController.configs.isEmpty) {
+              configController.fetchConfigs();
+            }
+
+            // If empty, fetch it once; if not empty, skip fetching
+            if (_homeController.isEmpty) {
+              await _homeController.loadHomeData(lang: lang);
+            }
             await _supportController.refreshCounts();
           },
           child: CustomScrollView(
