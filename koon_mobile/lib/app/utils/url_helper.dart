@@ -22,11 +22,21 @@ class UrlHelper {
             .replaceAll('://aliexpress.com', '://ar.aliexpress.com');
       }
       
-      // SHEIN redirection (www.shein.com -> ar.shein.com)
-      if (host.contains('shein.com') && !host.contains('ar.shein.com')) {
-        return url
-            .replaceAll('www.shein.com', 'ar.shein.com')
-            .replaceAll('://shein.com', '://ar.shein.com');
+      // SHEIN redirection (redirect to mobile Arabic version: https://m.shein.com/ar/)
+      if (host.contains('shein.com')) {
+        String updated = url
+            .replaceAll('www.shein.com', 'm.shein.com')
+            .replaceAll('ar.shein.com', 'm.shein.com')
+            .replaceAll('://shein.com', '://m.shein.com');
+        if (updated.contains('/ar-en/')) {
+          updated = updated.replaceAll('/ar-en/', '/ar/');
+        } else {
+          final parsed = Uri.tryParse(updated);
+          if (parsed != null && (parsed.path.isEmpty || parsed.path == '/')) {
+            updated = 'https://m.shein.com/ar/';
+          }
+        }
+        return updated;
       }
       
       // iHerb redirection (www.iherb.com -> ar.iherb.com)

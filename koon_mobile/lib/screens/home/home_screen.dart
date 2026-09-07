@@ -36,7 +36,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final List<Map<String, dynamic>> _externalStores = [
     {'name': 'Alibaba', 'logo': '🏭', 'color': Color(0xFFFF6B00), 'url': 'https://arabic.alibaba.com', 'subtitle': 'Wholesale', 'enabled': true},
     {'name': 'AliExpress', 'logo': '🛒', 'color': Color(0xFFE53935), 'url': 'https://ar.aliexpress.com', 'subtitle': '', 'enabled': true},
-    {'name': 'SHEIN', 'logo': '👗', 'color': Color(0xFF1A1A2E), 'url': 'https://m.shein.com/ar-en/', 'subtitle': '', 'enabled': true},
+    {'name': 'SHEIN', 'logo': '👗', 'color': Color(0xFF1A1A2E), 'url': 'https://m.shein.com/ar/', 'subtitle': '', 'enabled': true},
     {'name': 'iHerb', 'logo': '🌿', 'color': Color(0xFF007943), 'url': 'https://ar.iherb.com', 'subtitle': '', 'enabled': true},
     {'name': 'Amazon', 'logo': '📦', 'color': Color(0xFFFFA726), 'url': 'https://www.amazon.sa/-/language=ar_AE', 'subtitle': '', 'enabled': true},
   ];
