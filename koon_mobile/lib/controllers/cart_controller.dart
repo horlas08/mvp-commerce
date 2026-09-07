@@ -18,6 +18,11 @@ class CartController extends GetxController {
   final RxList<Map<String, dynamic>> cartItems = <Map<String, dynamic>>[].obs;
   final RxBool isLoading = false.obs;
   final RxInt totalCartCount = 0.obs;
+  final RxMap<String, int> cartCountsByType = <String, int>{}.obs;
+
+  int getCountForCartType(String cartType) {
+    return cartCountsByType[cartType.toLowerCase()] ?? 0;
+  }
 
   // ── Cart Auto-Update Refresh States & Queue ─────────────────────────────
   final RxList<Map<String, dynamic>> refreshQueue = <Map<String, dynamic>>[].obs;
@@ -39,8 +44,29 @@ class CartController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    _loadSavedCartType();
     loadCart();
-    ever(selectedCartType, (_) => loadCart());
+    ever(selectedCartType, (val) {
+      _saveSelectedCartType(val);
+      loadCart();
+    });
+  }
+
+  Future<void> _loadSavedCartType() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getString('selected_cart_type');
+      if (saved != null && saved.isNotEmpty && cartTypes.any((c) => c['key'] == saved)) {
+        selectedCartType.value = saved;
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveSelectedCartType(String type) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('selected_cart_type', type);
+    } catch (_) {}
   }
 
   @override
@@ -215,6 +241,13 @@ class CartController extends GetxController {
     final lang = Get.locale?.languageCode ?? 'en';
     final allItems = await _cartService.getCart(lang: lang);
     totalCartCount.value = allItems.length;
+
+    final Map<String, int> counts = {};
+    for (final item in allItems) {
+      final type = (item['cart_type'] ?? 'internal').toString().toLowerCase();
+      counts[type] = (counts[type] ?? 0) + 1;
+    }
+    cartCountsByType.assignAll(counts);
   }
 
   Future<AddToCartStatus> addToCart({
@@ -312,8 +345,32 @@ class CartController extends GetxController {
   }
 
   Future<void> removeItem(String itemId) async {
+    // Optimistically remove from local list so UI updates immediately
+    final removedIndex = cartItems.indexWhere((i) => i['id'] == itemId);
+    Map<String, dynamic>? removedItem;
+    if (removedIndex != -1) {
+      removedItem = cartItems[removedIndex];
+      cartItems.removeAt(removedIndex);
+      cartItems.refresh();
+    }
+    // Also clear any status tracking for this item
+    itemStatuses.remove(itemId);
+    itemErrors.remove(itemId);
+    itemUpdatedPrices.remove(itemId);
+
     final success = await _cartService.removeFromCart(itemId);
-    if (success) await loadCart(autoRefresh: false);
+    if (!success && removedItem != null) {
+      // Restore the item if the API call failed
+      if (removedIndex <= cartItems.length) {
+        cartItems.insert(removedIndex, removedItem);
+      } else {
+        cartItems.add(removedItem);
+      }
+      cartItems.refresh();
+    } else if (success) {
+      // Refresh total badge count across all carts
+      await _refreshTotalCount();
+    }
   }
 
   Future<void> clearCurrentCart() async {

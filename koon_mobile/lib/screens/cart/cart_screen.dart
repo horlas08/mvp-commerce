@@ -194,7 +194,7 @@ class CartScreen extends StatelessWidget {
                     itemCount: cartController.cartItems.length,
                     itemBuilder: (context, index) {
                       final item = cartController.cartItems[index];
-                      return _buildCartItem(item, cartController, index);
+                      return _buildCartItem(context, item, cartController, index);
                     },
                   ),
                 );
@@ -368,7 +368,7 @@ class CartScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildCartItem(Map<String, dynamic> item, CartController controller, int index) {
+  Widget _buildCartItem(BuildContext context, Map<String, dynamic> item, CartController controller, int index) {
     final title = item['title'] ?? item['product']?['title'] ?? 'Product';
     final double priceVal = KoonCurrencyService.parsePriceToDouble(item['product']?['price'] ?? item['price']);
     final originalCurrency = item['product']?['currency'] ?? 'SAR';
@@ -384,7 +384,50 @@ class CartScreen extends StatelessWidget {
     final externalUrl = item['external_url'] as String?;
     final cartType = item['cart_type'] ?? controller.selectedCartType.value;
 
-    return Card(
+    return Dismissible(
+      key: ValueKey('cart_item_${item['id']}'),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: AppColors.error,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        child: const Icon(Icons.delete_outline, color: Colors.white, size: 28),
+      ),
+      confirmDismiss: (_) async {
+        return await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Text(
+              Get.locale?.languageCode == 'ar' ? 'حذف المنتج' : 'Remove Item',
+              style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+            ),
+            content: Text(
+              Get.locale?.languageCode == 'ar'
+                  ? 'هل تريد حذف هذا المنتج من السلة؟'
+                  : 'Remove this item from your cart?',
+              style: GoogleFonts.inter(fontSize: 14),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text('cancel'.tr()),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+                child: Text('delete'.tr(), style: const TextStyle(color: Colors.white)),
+              ),
+            ],
+          ),
+        ) ?? false;
+      },
+      onDismissed: (_) => controller.removeItem(item['id']),
+      child: Card(
       margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
@@ -452,6 +495,44 @@ class CartScreen extends StatelessWidget {
                               ],
                             ],
                           ),
+                          // Color & Size chips from selections_json
+                          Builder(builder: (_) {
+                            final rawSel = item['selections_json'] as String?;
+                            if (rawSel == null || rawSel.isEmpty) return const SizedBox.shrink();
+                            Map<String, dynamic> selMap = {};
+                            try { selMap = Map<String, dynamic>.from(jsonDecode(rawSel) as Map); } catch (_) {}
+                            if (selMap.isEmpty) return const SizedBox.shrink();
+                            // Extract color and size (case-insensitive key matching)
+                            String? colorVal;
+                            String? sizeVal;
+                            final List<Widget> otherChips = [];
+                            for (final e in selMap.entries) {
+                              final key = e.key.toString().toLowerCase();
+                              final val = e.value.toString();
+                              if (val.isEmpty) continue;
+                              if (key == 'color' || key == 'colour' || key == 'اللون') {
+                                colorVal = val;
+                              } else if (key == 'size' || key == 'الحجم' || key == 'المقاس') {
+                                sizeVal = val;
+                              } else {
+                                otherChips.add(_buildSelChip('${e.key}: $val'));
+                              }
+                            }
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Wrap(
+                                spacing: 4,
+                                runSpacing: 2,
+                                children: [
+                                  if (colorVal != null)
+                                    _buildSelChip('🎨 $colorVal'),
+                                  if (sizeVal != null)
+                                    _buildSelChip('📏 $sizeVal'),
+                                  ...otherChips,
+                                ],
+                              ),
+                            );
+                          }),
                           const SizedBox(height: 6),
                           Obx(() {
                             final status = controller.itemStatuses[item['id']];
@@ -577,6 +658,7 @@ class CartScreen extends StatelessWidget {
             ),
           ],
         ),
+        ),
       ),
     ).animate(delay: Duration(milliseconds: index * 80)).fadeIn(duration: 300.ms).slideX(begin: 0.05);
   }
@@ -616,6 +698,25 @@ class CartScreen extends StatelessWidget {
             child: Text('login'.tr()),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSelChip(String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: AppColors.primary.withOpacity(0.18)),
+      ),
+      child: Text(
+        label,
+        style: GoogleFonts.inter(
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          color: AppColors.primary,
+        ),
       ),
     );
   }
@@ -756,8 +857,28 @@ class CartScreen extends StatelessWidget {
                               color: isSelected ? AppColors.primaryDark : AppColors.textPrimary,
                             ),
                           ),
-                          trailing: isSelected
-                              ? Container(
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if ((cartController.cartCountsByType[key] ?? 0) > 0)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                                  decoration: BoxDecoration(
+                                    color: isSelected ? AppColors.primary.withOpacity(0.15) : AppColors.primarySurface,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    '${cartController.cartCountsByType[key]}',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
+                                ),
+                              if (isSelected)
+                                Container(
                                   padding: const EdgeInsets.all(4),
                                   decoration: const BoxDecoration(
                                     color: AppColors.primary,
@@ -768,8 +889,9 @@ class CartScreen extends StatelessWidget {
                                     color: Colors.white,
                                     size: 14,
                                   ),
-                                )
-                              : null,
+                                ),
+                            ],
+                          ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),

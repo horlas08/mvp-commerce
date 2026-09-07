@@ -143,6 +143,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
   String? _loadError;
   /// Prevents injecting pre-selections more than once per navigation.
   bool _preselectInjected = false;
+  /// When iHerb navigates to a variant URL, this completer is set so that
+  /// _handleProductAction can await the page load before re-extracting the price.
+  Completer<void>? _pendingIherbNavCompleter;
 
   // ── HTML source dumping (dev tool) ────────────────────────────────────────
   // Saves the live page HTML to <appExternalStorage>/<site>_source.html so we
@@ -1464,8 +1467,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
   }
 
   Future<void> _handleProductAction(String action) async {
-    final product = await _fetchProductFromPage();
-    if (product == null) return;
+    final rawProduct = await _fetchProductFromPage();
+    if (rawProduct == null) return;
+    Map<String, dynamic> product = rawProduct;
 
     final authController = Get.find<AuthController>();
     if (!authController.isLoggedIn.value) {
@@ -1574,6 +1578,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
       quantity = (result['quantity'] as num?)?.toInt() ?? quantity;
 
       // iHerb: if user picked a different pack/flavor option, navigate first
+      // and WAIT for the new page to load before proceeding.
       if (isIherb && iherbUrlMap.isNotEmpty) {
         for (final entry in chosen.entries) {
           final targetUrl = iherbUrlMap[entry.value];
@@ -1581,12 +1586,33 @@ class _WebViewScreenState extends State<WebViewScreen> {
               targetUrl.isNotEmpty &&
               !(_currentUrl.contains(targetUrl) ||
                   targetUrl.contains(_currentUrl))) {
+            // Set up a completer that onLoadStop will resolve
+            _pendingIherbNavCompleter = Completer<void>();
             _webViewController?.loadUrl(
               urlRequest: URLRequest(url: WebUri(targetUrl)),
             );
-            // Navigation started — the product bar will update on page load.
-            // Don't add to cart for the old product; let the user tap again.
-            return;
+            // Wait for page load (timeout after 20s to avoid hanging forever)
+            try {
+              await _pendingIherbNavCompleter!.future.timeout(
+                const Duration(seconds: 20),
+                onTimeout: () {},
+              );
+            } catch (_) {}
+            _pendingIherbNavCompleter = null;
+
+            // Re-extract product info from the newly loaded page
+            if (mounted && _webViewController != null) {
+              await Future.delayed(const Duration(milliseconds: 800));
+              final raw = await _webViewController!.evaluateJavascript(
+                source: 'window.__koonExtractProduct ? window.__koonExtractProduct() : null',
+              );
+              if (raw != null && raw is Map) {
+                product = Map<String, dynamic>.from(raw);
+                product['url'] = targetUrl;
+              }
+            }
+            // Continue adding to cart with updated product data below
+            break;
           }
         }
       }
@@ -2249,10 +2275,11 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   Widget _buildCartIconWithBadge() {
     final cartController = Get.find<CartController>();
+    final siteCartType = _cartTypeForSite();
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
       child: Obx(() {
-        final count = cartController.totalCartCount.value;
+        final count = cartController.getCountForCartType(siteCartType);
         return Material(
           color: Colors.transparent,
           child: InkWell(
@@ -2673,6 +2700,11 @@ class _WebViewScreenState extends State<WebViewScreen> {
     _refreshNavButtons();
     _dumpHtml();
     await _injectPreselectedVariants();
+
+    // Resolve the iHerb navigation completer if it's pending
+    if (_pendingIherbNavCompleter != null && !_pendingIherbNavCompleter!.isCompleted) {
+      _pendingIherbNavCompleter!.complete();
+    }
   }
 
   Widget _buildLoadErrorOverlay() {

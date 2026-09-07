@@ -38,13 +38,25 @@ class _SearchScreenState extends State<SearchScreen> {
     'amazon.com.au',
   ];
 
+  /// Returns true if the text looks like a URL (has scheme or www. prefix).
+  bool _isUrlLike(String text) {
+    final trimmed = text.trim().toLowerCase();
+    return trimmed.startsWith('http://') ||
+        trimmed.startsWith('https://') ||
+        trimmed.startsWith('www.');
+  }
+
   /// Returns the site name for the URL if it is a supported external URL,
   /// otherwise returns null.
   String? _externalSiteFor(String text) {
     final trimmed = text.trim();
     Uri? uri;
     try {
-      uri = Uri.parse(trimmed);
+      // Normalize www. prefix so Uri.parse works
+      final normalized = trimmed.startsWith('www.')
+          ? 'https://$trimmed'
+          : trimmed;
+      uri = Uri.parse(normalized);
     } catch (_) {
       return null;
     }
@@ -62,6 +74,25 @@ class _SearchScreenState extends State<SearchScreen> {
     return null;
   }
 
+  /// Shows a snackbar telling the user the link is not supported.
+  void _showUnsupportedLinkMessage() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          context.locale.languageCode == 'ar'
+              ? 'هذا الرابط غير مدعوم. يُرجى لصق رابط من: Alibaba أو AliExpress أو Shein أو iHerb أو Amazon فقط.'
+              : 'This link is not supported. Please paste a link from: Alibaba, AliExpress, Shein, iHerb, or Amazon only.',
+          style: const TextStyle(fontSize: 13),
+        ),
+        backgroundColor: const Color(0xFFD32F2F),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 4),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
   /// Opens an external URL in the WebView.
   void _openInWebView(String url, String siteName) {
     final arabicUrl = UrlHelper.convertToArabicUrl(url);
@@ -74,9 +105,15 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Future<void> _handleInput(String value) async {
-    final siteName = _externalSiteFor(value);
-    if (siteName != null) {
-      _openInWebView(value.trim(), siteName);
+    final trimmed = value.trim();
+    if (_isUrlLike(trimmed)) {
+      final siteName = _externalSiteFor(trimmed);
+      if (siteName != null) {
+        _openInWebView(trimmed, siteName);
+      } else {
+        // URL-like but not a supported store — reject it
+        _showUnsupportedLinkMessage();
+      }
       return;
     }
     await _search(value);
@@ -119,7 +156,7 @@ class _SearchScreenState extends State<SearchScreen> {
           onSubmitted: _handleInput,
           onChanged: (v) {
             // Detect URL paste immediately; otherwise search after 3 chars
-            if (_externalSiteFor(v) != null) {
+            if (_isUrlLike(v)) {
               _handleInput(v);
             } else if (v.length > 2) {
               _search(v);

@@ -5,7 +5,7 @@ import { RefreshCw, ChevronDown, Mail, Image as ImageIcon, ExternalLink, Downloa
 import { adminApi, Order, getMediaUrl } from "@/lib/api";
 import { useLang } from "@/lib/lang-context";
 
-const ORDER_STATUSES = ["pending", "confirmed", "processing", "shipped", "delivered", "cancelled"];
+const ORDER_STATUSES = ["pending", "confirmed", "processing", "shipped", "delivered", "cancelled", "refunded"];
 const CART_TYPES = ["", "internal", "amazon", "aliexpress", "shein", "alibaba", "iherb"];
 
 export default function OrdersPage() {

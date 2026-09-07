@@ -4,8 +4,9 @@ import uuid
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, File, UploadFile, BackgroundTasks
 from pydantic import BaseModel
+from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, cast, String
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db
@@ -101,28 +102,77 @@ async def list_users(
     limit: int = Query(20, ge=1, le=100),
     search: Optional[str] = None,
     role: Optional[str] = None,
+    governorate: Optional[str] = None,
+    date_from: Optional[str] = Query(None, description="Start date YYYY-MM-DD"),
+    date_to: Optional[str] = Query(None, description="End date YYYY-MM-DD"),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_admin_user),
 ):
     query = select(User)
+    count_query = select(func.count(User.id))
+
     if search:
-        query = query.where(
-            (User.email.ilike(f"%{search}%")) | (User.name.ilike(f"%{search}%"))
-        )
+        search_filter = (User.email.ilike(f"%{search}%")) | (User.name.ilike(f"%{search}%"))
+        query = query.where(search_filter)
+        count_query = count_query.where(search_filter)
     if role:
         query = query.where(User.role == role)
+        count_query = count_query.where(User.role == role)
+    if date_from:
+        try:
+            df = datetime.strptime(date_from, "%Y-%m-%d")
+            query = query.where(User.created_at >= df)
+            count_query = count_query.where(User.created_at >= df)
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            dt = datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1)
+            query = query.where(User.created_at < dt)
+            count_query = count_query.where(User.created_at < dt)
+        except ValueError:
+            pass
+    if governorate:
+        gov_subq = (
+            select(Order.user_id)
+            .where(Order.shipping_address != None)
+            .where(cast(Order.shipping_address, String).ilike(f"%{governorate}%"))
+        )
+        query = query.where(User.id.in_(gov_subq))
+        count_query = count_query.where(User.id.in_(gov_subq))
+
     query = query.order_by(User.created_at.desc()).offset((page - 1) * limit).limit(limit)
     result = await db.execute(query)
     users = result.scalars().all()
-    count_query = select(func.count(User.id))
-    if search:
-        count_query = count_query.where(
-            (User.email.ilike(f"%{search}%")) | (User.name.ilike(f"%{search}%"))
-        )
-    if role:
-        count_query = count_query.where(User.role == role)
     total = (await db.execute(count_query)).scalar_one()
-    return {"users": [u.to_dict() for u in users], "total": total, "page": page, "limit": limit}
+
+    # Fetch governorate from latest order for these users
+    user_dicts = []
+    if users:
+        uid_list = [u.id for u in users]
+        orders_result = await db.execute(
+            select(Order)
+            .where(Order.user_id.in_(uid_list))
+            .where(Order.shipping_address != None)
+            .order_by(Order.created_at.desc())
+        )
+        all_orders = orders_result.scalars().all()
+        user_govs = {}
+        for o in all_orders:
+            if o.user_id not in user_govs:
+                addr = o.shipping_address or {}
+                gov = (addr.get("state") or addr.get("state_name") or addr.get("governorate") or "").strip()
+                if gov:
+                    user_govs[o.user_id] = gov
+
+        for u in users:
+            d = u.to_dict()
+            d["governorate"] = user_govs.get(u.id, "")
+            user_dicts.append(d)
+    else:
+        user_dicts = []
+
+    return {"users": user_dicts, "total": total, "page": page, "limit": limit}
 
 
 class UpdateUserRequest(BaseModel):
@@ -165,6 +215,178 @@ async def delete_user(
     await db.delete(user)
     await db.commit()
     return {"message": "User deleted"}
+
+
+@router.get("/users/governorates")
+async def list_user_governorates(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user),
+):
+    """Return a distinct list of governorates (states) from order shipping addresses."""
+    result = await db.execute(
+        select(Order.shipping_address).where(Order.shipping_address != None)
+    )
+    rows = result.scalars().all()
+    governorates = set()
+    for addr in rows:
+        if isinstance(addr, dict):
+            val = (addr.get("state") or addr.get("state_name") or
+                   addr.get("governorate") or "").strip()
+            if val:
+                governorates.add(val)
+    return sorted(list(governorates))
+
+
+@router.get("/users/export")
+async def export_users_excel(
+    search: Optional[str] = None,
+    role: Optional[str] = None,
+    governorate: Optional[str] = None,
+    date_from: Optional[str] = Query(None, description="Start date YYYY-MM-DD"),
+    date_to: Optional[str] = Query(None, description="End date YYYY-MM-DD"),
+    user_ids: Optional[str] = Query(None, description="Comma-separated list of user IDs to export"),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user),
+):
+    """Export users as an Excel (.xlsx) file with delivery details and GPS coordinates."""
+    import io
+    from datetime import timedelta
+    from fastapi.responses import StreamingResponse
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    query = select(User)
+    if search:
+        query = query.where(
+            (User.email.ilike(f"%{search}%")) | (User.name.ilike(f"%{search}%"))
+        )
+    if role:
+        query = query.where(User.role == role)
+    if date_from:
+        try:
+            df = datetime.strptime(date_from, "%Y-%m-%d")
+            query = query.where(User.created_at >= df)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date_from format")
+    if date_to:
+        try:
+            dt = datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1)
+            query = query.where(User.created_at < dt)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date_to format")
+    if user_ids:
+        ids = [uid.strip() for uid in user_ids.split(",") if uid.strip()]
+        if ids:
+            query = query.where(User.id.in_(ids))
+
+    query = query.order_by(User.created_at.desc())
+    result = await db.execute(query)
+    users = result.scalars().all()
+
+    # Fetch last order's shipping_address for each user for governorate + GPS
+    user_order_info: dict = {}
+    if users:
+        uid_list = [u.id for u in users]
+        # Subquery: latest order per user
+        orders_result = await db.execute(
+            select(Order)
+            .where(Order.user_id.in_(uid_list))
+            .where(Order.shipping_address != None)
+            .order_by(Order.user_id, Order.created_at.desc())
+        )
+        all_orders = orders_result.scalars().all()
+        seen_users = set()
+        for o in all_orders:
+            if o.user_id not in seen_users:
+                seen_users.add(o.user_id)
+                addr = o.shipping_address or {}
+                gov = (addr.get("state") or addr.get("state_name") or
+                       addr.get("governorate") or "").strip()
+                lat = (addr.get("latitude") or addr.get("lat") or
+                       (addr.get("location") or {}).get("lat") or
+                       (addr.get("coordinates") or {}).get("lat") or "")
+                lng = (addr.get("longitude") or addr.get("lng") or
+                       (addr.get("location") or {}).get("lng") or
+                       (addr.get("coordinates") or {}).get("lng") or "")
+                city = addr.get("city") or addr.get("city_name") or ""
+                user_order_info[o.user_id] = {"governorate": gov, "lat": lat, "lng": lng, "city": city}
+
+    # Filter by governorate if requested (post-fetch filtering)
+    if governorate:
+        users = [u for u in users if user_order_info.get(u.id, {}).get("governorate") == governorate]
+
+    # ── Build workbook ─────────────────────────────────────────────────────────
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Users"
+
+    header_fill = PatternFill(start_color="1E3A5F", end_color="1E3A5F", fill_type="solid")
+    header_font = Font(color="FFFFFF", bold=True, size=10)
+    alt_fill = PatternFill(start_color="EBF3FB", end_color="EBF3FB", fill_type="solid")
+    left = Alignment(horizontal="left", vertical="center", wrap_text=True)
+    center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    thin = Border(
+        left=Side(style="thin"), right=Side(style="thin"),
+        top=Side(style="thin"), bottom=Side(style="thin"),
+    )
+
+    headers = [
+        "#", "Full Name", "Email", "Phone",
+        "Role", "Status", "Wallet Balance (SAR)",
+        "Registered Date", "Registered Time",
+        "Governorate / State", "City",
+        "GPS Latitude", "GPS Longitude",
+    ]
+    col_widths = [5, 25, 32, 16, 10, 10, 18, 14, 12, 22, 18, 14, 14]
+
+    ws.append(headers)
+    ws.row_dimensions[1].height = 28
+    for col_idx, _ in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col_idx)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = center
+        cell.border = thin
+        ws.column_dimensions[get_column_letter(col_idx)].width = col_widths[col_idx - 1]
+
+    for row_idx, user in enumerate(users, 2):
+        info = user_order_info.get(user.id, {})
+        row_data = [
+            row_idx - 1,
+            user.name,
+            user.email,
+            user.phone or "",
+            user.role,
+            "Active" if user.is_active else "Inactive",
+            round(user.credit_balance or 0.0, 2),
+            user.created_at.strftime("%Y-%m-%d") if user.created_at else "",
+            user.created_at.strftime("%H:%M:%S") if user.created_at else "",
+            info.get("governorate") or "",
+            info.get("city") or "",
+            str(info.get("lat") or ""),
+            str(info.get("lng") or ""),
+        ]
+        ws.append(row_data)
+        ws.row_dimensions[row_idx].height = 20
+        fill = alt_fill if row_idx % 2 == 0 else None
+        for col_idx, _ in enumerate(headers, 1):
+            cell = ws.cell(row=row_idx, column=col_idx)
+            cell.border = thin
+            cell.alignment = left if col_idx > 1 else center
+            if fill:
+                cell.fill = fill
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    filename = f"users_export_{date_from or 'all'}_{date_to or 'all'}.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # ── Products ─────────────────────────────────────────────────────────────────
@@ -336,12 +558,12 @@ async def export_orders_excel(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_admin_user),
 ):
-    """Export orders as an Excel (.xlsx) file for a given date range."""
+    """Export orders as an Excel (.xlsx) file with full details per order item."""
     import io
-    from datetime import date
+    from datetime import timedelta
     from fastapi.responses import StreamingResponse
     import openpyxl
-    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
 
     query = select(Order).options(selectinload(Order.items), selectinload(Order.user))
@@ -355,10 +577,7 @@ async def export_orders_excel(
 
     if date_to:
         try:
-            dt = datetime.strptime(date_to, "%Y-%m-%d")
-            # Include the full day_to
-            from datetime import timedelta
-            dt = dt + timedelta(days=1)
+            dt = datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1)
             query = query.where(Order.created_at < dt)
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid date_to format, use YYYY-MM-DD")
@@ -373,64 +592,171 @@ async def export_orders_excel(
     result = await db.execute(query)
     orders = result.scalars().all()
 
-    # Build workbook
+    # ── Build workbook ────────────────────────────────────────────────────────
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Orders"
 
     header_fill = PatternFill(start_color="1E3A5F", end_color="1E3A5F", fill_type="solid")
-    header_font = Font(color="FFFFFF", bold=True, size=11)
-    center = Alignment(horizontal="center", vertical="center")
+    header_font = Font(color="FFFFFF", bold=True, size=10)
+    order_fill = PatternFill(start_color="EBF3FB", end_color="EBF3FB", fill_type="solid")
+    center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    left = Alignment(horizontal="left", vertical="center", wrap_text=True)
+    thin = Border(
+        left=Side(style="thin"), right=Side(style="thin"),
+        top=Side(style="thin"), bottom=Side(style="thin"),
+    )
 
     headers = [
-        "Order ID", "Date", "Customer Name", "Customer Email",
-        "Status", "Payment Status", "Cart Type",
-        "Shipping Type", "Items Count", "Subtotal",
-        "Shipping Fee", "Commission", "Discount", "Total", "Currency"
+        # Order-level
+        "Order #", "Order Date", "Order Time",
+        "Customer Name", "Customer Email", "Customer Phone",
+        "Order Status", "Cart Type", "Total (SAR)",
+        # Item-level
+        "Item #", "Product Name", "Product Link",
+        "Product Details (Color / Size / Variant)", "Thumbnail URL",
+        "Unit Price (SAR)", "Quantity", "Item Total (SAR)",
+        # Delivery
+        "Delivery Name", "Delivery Phone",
+        "City", "State / Governorate",
+        "Street / Address Details",
+        "GPS Latitude", "GPS Longitude",
     ]
+
     ws.append(headers)
+    ws.row_dimensions[1].height = 30
     for col_idx, _ in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col_idx)
         cell.fill = header_fill
         cell.font = header_font
         cell.alignment = center
+        cell.border = thin
+        # Set default column widths
+        ws.column_dimensions[get_column_letter(col_idx)].width = 18
 
+    # Wider columns for text-heavy fields
+    ws.column_dimensions["D"].width = 22  # Customer Name
+    ws.column_dimensions["E"].width = 28  # Email
+    ws.column_dimensions["K"].width = 35  # Product Name
+    ws.column_dimensions["L"].width = 40  # Product Link
+    ws.column_dimensions["M"].width = 32  # Product Details
+    ws.column_dimensions["N"].width = 40  # Thumbnail URL
+    ws.column_dimensions["V"].width = 35  # Street / Address
+
+    current_row = 2
     for order in orders:
-        items_count = sum(i.quantity for i in order.items) if order.items else 0
-        items_total = sum(i.price * i.quantity for i in order.items) if order.items else 0.0
-        shipping_fee = 0.0
-        commission = 0.0
-        discount = order.discount_amount or 0.0
-        total = order.total or 0.0
-        # Derive shipping/commission from total breakdown
-        shipping_fee = round(total - items_total + discount, 2) if total else 0.0
+        items = order.items or []
+        if not items:
+            items = [None]  # type: ignore[list-item]  # ensure at least one row
 
-        ws.append([
-            order.id[:8].upper(),
-            order.created_at.strftime("%Y-%m-%d %H:%M") if order.created_at else "",
-            order.user.name if order.user else "",
-            order.user.email if order.user else "",
-            order.status.value if order.status else "",
-            order.payment_status.value if order.payment_status else "",
-            order.cart_type or "",
-            order.shipping_type or "",
-            items_count,
-            round(items_total, 2),
-            shipping_fee,
-            commission,
-            discount,
-            total,
-            order.currency or "SAR",
-        ])
+        addr = order.shipping_address or {}
+        delivery_name = addr.get("name") or addr.get("full_name") or ""
+        delivery_phone = addr.get("phone") or ""
+        city = addr.get("city") or addr.get("city_name") or ""
+        state = addr.get("state") or addr.get("state_name") or addr.get("governorate") or ""
+        street = addr.get("street") or addr.get("address") or addr.get("address_line1") or ""
+        # GPS coordinates — stored as lat/lng, latitude/longitude, or nested location
+        lat = (addr.get("latitude") or addr.get("lat") or
+               (addr.get("location") or {}).get("lat") or
+               (addr.get("coordinates") or {}).get("lat") or "")
+        lng = (addr.get("longitude") or addr.get("lng") or
+               (addr.get("location") or {}).get("lng") or
+               (addr.get("coordinates") or {}).get("lng") or "")
 
-    # Auto-fit columns
-    for col_idx in range(1, len(headers) + 1):
-        col_letter = get_column_letter(col_idx)
-        max_len = max(
-            len(str(ws.cell(row=row_idx, column=col_idx).value or ""))
-            for row_idx in range(1, ws.max_row + 1)
-        )
-        ws.column_dimensions[col_letter].width = min(max_len + 4, 40)
+        customer_lang = (order.user.preferred_language if order.user else "en") or "en"
+
+        order_start_row = current_row
+        for item_idx, item in enumerate(items):
+            if item is None:
+                product_name = ""
+                product_link = ""
+                product_details = ""
+                thumbnail = ""
+                unit_price = 0.0
+                qty = 0
+                item_total = 0.0
+            else:
+                # Product name in customer's language
+                product_name = item.title or ""
+                product_link = item.external_url or ""
+                thumbnail = item.image_url or ""
+                unit_price = float(item.price or 0.0)
+                qty = int(item.quantity or 1)
+                item_total = round(unit_price * qty, 2)
+                # Build details string from variant_info
+                vi = item.variant_info or {}
+                details_parts = []
+                for k, v in vi.items():
+                    if v:
+                        details_parts.append(f"{k}: {v}")
+                product_details = " | ".join(details_parts)
+
+            row_data = [
+                order.id[:8].upper(),
+                order.created_at.strftime("%Y-%m-%d") if order.created_at else "",
+                order.created_at.strftime("%H:%M:%S") if order.created_at else "",
+                order.user.name if order.user else "",
+                order.user.email if order.user else "",
+                order.user.phone if order.user else "",
+                order.status.value if order.status else "",
+                (order.cart_type or "internal").upper(),
+                round(order.total or 0.0, 2),
+                # Item
+                item_idx + 1,
+                product_name,
+                product_link,
+                product_details,
+                thumbnail,
+                unit_price,
+                qty,
+                item_total,
+                # Delivery
+                delivery_name,
+                delivery_phone,
+                city,
+                state,
+                street,
+                str(lat) if lat else "",
+                str(lng) if lng else "",
+            ]
+
+            ws.append(row_data)
+            row = ws.row_dimensions[current_row]
+            row.height = 22
+
+            # Style the row
+            fill = order_fill if item_idx % 2 == 0 else None
+            for col_idx, _ in enumerate(headers, 1):
+                cell = ws.cell(row=current_row, column=col_idx)
+                cell.border = thin
+                cell.alignment = left
+                if fill:
+                    cell.fill = fill
+                # Make product links clickable
+                if col_idx == 12 and product_link:  # Product Link column
+                    cell.hyperlink = product_link
+                    cell.font = Font(color="0563C1", underline="single")
+                # Make thumbnail clickable
+                if col_idx == 14 and thumbnail:  # Thumbnail URL column
+                    cell.hyperlink = thumbnail
+                    cell.font = Font(color="0563C1", underline="single")
+
+            current_row += 1
+
+        # Merge order-level cells when multiple items
+        if len(items) > 1:
+            merge_cols = [1, 2, 3, 4, 5, 6, 7, 8, 9]  # Order-level columns
+            for col_idx in merge_cols:
+                if order_start_row < current_row - 1:
+                    ws.merge_cells(
+                        start_row=order_start_row,
+                        start_column=col_idx,
+                        end_row=current_row - 1,
+                        end_column=col_idx,
+                    )
+                    ws.cell(row=order_start_row, column=col_idx).alignment = Alignment(
+                        horizontal="center", vertical="center", wrap_text=True
+                    )
 
     buf = io.BytesIO()
     wb.save(buf)

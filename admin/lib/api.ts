@@ -74,13 +74,32 @@ export const adminApi = {
   getStats: () => apiFetch<Stats>("/admin/stats"),
 
   // Users
-  listUsers: (params?: { page?: number; limit?: number; search?: string; role?: string }) => {
+  listUsers: (params?: { page?: number; limit?: number; search?: string; role?: string; governorate?: string; date_from?: string; date_to?: string }) => {
     const q = new URLSearchParams();
     if (params?.page) q.set("page", String(params.page));
     if (params?.limit) q.set("limit", String(params.limit));
     if (params?.search) q.set("search", params.search);
     if (params?.role) q.set("role", params.role);
+    if (params?.date_from) q.set("date_from", params.date_from);
+    if (params?.date_to) q.set("date_to", params.date_to);
     return apiFetch<PaginatedUsers>(`/admin/users?${q}`);
+  },
+  listUserGovernorates: () => apiFetch<string[]>("/admin/users/governorates"),
+  exportUsersExcel: (params?: {
+    search?: string; role?: string; governorate?: string;
+    date_from?: string; date_to?: string; user_ids?: string;
+  }) => {
+    const q = new URLSearchParams();
+    if (params?.search) q.set("search", params.search);
+    if (params?.role) q.set("role", params.role);
+    if (params?.governorate) q.set("governorate", params.governorate);
+    if (params?.date_from) q.set("date_from", params.date_from);
+    if (params?.date_to) q.set("date_to", params.date_to);
+    if (params?.user_ids) q.set("user_ids", params.user_ids);
+    const token = typeof window !== "undefined" ? localStorage.getItem("admin_token") : null;
+    const base = getApiBase();
+    const url = `${base}/admin/users/export?${q}`;
+    return fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
   },
   updateUser: (id: string, data: Partial<{ role: string; is_active: boolean; credit_balance: number }>) =>
     apiFetch<AdminUser>(`/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
@@ -325,6 +344,7 @@ export interface AdminUser {
   is_active: boolean;
   is_verified: boolean;
   credit_balance: number;
+  governorate?: string;
   created_at: string;
 }
 
