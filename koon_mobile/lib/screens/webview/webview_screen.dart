@@ -85,14 +85,112 @@ class WebViewScreen extends StatefulWidget {
           isSecure: true,
         );
       } else if (host.contains('aliexpress.com')) {
-        await cookieManager.setCookie(
-          url: WebUri(url),
-          name: "aep_usuc_f",
-          value: "site=glo&c_tp=SAR&region=SA&b_locale=ar_SA",
-          domain: ".aliexpress.com",
-          expiresDate: expiresDate,
-          isSecure: true,
-        );
+        final aliUri = WebUri(url);
+        final aliCookies = [
+          {
+            'name': 'aep_usuc_f',
+            'value':
+                'site=ara&province=918500040000000000&city=918500040008000000&c_tp=SAR&x_alimid=2667132275&re_sns=google&isb=y&region=SA&b_locale=ar_MA&ae_u_p_s=2',
+            'domain': '.aliexpress.com',
+            'isSecure': true,
+            'isHttpOnly': false,
+          },
+          {
+            'name': 'xman_us_f',
+            'value':
+                'zero_order=n&x_locale=ar_MA&x_l=1&x_user=NG|Qozeem|Monsurudeen|ifm|2667132275&x_lid=ng1068854275vggae&x_c_chg=1&acs_rt=1d74838ab3e849568d80ba731082fc4a&intl_locale=ar_MA',
+            'domain': '.aliexpress.com',
+            'isSecure': true,
+            'isHttpOnly': false,
+          },
+          {
+            'name': 'xman_f',
+            'value':
+                'QS+jkqKaP1TapVVaifmkgFWL0HKOwi+QuclNqVEwGBuxOhhiwi5B4I+vLOR7zbwW171nImZs/UaPXV9Mr0/7KnxY4uPOLrfywPcakXfxMYv6Q+Xgq1s/NGyNwBfGIR/6KA6V1wcEnKbv+wxuRvSxGsJY/4RUa9Rb0Tvq5njkosBMwTfXOMXwU/U6HtEaQNbmLJlQT0+IgiwLqbLNb+Pdw2vcYGH1kUEQwVad4Vei+0CPb+D0qe4kV83xDLOeGLYxcy26w/qGU+o3TEF/7Jj35LTnPkhey3AIxAwULING0SyIkWWK9jgpRKppgWjGIkhAbH7+1nNC6Xv9oT3fnUAfhKHeXvx/QtnGB6Ud9RIH5J+ED+l5rFnahkjTgOf9r3tcu3yblLHLMBGvccPaBNOWPfiUTAMnadUI9HRBJo1CPf1bp5f9YoOcRAFEZu6EITA5scjjReiXGDkdXRQz04tjihssKJ1CNhvW',
+            'domain': '.aliexpress.com',
+            'isSecure': true,
+            'isHttpOnly': true,
+          },
+          {
+            'name': 'xman_t',
+            'value':
+                'yjWbqSAMsU65GYww2edMxl2+8xc950nCmlCslJBj9cDXTKX3/l8qP3cw5h1bdlAJ',
+            'domain': '.aliexpress.com',
+            'isSecure': true,
+            'isHttpOnly': true,
+          },
+          {
+            'name': '_baxia_sec_cookie_',
+            'value':
+                '%257B%2522lwrid%2522%253A%2522AgGfAKYbOyOG4DliUMXaxe5uIxeK%2522%252C%2522tfstk%2522%253A%2522gbWqMAv3idb5vQzhYMva8R6WRrpvBdzQ0OT6jGjMcEY0MC1yQaQVGV961A8GjU6Xli9mSGYPoAOf5O5-QMIOhop_DKIvBd4QRJaCDipOanrfqzsujhpwmnMCGFsvBd47RJwCDiQ4NYMuudqyEh-DjdvGS0qyjhgmsxbGqu8JrFvMINju4hLkSdvGSgqrp_ff1b-HiJvnhHxRWnR2-iYl5N6k02ThmUkiIlt2iQsDzADGU1CzilTUU4Y5jMCMaOzt5dI5TN5G-zGXo6-F8H_bExJGZaWetgUEHE5lkOJX9-up0_jeEE933mLhhhSMYpViqnXfN6OVarDwPtTJsTJaTmK53gXp_tUqEE7Rq69AKzHN-gsCHQBa84YOGHpkbOEn_FRG4iu9qzycBsuisIxJ4eZz4Uira_sgKOMZ6fdk838QDEht6IYB4eZz9fh9M-KyRo3F.%2522%252C%2522lwrtk%2522%253A%2522AAIEap9kDv0Fp1Edc6CWKcXc0Jb4UOtvK7tjdQNpyGyw45uTmwsUFPc%253D%2522%252C%2522epssw%2522%253A%252214*EItNc0ODDWbI-Wz4a3pxplcBNDZXR0znScPVQDp6oL4nDDDDi_lohDPPspt_B27B-6gxppB0Rw2-oskFqQHdLqjhPL4IlIjV95d0Fjru8z3HEb5vWhp_AC5SGHo3816uK0nS2nAHhs7iKs_tqJnTUTDDNnWETFzEC6GxDDd4oDDDYHV4DJ_tSuitlG8ZedIDWuDDh3_ltzjeAgpqApCzDdFADDDhBsooosEoo3yrEnoAdH8zM_s0pF0cgGFIUfF_TxuCU-hrRZ-DDWlhm0uVSN7d3uthn0g_dDQ_i57S8vODDPKdN0u-ixixMDu-PW52MLA9-yuIP938dBixMn8LMWj5MnD.%2522%257D',
+            'domain': '.aliexpress.com',
+            'isSecure': true,
+            'isHttpOnly': false,
+          },
+          {
+            'name': 'aep_history',
+            'value':
+                'keywords%5E%0Akeywords%09%0A%0Aproduct_selloffer%5E%0Aproduct_selloffer%091005010510256569%091005007044095151%091005012569313705%091005006683803905',
+            'domain': '.aliexpress.com',
+            'isSecure': false,
+            'isHttpOnly': false,
+          },
+          {
+            'name': '_atrk_siteuid',
+            'value': 'lwcwqYx-HkE0Fqr8',
+            'domain': '.ar.aliexpress.com',
+            'isSecure': false,
+            'isHttpOnly': false,
+          },
+          {
+            'name': 'g_state',
+            'value':
+                '{"i_l":0,"i_ll":1788801968375,"i_b":"a8P4lNtjX8v5c7DrftM2+GVj1fKX/KTUAf2aWT2nAH4","i_e":{"enable_itp_optimization":24},"i_et":1788801968375}',
+            'domain': 'ar.aliexpress.com',
+            'isSecure': false,
+            'isHttpOnly': false,
+          },
+          {
+            'name': 'isg',
+            'value':
+                'BOvrj99EBXcGrVmjIheYNKuEegnVAP-C59cCf11qYSio_A1e5daP0rbeUiSSZld6',
+            'domain': '.aliexpress.com',
+            'isSecure': true,
+            'isHttpOnly': false,
+          },
+          {
+            'name': 'acs_usuc_t',
+            'value':
+                'x_csrf=qoo_svffd5cr&acs_rt=f37ed2cb916c4dca98059d13c4121c4a',
+            'domain': '.aliexpress.com',
+            'isSecure': true,
+            'isHttpOnly': false,
+          },
+          {
+            'name': 'cna',
+            'value': 'L4nEIlaGR1sCAWZdB0I+da2o',
+            'domain': '.aliexpress.com',
+            'isSecure': true,
+            'isHttpOnly': false,
+          },
+        ];
+
+        for (final c in aliCookies) {
+          final domainStr = c['domain'] as String;
+          final targetUri = domainStr.contains('ar.aliexpress.com')
+              ? WebUri('https://ar.aliexpress.com')
+              : aliUri;
+          await cookieManager.setCookie(
+            url: targetUri,
+            name: c['name'] as String,
+            value: c['value'] as String,
+            domain: domainStr,
+            path: '/',
+            expiresDate: expiresDate,
+            isSecure: c['isSecure'] as bool,
+            isHttpOnly: c['isHttpOnly'] as bool,
+          );
+        }
       } else if (host.contains('iherb.com')) {
         await cookieManager.setCookie(
           url: WebUri(url),
@@ -2354,9 +2452,14 @@ class _WebViewScreenState extends State<WebViewScreen> {
                 function forceArabicAndSar(cookieStr) {
                   if (!cookieStr || typeof cookieStr !== 'string') return cookieStr;
                   if (cookieStr.includes('aep_usuc_f=')) {
-                    cookieStr = cookieStr.replace(/b_locale=[a-zA-Z_]+/g, 'b_locale=ar_SA');
+                    cookieStr = cookieStr.replace(/site=[a-zA-Z_]+/g, 'site=ara');
+                    cookieStr = cookieStr.replace(/b_locale=[a-zA-Z_]+/g, 'b_locale=ar_MA');
                     cookieStr = cookieStr.replace(/c_tp=[a-zA-Z]+/g, 'c_tp=SAR');
                     cookieStr = cookieStr.replace(/region=[a-zA-Z]+/g, 'region=SA');
+                  }
+                  if (cookieStr.includes('xman_us_f=')) {
+                    cookieStr = cookieStr.replace(/x_locale=[a-zA-Z_]+/g, 'x_locale=ar_MA');
+                    cookieStr = cookieStr.replace(/intl_locale=[a-zA-Z_]+/g, 'intl_locale=ar_MA');
                   }
                   if (cookieStr.includes('sc_g_cfg_f=')) {
                     cookieStr = cookieStr.replace(/sc_b_locale=[a-zA-Z_]+/g, 'sc_b_locale=ar_SA');
@@ -2539,6 +2642,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
             }
           },
         );
+        await WebViewScreen.setupCurrencyCookies(widget.initialUrl);
         debugPrint('[PERF] 4. CALLING controller.loadUrl(${widget.initialUrl}): ${_timeFromClick()} from card click');
         await controller.loadUrl(urlRequest: URLRequest(url: WebUri(widget.initialUrl)));
       },
