@@ -11,6 +11,7 @@ import '../cart/cart_screen.dart';
 import '../orders/orders_screen.dart';
 import '../profile/profile_screen.dart';
 import '../auth/email_verification_screen.dart';
+import '../../controllers/store_browser_controller.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -33,45 +34,73 @@ class _MainShellState extends State<MainShell> {
   @override
   Widget build(BuildContext context) {
     final authController = Get.find<AuthController>();
+    final storeController = StoreBrowserController.to;
 
     return Obx(() {
+      final isOpen = storeController.isStoreOpen.value;
+      final activeKey = storeController.activeStoreKey.value;
+      final stores = storeController.cachedStores;
+
       if (authController.isLoggedIn.value &&
           authController.user.value != null &&
           authController.user.value!['is_verified'] == false) {
         return const EmailVerificationScreen();
       }
 
-      return Scaffold(
-        body: IndexedStack(
-          index: _currentIndex,
-          children: _screens,
-        ),
-        bottomNavigationBar: Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(Theme.of(context).brightness == Brightness.dark ? 0.2 : 0.06),
-                blurRadius: 20,
-                offset: const Offset(0, -4),
+      return WillPopScope(
+        onWillPop: () async {
+          if (isOpen) {
+            storeController.closeStore();
+            return false;
+          }
+          return true;
+        },
+        child: Stack(
+          children: [
+            Scaffold(
+              body: IndexedStack(
+                index: _currentIndex,
+                children: _screens,
               ),
-            ],
-          ),
-          child: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _buildNavItem(0, Icons.home_outlined, Icons.home_rounded, 'home'.tr()),
-                  // _buildNavItem(1, Icons.grid_view_outlined, Icons.grid_view_rounded, 'categories'.tr()),
-                  _buildCartNavItem(index: 1),
-                  _buildNavItem(2, Icons.receipt_long_outlined, Icons.receipt_long_rounded, 'orders'.tr()),
-                  _buildNavItem(3, Icons.person_outline, Icons.person_rounded, 'profile'.tr()),
-                ],
+              bottomNavigationBar: Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(Theme.of(context).brightness == Brightness.dark ? 0.2 : 0.06),
+                      blurRadius: 20,
+                      offset: const Offset(0, -4),
+                    ),
+                  ],
+                ),
+                child: SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _buildNavItem(0, Icons.home_outlined, Icons.home_rounded, 'home'.tr()),
+                        // _buildNavItem(1, Icons.grid_view_outlined, Icons.grid_view_rounded, 'categories'.tr()),
+                        _buildCartNavItem(index: 1),
+                        _buildNavItem(2, Icons.receipt_long_outlined, Icons.receipt_long_rounded, 'orders'.tr()),
+                        _buildNavItem(3, Icons.person_outline, Icons.person_rounded, 'profile'.tr()),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
-          ),
+            for (final entry in stores.entries)
+              Positioned.fill(
+                child: Offstage(
+                  offstage: !isOpen || activeKey != entry.key,
+                  child: TickerMode(
+                    enabled: isOpen && activeKey == entry.key,
+                    child: entry.value,
+                  ),
+                ),
+              ),
+          ],
         ),
       );
     });

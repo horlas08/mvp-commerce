@@ -18,6 +18,7 @@ import '../../app/utils/url_helper.dart';
 import '../../controllers/support_controller.dart';
 import '../support/support_list_screen.dart';
 import '../support/notification_screen.dart';
+import '../../controllers/store_browser_controller.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -502,15 +503,10 @@ class _HomeScreenState extends State<HomeScreen> {
               debugPrint('[PERF] 1. CARD CLICKED: "${store['name']}" -> ${store['url']} at ${clickTime.toIso8601String()}');
               final arabicUrl = UrlHelper.convertToArabicUrl(store['url']);
               WebViewScreen.setupCurrencyCookies(arabicUrl);
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => WebViewScreen(
-                    initialUrl: arabicUrl,
-                    siteName: store['name'],
-                    clickTime: clickTime,
-                  ),
-                ),
+              StoreBrowserController.to.openStore(
+                name: store['name'],
+                url: arabicUrl,
+                clickTime: clickTime,
               );
             }
           : null,

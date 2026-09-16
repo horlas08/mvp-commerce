@@ -151,8 +151,6 @@ SITE_CONFIGS: Dict[str, ScraperConfig] = {
             # Banners, Bottom Navbar, and Registration Popup for Shein
             ".journey-contain",
             "#branch-app",
-            ".index-footer",
-            ".j-index-footer",
             ".show-register",
             ".j-show-register",
             ".show-register-es",

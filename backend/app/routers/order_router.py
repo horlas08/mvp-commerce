@@ -389,13 +389,15 @@ async def place_order(
         p_status = PaymentStatus.PENDING_APPROVAL
         order_status = OrderStatus.PENDING
 
+    shipping_address_data = addr.to_dict() if addr else ({"address_id": address_id} if address_id else None)
+
     # ── Create order ──────────────────────────────────────────────────────
     order = Order(
         user_id=user.id,
         total=total,
         status=order_status,
         cart_type=cart_type,
-        shipping_address={"address_id": address_id},
+        shipping_address=shipping_address_data,
         shipping_type=shipping_type,
         pickup_station_id=pickup_station_id,
         notes=additional_note,

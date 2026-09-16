@@ -540,8 +540,56 @@ async def list_orders_admin(
         count_query = count_query.where(Order.cart_type == cart_type)
     total = (await db.execute(count_query)).scalar_one()
 
+    # ── Resolve shipping address details from Address table ──────────────────
+    from app.models.address import Address
+    addr_ids = set()
+    user_ids_needing_addr = set()
+    for o in orders:
+        if isinstance(o.shipping_address, dict):
+            aid = o.shipping_address.get("address_id") or o.shipping_address.get("id")
+            if aid and not (o.shipping_address.get("street") or o.shipping_address.get("city")):
+                addr_ids.add(aid)
+        elif isinstance(o.shipping_address, str) and len(o.shipping_address.strip()) == 36:
+            addr_ids.add(o.shipping_address.strip())
+        elif not o.shipping_address and o.user_id:
+            user_ids_needing_addr.add(o.user_id)
+
+    address_map = {}
+    if addr_ids:
+        res_addr = await db.execute(select(Address).where(Address.id.in_(list(addr_ids))))
+        for a in res_addr.scalars().all():
+            address_map[a.id] = a.to_dict()
+
+    if user_ids_needing_addr:
+        res_u_addr = await db.execute(select(Address).where(Address.user_id.in_(list(user_ids_needing_addr))))
+        for a in res_u_addr.scalars().all():
+            if a.user_id not in address_map:
+                address_map[f"user_{a.user_id}"] = a.to_dict()
+
+    def resolve_shipping_address(o: Order) -> Optional[dict]:
+        addr = o.shipping_address
+        if isinstance(addr, dict):
+            aid = addr.get("address_id") or addr.get("id")
+            if aid and aid in address_map:
+                db_addr = address_map[aid]
+                return {
+                    **db_addr,
+                    **{k: v for k, v in addr.items() if v and k != "address_id"},
+                }
+            if addr.get("street") or addr.get("city") or addr.get("full_name"):
+                return addr
+            return addr
+        elif isinstance(addr, str) and addr.strip() in address_map:
+            return address_map[addr.strip()]
+        elif not addr and o.user_id and f"user_{o.user_id}" in address_map:
+            return address_map[f"user_{o.user_id}"]
+        elif isinstance(addr, str):
+            return {"street": addr}
+        return None
+
     def order_dict(o: Order):
         d = o.to_dict()
+        d["shipping_address"] = resolve_shipping_address(o)
         d["user_name"] = o.user.name if o.user else None
         d["user_email"] = o.user.email if o.user else None
         d["user_phone"] = o.user.phone if o.user else None
@@ -555,6 +603,7 @@ async def export_orders_excel(
     date_from: Optional[str] = Query(None, description="Start date YYYY-MM-DD"),
     date_to: Optional[str] = Query(None, description="End date YYYY-MM-DD"),
     status: Optional[str] = None,
+    cart_type: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_admin_user),
 ):
@@ -588,9 +637,57 @@ async def export_orders_excel(
         except ValueError:
             raise HTTPException(status_code=400, detail=f"Invalid status: {status}")
 
+    if cart_type:
+        query = query.where(Order.cart_type == cart_type)
+
     query = query.order_by(Order.created_at.desc())
     result = await db.execute(query)
     orders = result.scalars().all()
+
+    # ── Resolve shipping address details for export ─────────────────────────
+    from app.models.address import Address
+    export_addr_ids = set()
+    export_user_ids = set()
+    for o in orders:
+        if isinstance(o.shipping_address, dict):
+            aid = o.shipping_address.get("address_id") or o.shipping_address.get("id")
+            if aid and not (o.shipping_address.get("street") or o.shipping_address.get("city")):
+                export_addr_ids.add(aid)
+        elif isinstance(o.shipping_address, str) and len(o.shipping_address.strip()) == 36:
+            export_addr_ids.add(o.shipping_address.strip())
+        elif not o.shipping_address and o.user_id:
+            export_user_ids.add(o.user_id)
+
+    export_address_map = {}
+    if export_addr_ids:
+        res_exp_addr = await db.execute(select(Address).where(Address.id.in_(list(export_addr_ids))))
+        for a in res_exp_addr.scalars().all():
+            export_address_map[a.id] = a.to_dict()
+
+    if export_user_ids:
+        res_exp_u_addr = await db.execute(select(Address).where(Address.user_id.in_(list(export_user_ids))))
+        for a in res_exp_u_addr.scalars().all():
+            if a.user_id not in export_address_map:
+                export_address_map[f"user_{a.user_id}"] = a.to_dict()
+
+    def resolve_export_address(o: Order) -> dict:
+        addr = o.shipping_address
+        if isinstance(addr, dict):
+            aid = addr.get("address_id") or addr.get("id")
+            if aid and aid in export_address_map:
+                db_addr = export_address_map[aid]
+                return {
+                    **db_addr,
+                    **{k: v for k, v in addr.items() if v and k != "address_id"},
+                }
+            return addr
+        elif isinstance(addr, str) and addr.strip() in export_address_map:
+            return export_address_map[addr.strip()]
+        elif not addr and o.user_id and f"user_{o.user_id}" in export_address_map:
+            return export_address_map[f"user_{o.user_id}"]
+        elif isinstance(addr, str):
+            return {"street": addr}
+        return {}
 
     # ── Build workbook ────────────────────────────────────────────────────────
     wb = openpyxl.Workbook()
@@ -649,17 +746,17 @@ async def export_orders_excel(
         if not items:
             items = [None]  # type: ignore[list-item]  # ensure at least one row
 
-        addr = order.shipping_address or {}
-        delivery_name = addr.get("name") or addr.get("full_name") or ""
-        delivery_phone = addr.get("phone") or ""
+        addr = resolve_export_address(order)
+        delivery_name = addr.get("full_name") or addr.get("name") or (order.user.name if order.user else "")
+        delivery_phone = addr.get("phone") or (order.user.phone if order.user else "")
         city = addr.get("city") or addr.get("city_name") or ""
         state = addr.get("state") or addr.get("state_name") or addr.get("governorate") or ""
         street = addr.get("street") or addr.get("address") or addr.get("address_line1") or ""
         # GPS coordinates — stored as lat/lng, latitude/longitude, or nested location
-        lat = (addr.get("latitude") or addr.get("lat") or
+        lat = (addr.get("lat") or addr.get("latitude") or
                (addr.get("location") or {}).get("lat") or
                (addr.get("coordinates") or {}).get("lat") or "")
-        lng = (addr.get("longitude") or addr.get("lng") or
+        lng = (addr.get("lng") or addr.get("longitude") or
                (addr.get("location") or {}).get("lng") or
                (addr.get("coordinates") or {}).get("lng") or "")
 

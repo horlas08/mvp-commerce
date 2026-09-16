@@ -11,6 +11,7 @@ import 'controllers/home_controller.dart';
 import 'controllers/cart_controller.dart';
 import 'controllers/order_controller.dart';
 import 'controllers/support_controller.dart';
+import 'controllers/store_browser_controller.dart';
 import 'screens/splash/splash_screen.dart';
 
 void main() async {
@@ -26,6 +27,7 @@ void main() async {
   Get.put(CartController(), permanent: true);
   Get.put(OrderController(), permanent: true);
   Get.put(SupportController(), permanent: true);
+  Get.put(StoreBrowserController(), permanent: true);
 
   runApp(
     EasyLocalization(

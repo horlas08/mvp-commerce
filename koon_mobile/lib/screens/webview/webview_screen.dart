@@ -30,12 +30,15 @@ class WebViewScreen extends StatefulWidget {
   final Map<String, String>? preselectedVariants;
   final DateTime? clickTime;
 
+  final VoidCallback? onClose;
+
   const WebViewScreen({
     super.key,
     required this.initialUrl,
     required this.siteName,
     this.preselectedVariants,
     this.clickTime,
+    this.onClose,
   });
 
   // ── Currency Cookie Setter (force SAR display on the website itself) ──────
@@ -2282,6 +2285,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
           _webViewController!.goBack();
           return false;
         }
+        if (widget.onClose != null) {
+          widget.onClose!();
+          return false;
+        }
         return true;
       },
       child: Scaffold(
@@ -2311,7 +2318,13 @@ class _WebViewScreenState extends State<WebViewScreen> {
       leading: IconButton(
         icon: Icon(Icons.close_rounded, color: AppColors.error),
         tooltip: 'close'.tr(),
-        onPressed: () => Navigator.of(context).pop(),
+        onPressed: () {
+          if (widget.onClose != null) {
+            widget.onClose!();
+          } else {
+            Navigator.of(context).pop();
+          }
+        },
       ),
       title: Text(
         widget.siteName,
@@ -2577,6 +2590,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
         domStorageEnabled: true,
         databaseEnabled: true,
         cacheEnabled: true,
+        cacheMode: CacheMode.LOAD_DEFAULT,
+        hardwareAcceleration: true,
+        loadsImagesAutomatically: true,
+        allowsBackForwardNavigationGestures: true,
         transparentBackground: true,
         useShouldOverrideUrlLoading: true,
         mediaPlaybackRequiresUserGesture: false,
@@ -2601,6 +2618,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
             action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
           ),
           ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*analytics\\.google\\.com.*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          ContentBlocker(
             trigger: ContentBlockerTrigger(urlFilter: '.*googletagmanager\\.com.*'),
             action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
           ),
@@ -2610,6 +2631,87 @@ class _WebViewScreenState extends State<WebViewScreen> {
           ),
           ContentBlocker(
             trigger: ContentBlockerTrigger(urlFilter: '.*clarity\\.ms.*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          // Shein telemetry
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*srmdata\\.com.*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          // Amazon telemetry & ads
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*unagi.*\\.amazon\\..*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*fls-.*\\.amazon\\..*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*amazon-adsystem\\.com.*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          // AliExpress telemetry
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*aplus\\.aliexpress\\.com.*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*fourier\\.aliexpress\\.com.*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          // iHerb metrics & RUM
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*gtm-metrics\\.iherb\\.com.*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*bam\\.nr-data\\.net.*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*simonsignal\\.com.*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          // Social tracking pixels & retargeting
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*connect\\.facebook\\.net.*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*facebook\\.com/tr/.*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*pinterest\\.com.*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*bat\\.bing\\.com.*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*tr\\.snapchat\\.com.*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*alb\\.reddit\\.com.*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*criteo\\.(com|net).*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*taboola\\.com.*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*appier\\.net.*'),
+            action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+          ),
+          ContentBlocker(
+            trigger: ContentBlockerTrigger(urlFilter: '.*zmaticoo\\.com.*'),
             action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
           ),
         ],

@@ -39,14 +39,43 @@ class ScraperHelper {
       (function() {
         'use strict';
         const SELECTORS = __HIDE_SELECTORS_JSON__;
+
+        function isSentinelOrLoader(node) {
+          if (!node) return false;
+          try {
+            const cls = typeof node.className === 'string' ? node.className.toLowerCase() : '';
+            const id = (node.id || '').toLowerCase();
+            const role = (node.getAttribute && node.getAttribute('role') || '').toLowerCase();
+            const testStr = cls + ' ' + id + ' ' + role;
+            if (/loading|loadmore|load-more|infinite|sentinel|spinner|pagination|paging|feed-end|feed-bottom|feed_bottom|load_more/i.test(testStr)) {
+              return true;
+            }
+            if (node.querySelector && node.querySelector('[class*="loading"], [class*="spinner"], [class*="infinite"], [class*="sentinel"]')) {
+              return true;
+            }
+          } catch(e) {}
+          return false;
+        }
+
+        function isBottomBarSelector(sel) {
+          return /bottom-bar|bottombar|footer-bar|footerbar|action-bar|actionbar|buy-box|buybox|product-action|product-bottom|goods-detail-bottom/i.test(sel);
+        }
+
         function hideElements() {
+          const onPdp = isProductPage();
           for (const sel of SELECTORS) {
+            // Bottom-bar and action-bar selectors should ONLY be hidden on Product Detail Pages (PDP)
+            // so we do not squash infinite scroll feeds and category page footers.
+            if (isBottomBarSelector(sel) && !onPdp) {
+              continue;
+            }
             try {
               const nodes = document.querySelectorAll(sel);
               nodes.forEach(node => {
-                if (node.tagName && (node.tagName.toLowerCase() === 'body' || node.tagName.toLowerCase() === 'html')) {
-                  return;
-                }
+                if (!node || !node.tagName) return;
+                const tag = node.tagName.toLowerCase();
+                if (tag === 'body' || tag === 'html') return;
+                if (isSentinelOrLoader(node)) return;
                 node.setAttribute('style',
                   'display:none!important;visibility:hidden!important;' +
                   'pointer-events:none!important;opacity:0!important;' +
@@ -55,9 +84,15 @@ class ScraperHelper {
               });
             } catch(e) {}
           }
+          // Only unlock modal-locked body/html overflow without forcing 'auto !important'
+          // which breaks viewport-level scrolling and IntersectionObserver on WebKit/Chromium.
           try {
-            document.body.style.setProperty('overflow', 'auto', 'important');
-            document.documentElement.style.setProperty('overflow', 'auto', 'important');
+            if (document.body && document.body.style && document.body.style.overflow === 'hidden') {
+              document.body.style.overflow = '';
+            }
+            if (document.documentElement && document.documentElement.style && document.documentElement.style.overflow === 'hidden') {
+              document.documentElement.style.overflow = '';
+            }
           } catch(e) {}
         }
         function parsePriceString(text) {

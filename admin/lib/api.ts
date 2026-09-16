@@ -273,22 +273,28 @@ export const adminApi = {
     }),
 
   // Export Orders to Excel
-  exportOrdersExcel: async (params?: { date_from?: string; date_to?: string; status?: string }) => {
+  exportOrdersExcel: async (params?: { date_from?: string; date_to?: string; status?: string; cart_type?: string }) => {
     const q = new URLSearchParams();
     if (params?.date_from) q.set("date_from", params.date_from);
     if (params?.date_to) q.set("date_to", params.date_to);
     if (params?.status) q.set("status", params.status);
+    if (params?.cart_type) q.set("cart_type", params.cart_type);
     const token = typeof window !== "undefined" ? localStorage.getItem("admin_token") : null;
     const headers: Record<string, string> = {};
     if (token) headers["Authorization"] = `Bearer ${token}`;
     const base = getApiBase();
     const res = await fetch(`${base}/admin/orders/export?${q}`, { headers });
-    if (!res.ok) throw new Error("Export failed");
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: "Export failed" }));
+      throw new Error(err.detail || "Export failed");
+    }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `orders_${params?.date_from || "all"}_${params?.date_to || "all"}.xlsx`;
+    const cartSuffix = params?.cart_type ? `_${params.cart_type}` : "";
+    const statusSuffix = params?.status ? `_${params.status}` : "";
+    a.download = `orders${cartSuffix}${statusSuffix}_${params?.date_from || "all"}_${params?.date_to || "all"}.xlsx`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
