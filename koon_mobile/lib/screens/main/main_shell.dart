@@ -96,7 +96,10 @@ class _MainShellState extends State<MainShell> {
                   offstage: !isOpen || activeKey != entry.key,
                   child: TickerMode(
                     enabled: isOpen && activeKey == entry.key,
-                    child: entry.value,
+                    child: HeroMode(
+                      enabled: false,
+                      child: entry.value,
+                    ),
                   ),
                 ),
               ),
