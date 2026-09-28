@@ -314,6 +314,16 @@ export interface BankAccount {
   logo_url?: string;
 }
 
+export interface SitePricingPolicy {
+  shipping_mode?: "fixed" | "formula";
+  shipping_value?: number;
+  shipping_hidden?: boolean;
+  commission_mode?: "fixed" | "formula";
+  commission_value?: number;
+  commission_hidden?: boolean;
+  tax_percentage?: number;
+}
+
 export interface PricingPolicy {
   shipping_mode: "fixed" | "formula";
   shipping_value: number;
@@ -321,6 +331,8 @@ export interface PricingPolicy {
   commission_mode: "fixed" | "formula";
   commission_value: number;
   commission_hidden: boolean;
+  tax_percentage?: number;
+  sites?: Record<string, SitePricingPolicy>;
 }
 
 export interface PaymentMethod {

@@ -368,5 +368,13 @@
   "rating_label": "التقييم",
   "stock_label": "المخزون",
   "failed_to_add_to_cart": "فشل في الإضافة إلى السلة",
-  "auto_update_error": "التحديث التلقائي للأسعار"
+  "auto_update_error": "التحديث التلقائي للأسعار",
+  "tax": "الضريبة",
+  "discount": "الخصم",
+  "apply_coupon": "تطبيق الكوبون",
+  "coupon_code": "كود الخصم",
+  "apply": "تطبيق",
+  "remove": "إزالة",
+  "coupon_applied": "تم تطبيق الكوبون",
+  "invalid_coupon": "كود الخصم غير صالح"
 }

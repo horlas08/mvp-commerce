@@ -75,7 +75,7 @@ class CartController extends GetxController {
     super.onClose();
   }
 
-  Future<void> loadCart({bool autoRefresh = true}) async {
+  Future<void> loadCart({bool autoRefresh = true, bool forceRefreshAll = false}) async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('access_token');
     if (token == null) {
@@ -92,11 +92,25 @@ class CartController extends GetxController {
     _refreshTotalCount();
 
     if (autoRefresh && selectedCartType.value != 'internal') {
-      startCartRefresh();
+      startCartRefresh(forceAll: forceRefreshAll);
     }
   }
 
+  bool isItemSelected(Map<String, dynamic> item) {
+    final s = item['is_selected'];
+    if (s == null) return true;
+    if (s is bool) return s;
+    if (s is int) return s == 1;
+    if (s is String) return s.toLowerCase() == 'true' || s == '1';
+    return false;
+  }
+
   bool isItemFresh(Map<String, dynamic> item) {
+    final id = item['id']?.toString() ?? '';
+    if (id.isNotEmpty && itemStatuses[id] == 'success') {
+      return true;
+    }
+
     final rawPrice = item['price'] ?? item['product']?['price'];
     final parsedPrice = KoonCurrencyService.parsePriceToDouble(rawPrice);
     // If price is missing or 0 or unknown, it is NOT fresh -> needs refresh
@@ -111,8 +125,9 @@ class CartController extends GetxController {
     if (updatedAtStr != null && updatedAtStr.isNotEmpty) {
       final updatedAt = DateTime.tryParse(updatedAtStr)?.toLocal();
       if (updatedAt != null) {
+        final diff = now.difference(updatedAt);
         final isToday = updatedAt.year == now.year && updatedAt.month == now.month && updatedAt.day == now.day;
-        if (isToday) return true; // Price updated today -> fresh!
+        if (isToday || (diff.inHours >= 0 && diff.inHours < 20)) return true; // Price updated today or within ~20h -> fresh!
       }
     }
 
@@ -121,8 +136,9 @@ class CartController extends GetxController {
     if (createdAtStr != null && createdAtStr.isNotEmpty) {
       final createdAt = DateTime.tryParse(createdAtStr)?.toLocal();
       if (createdAt != null) {
+        final diff = now.difference(createdAt);
         final isToday = createdAt.year == now.year && createdAt.month == now.month && createdAt.day == now.day;
-        if (isToday) return true; // Added to cart today -> fresh!
+        if (isToday || (diff.inHours >= 0 && diff.inHours < 20)) return true; // Added to cart today or within ~20h -> fresh!
       }
     }
 
@@ -141,15 +157,24 @@ class CartController extends GetxController {
       final extUrl = item['external_url']?.toString() ?? '';
       if (extUrl.isEmpty) return false;
       if (forceAll) return true;
-      // Only refresh items that were NOT updated today or NOT added today
+      // Only auto-refresh selected items that are not fresh. Unselected items refresh if selected or on forced refresh.
+      if (!isItemSelected(item)) return false;
       return !isItemFresh(item);
     }).toList();
+
+    // Prioritize selected items
+    externalItems.sort((a, b) {
+      final aSel = isItemSelected(a) ? 0 : 1;
+      final bSel = isItemSelected(b) ? 0 : 1;
+      return aSel.compareTo(bSel);
+    });
 
     // For items that ARE fresh, mark them as 'success' immediately
     for (var item in cartItems) {
       final extUrl = item['external_url']?.toString() ?? '';
+      final id = item['id']?.toString() ?? '';
       if (extUrl.isNotEmpty && isItemFresh(item) && !forceAll) {
-        itemStatuses[item['id']] = 'success';
+        itemStatuses[id] = 'success';
       }
     }
 
@@ -161,18 +186,35 @@ class CartController extends GetxController {
     Get.log('[CartAutoUpdate] Found ${externalItems.length} stale items needing refresh in $selectedCartType cart');
 
     for (var item in externalItems) {
-      itemStatuses[item['id']] = 'pending';
+      final id = item['id']?.toString() ?? '';
+      itemStatuses[id] = 'pending';
     }
     refreshQueue.addAll(externalItems);
     _nextQueueItem();
   }
 
   void retryItemRefresh(String itemId) {
-    final item = cartItems.firstWhereOrNull((i) => i['id'] == itemId);
+    final strId = itemId.toString();
+    final item = cartItems.firstWhereOrNull((i) => i['id']?.toString() == strId);
     if (item == null) return;
-    itemStatuses[itemId] = 'pending';
-    itemErrors.remove(itemId);
-    refreshQueue.add(item);
+    itemStatuses[strId] = 'pending';
+    itemErrors.remove(strId);
+    
+    // Put retried item at the front of the queue
+    refreshQueue.removeWhere((i) => i['id']?.toString() == strId);
+    refreshQueue.insert(0, item);
+
+    // If currently running item is unselected, switch immediately to the retried item
+    final current = currentRefreshItem.value;
+    if (current != null && current['id']?.toString() != strId && !isItemSelected(current)) {
+      _refreshTimeout?.cancel();
+      final currentId = current['id']?.toString() ?? '';
+      itemStatuses[currentId] = 'pending';
+      refreshQueue.removeWhere((i) => i['id']?.toString() == currentId);
+      refreshQueue.add(current);
+      currentRefreshItem.value = null;
+    }
+
     if (currentRefreshItem.value == null) {
       _nextQueueItem();
     }
@@ -187,52 +229,64 @@ class CartController extends GetxController {
     }
     final item = refreshQueue.removeAt(0);
     currentRefreshItem.value = item;
-    itemStatuses[item['id']] = 'updating';
-    itemErrors.remove(item['id']);
+    final id = item['id']?.toString() ?? '';
+    itemStatuses[id] = 'updating';
+    itemErrors.remove(id);
 
-    Get.log('[CartAutoUpdate] ⏳ Refreshing item ${item['id']} (${item['title']})...');
+    Get.log('[CartAutoUpdate] ⏳ Refreshing item $id (${item['title']})...');
 
     _refreshTimeout = Timer(const Duration(seconds: 18), () {
-      if (currentRefreshItem.value?['id'] == item['id']) {
-        Get.log('[CartAutoUpdate] ⏱️ Timeout refreshing cart item ${item['id']}');
-        onRefreshFailed(item['id'], reason: 'Page load timed out (18s)');
+      if (currentRefreshItem.value?['id']?.toString() == id) {
+        Get.log('[CartAutoUpdate] ⏱️ Timeout refreshing cart item $id');
+        onRefreshFailed(id, reason: 'Page load timed out (18s)');
       }
     });
   }
 
   void onRefreshComplete(String itemId, String? newPrice, {bool outOfStock = false}) async {
     _refreshTimeout?.cancel();
+    final strId = itemId.toString();
     if (outOfStock) {
-      itemStatuses[itemId] = 'out_of_stock';
-      itemErrors.remove(itemId);
-      Get.log('[CartAutoUpdate] ⚠️ Item $itemId marked as Out of Stock');
-      await updateItemPrice(itemId, "Out of Stock");
+      itemStatuses[strId] = 'out_of_stock';
+      itemErrors.remove(strId);
+      Get.log('[CartAutoUpdate] ⚠️ Item $strId marked as Out of Stock');
+      await updateItemPrice(strId, "Out of Stock");
     } else if (newPrice != null && newPrice.isNotEmpty && !newPrice.toLowerCase().contains('unknown')) {
       final parsed = KoonCurrencyService.parsePriceToDouble(newPrice);
       if (parsed > 0) {
-        itemStatuses[itemId] = 'success';
-        itemErrors.remove(itemId);
-        itemUpdatedPrices[itemId] = newPrice;
-        final sarPrice = await KoonCurrencyService.convertToSar(newPrice);
-        Get.log('[CartAutoUpdate] ✅ Item $itemId refreshed: original=$newPrice -> SAR=$sarPrice');
-        await updateItemPrice(itemId, sarPrice);
+        itemStatuses[strId] = 'success';
+        itemErrors.remove(strId);
+        itemUpdatedPrices[strId] = newPrice;
+        String finalPrice = newPrice;
+        try {
+          finalPrice = await KoonCurrencyService.convertToSar(newPrice);
+          Get.log('[CartAutoUpdate] ✅ Item $strId refreshed: original=$newPrice -> SAR=$finalPrice');
+        } catch (e) {
+          Get.log('[CartAutoUpdate] Error converting price to SAR: $e');
+        }
+        await updateItemPrice(strId, finalPrice);
       } else {
-        itemStatuses[itemId] = 'error';
-        itemErrors[itemId] = 'Could not parse price: $newPrice';
-        Get.log('[CartAutoUpdate] ❌ Failed parsing price for $itemId: $newPrice');
+        itemStatuses[strId] = 'error';
+        itemErrors[strId] = 'Could not parse price: $newPrice';
+        Get.log('[CartAutoUpdate] ❌ Failed parsing price for $strId: $newPrice');
       }
     } else {
-      itemStatuses[itemId] = 'success';
-      itemErrors.remove(itemId);
+      itemStatuses[strId] = 'success';
+      itemErrors.remove(strId);
+      final rawPrice = cartItems.firstWhereOrNull((i) => i['id']?.toString() == strId)?['price']?.toString() ?? '';
+      if (rawPrice.isNotEmpty) {
+        await updateItemPrice(strId, rawPrice);
+      }
     }
     _nextQueueItem();
   }
 
   void onRefreshFailed(String itemId, {String? reason}) {
     _refreshTimeout?.cancel();
-    itemStatuses[itemId] = 'error';
-    itemErrors[itemId] = reason ?? 'Auto-update scrape failed';
-    Get.log('[CartAutoUpdate] ❌ Item $itemId refresh failed: $reason');
+    final strId = itemId.toString();
+    itemStatuses[strId] = 'error';
+    itemErrors[strId] = reason ?? 'Auto-update scrape failed';
+    Get.log('[CartAutoUpdate] ❌ Item $strId refresh failed: $reason');
     _nextQueueItem();
   }
 
@@ -317,7 +371,8 @@ class CartController extends GetxController {
   }
 
   Future<void> updateItemPrice(String itemId, String price) async {
-    final index = cartItems.indexWhere((i) => i['id'] == itemId);
+    final strId = itemId.toString();
+    final index = cartItems.indexWhere((i) => i['id']?.toString() == strId);
     if (index != -1) {
       final updated = Map<String, dynamic>.from(cartItems[index]);
       updated['price'] = price;
@@ -330,23 +385,30 @@ class CartController extends GetxController {
       cartItems[index] = updated;
       cartItems.refresh();
     }
-    await _cartService.updateCartItem(itemId, price: price);
+    await _cartService.updateCartItem(strId, price: price);
   }
 
   Future<void> toggleSelection(String itemId, bool isSelected) async {
-    final index = cartItems.indexWhere((i) => i['id'] == itemId);
+    final strId = itemId.toString();
+    final index = cartItems.indexWhere((i) => i['id']?.toString() == strId);
     if (index != -1) {
       final updated = Map<String, dynamic>.from(cartItems[index]);
       updated['is_selected'] = isSelected;
       cartItems[index] = updated;
       cartItems.refresh();
+
+      // If user selected an item that needs refresh, trigger refresh for it!
+      if (isSelected && (updated['external_url']?.toString() ?? '').isNotEmpty && !isItemFresh(updated)) {
+        retryItemRefresh(strId);
+      }
     }
-    await _cartService.updateCartItem(itemId, isSelected: isSelected);
+    await _cartService.updateCartItem(strId, isSelected: isSelected);
   }
 
   Future<void> removeItem(String itemId) async {
+    final strId = itemId.toString();
     // Optimistically remove from local list so UI updates immediately
-    final removedIndex = cartItems.indexWhere((i) => i['id'] == itemId);
+    final removedIndex = cartItems.indexWhere((i) => i['id']?.toString() == strId);
     Map<String, dynamic>? removedItem;
     if (removedIndex != -1) {
       removedItem = cartItems[removedIndex];
@@ -354,11 +416,11 @@ class CartController extends GetxController {
       cartItems.refresh();
     }
     // Also clear any status tracking for this item
-    itemStatuses.remove(itemId);
-    itemErrors.remove(itemId);
-    itemUpdatedPrices.remove(itemId);
+    itemStatuses.remove(strId);
+    itemErrors.remove(strId);
+    itemUpdatedPrices.remove(strId);
 
-    final success = await _cartService.removeFromCart(itemId);
+    final success = await _cartService.removeFromCart(strId);
     if (!success && removedItem != null) {
       // Restore the item if the API call failed
       if (removedIndex <= cartItems.length) {
@@ -381,7 +443,7 @@ class CartController extends GetxController {
   double get totalAmount {
     double total = 0;
     for (var item in cartItems) {
-      if (item['is_selected'] == true) {
+      if (isItemSelected(item)) {
         final rawPrice = item['price'] ?? item['product']?['price'];
         final price = KoonCurrencyService.parsePriceToDouble(rawPrice);
         final qty = item['quantity'] ?? 1;

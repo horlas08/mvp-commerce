@@ -21,10 +21,18 @@ class CouponService {
         ApiConstants.validateCoupon,
         data: {'code': code, 'order_total': orderTotal},
       );
-      if (response.statusCode == 200) {
-        return response.data;
+      if (response.statusCode == 200 && response.data is Map) {
+        return Map<String, dynamic>.from(response.data);
       }
-    } catch (_) {}
+    } catch (e) {
+      if (e is DioException && e.response?.data != null) {
+        final data = e.response!.data;
+        if (data is Map && data.containsKey('detail')) {
+          throw Exception(data['detail'].toString());
+        }
+      }
+      rethrow;
+    }
     return null;
   }
 }

@@ -23,6 +23,7 @@ class WishlistService {
     String? price,
     String? imageUrl,
     String source = "internal",
+    String? selectionsJson,
   }) async {
     try {
       String? convertedPrice = price;
@@ -38,6 +39,7 @@ class WishlistService {
           if (convertedPrice != null) 'price': convertedPrice,
           if (imageUrl != null) 'image_url': imageUrl,
           'source': source,
+          if (selectionsJson != null) 'selections_json': selectionsJson,
         },
       );
       if (response.statusCode == 200) {

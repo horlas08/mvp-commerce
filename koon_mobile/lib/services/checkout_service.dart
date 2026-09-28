@@ -57,6 +57,7 @@ class CheckoutService {
     String? pickupStationId,
     String? additionalNote,
     bool allowTeamReview = false,
+    String? couponCode,
     required String paymentMethodId, // 'wallet' or admin method id
     Map<String, String>? paymentFormData,
     XFile? paymentProofImage,
@@ -71,6 +72,7 @@ class CheckoutService {
         if (additionalNote != null && additionalNote.isNotEmpty)
           'additional_note': additionalNote,
         'allow_team_review': allowTeamReview,
+        if (couponCode != null && couponCode.isNotEmpty) 'coupon_code': couponCode,
         'payment_method_id': paymentMethodId,
       });
 

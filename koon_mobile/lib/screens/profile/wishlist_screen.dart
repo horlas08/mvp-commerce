@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:get/get.dart' hide Trans;
@@ -5,12 +6,14 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/utils/app_snackbar.dart';
+import '../../app/utils/url_helper.dart';
 import '../../services/wishlist_service.dart';
 import '../../controllers/cart_controller.dart';
 import '../../controllers/settings_controller.dart';
 import '../../services/currency_service.dart';
 import '../product/product_detail_screen.dart';
 import '../auth/login_screen.dart';
+import '../webview/webview_screen.dart';
 
 class WishlistScreen extends StatefulWidget {
   const WishlistScreen({super.key});
@@ -61,6 +64,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
       imageUrl: item['image_url'],
       externalUrl: item['external_url'],
       siteName: source == 'internal' ? 'Internal' : source,
+      selectionsJson: item['selections_json'] as String?,
     );
     if (result == AddToCartStatus.success) {
       if (mounted) AppSnackbar.success(context, 'added_to_cart'.tr());
@@ -123,14 +127,41 @@ class _WishlistScreenState extends State<WishlistScreen> {
                       productMap['images'] ??= [imageUrl];
                     }
 
+                    Map<String, String>? preselected;
+                    final rawSelections = item['selections_json'] as String?;
+                    if (rawSelections != null && rawSelections.isNotEmpty) {
+                      try {
+                        final decoded = jsonDecode(rawSelections);
+                        if (decoded is Map) {
+                          preselected = decoded.map(
+                            (k, v) => MapEntry(k.toString(), v.toString()),
+                          );
+                        }
+                      } catch (_) {}
+                    }
+                    final String? variantSummary =
+                        preselected != null && preselected.isNotEmpty
+                            ? preselected.values.join(' • ')
+                            : null;
+
                     return Obx(() => GestureDetector(
                           onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => ProductDetailScreen(product: productMap),
-                              ),
-                            );
+                            final externalUrl = item['external_url']?.toString();
+                            if (externalUrl != null && externalUrl.isNotEmpty) {
+                              Get.to(() => WebViewScreen(
+                                    initialUrl: UrlHelper.convertToArabicUrl(externalUrl),
+                                    siteName: (item['source'] ?? 'AMAZON').toString().toUpperCase(),
+                                    preselectedVariants: preselected,
+                                    preselectedImageUrl: imageUrl,
+                                  ));
+                            } else {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => ProductDetailScreen(product: productMap),
+                                ),
+                              );
+                            }
                           },
                           child: Container(
                             decoration: BoxDecoration(
@@ -174,6 +205,19 @@ class _WishlistScreenState extends State<WishlistScreen> {
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w500)),
+                                        if (variantSummary != null && variantSummary.isNotEmpty) ...[
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            variantSummary,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: GoogleFonts.inter(
+                                              fontSize: 10,
+                                              color: AppColors.textSecondary,
+                                              fontWeight: FontWeight.w400,
+                                            ),
+                                          ),
+                                        ],
                                         const Spacer(),
                                         Text(
                                           _settingsController.formatPrice(priceVal, originalCurrency),

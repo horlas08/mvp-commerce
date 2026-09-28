@@ -1,7 +1,7 @@
 import os
 import shutil
 import uuid
-from typing import Optional
+from typing import Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, File, UploadFile, BackgroundTasks
 from pydantic import BaseModel
 from datetime import datetime, timedelta
@@ -872,13 +872,25 @@ async def export_orders_excel(
 PRICING_POLICY_KEY = "pricing_policy"
 
 
+class SitePricingPolicy(BaseModel):
+    shipping_mode: str = "fixed"  # "fixed" | "formula"
+    shipping_value: float = 0.0
+    shipping_hidden: bool = False
+    commission_mode: str = "fixed"  # "fixed" | "formula"
+    commission_value: float = 0.0
+    commission_hidden: bool = False
+    tax_percentage: Optional[float] = None  # None means fallback to global default
+
+
 class PricingPolicyRequest(BaseModel):
-    shipping_mode: str  # "fixed" | "formula"
-    shipping_value: float  # fixed amount OR multiplier (e.g. 0.05)
-    shipping_hidden: bool  # hide shipping statement on product page
-    commission_mode: str  # "fixed" | "formula"
-    commission_value: float
-    commission_hidden: bool
+    shipping_mode: str = "fixed"  # "fixed" | "formula"
+    shipping_value: float = 0.0  # fixed amount OR multiplier (e.g. 0.05)
+    shipping_hidden: bool = False  # hide shipping statement on product page
+    commission_mode: str = "fixed"  # "fixed" | "formula"
+    commission_value: float = 0.0
+    commission_hidden: bool = False
+    tax_percentage: float = 0.0  # Global tax rate percentage (default 0.0)
+    sites: Optional[Dict[str, Any]] = None  # Dynamic site-specific rates
 
 
 @router.get("/pricing-policy")
@@ -886,7 +898,7 @@ async def get_pricing_policy(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_admin_user),
 ):
-    """Get global pricing policy (shipping & commission defaults)."""
+    """Get global and site-specific pricing policies."""
     import json
     from app.models.app_setting import AppSetting
     result = await db.execute(select(AppSetting).where(AppSetting.key == PRICING_POLICY_KEY))
@@ -899,11 +911,79 @@ async def get_pricing_policy(
             "commission_mode": "fixed",
             "commission_value": 0.0,
             "commission_hidden": False,
+            "tax_percentage": 0.0,
+            "sites": {},
         }
     try:
-        return json.loads(setting.value_en)
+        data = json.loads(setting.value_en)
+        if not isinstance(data, dict):
+            data = {}
+        data.setdefault("shipping_mode", "fixed")
+        data.setdefault("shipping_value", 0.0)
+        data.setdefault("shipping_hidden", False)
+        data.setdefault("commission_mode", "fixed")
+        data.setdefault("commission_value", 0.0)
+        data.setdefault("commission_hidden", False)
+        data.setdefault("tax_percentage", 0.0)
+        data.setdefault("sites", {})
+        return data
     except Exception:
-        return json.loads("{}")
+        return {
+            "shipping_mode": "fixed",
+            "shipping_value": 0.0,
+            "shipping_hidden": False,
+            "commission_mode": "fixed",
+            "commission_value": 0.0,
+            "commission_hidden": False,
+            "tax_percentage": 0.0,
+            "sites": {},
+        }
+
+
+@router.get("/pricing-policy/public")
+async def get_public_pricing_policy(
+    db: AsyncSession = Depends(get_db),
+):
+    """Public read-only pricing policy with site-specific rates and fallbacks."""
+    import json
+    from app.models.app_setting import AppSetting
+    result = await db.execute(select(AppSetting).where(AppSetting.key == PRICING_POLICY_KEY))
+    setting = result.scalar_one_or_none()
+    if not setting:
+        return {
+            "shipping_mode": "fixed",
+            "shipping_value": 0.0,
+            "shipping_hidden": False,
+            "commission_mode": "fixed",
+            "commission_value": 0.0,
+            "commission_hidden": False,
+            "tax_percentage": 0.0,
+            "sites": {},
+        }
+    try:
+        data = json.loads(setting.value_en)
+        if not isinstance(data, dict):
+            data = {}
+        data.setdefault("shipping_mode", "fixed")
+        data.setdefault("shipping_value", 0.0)
+        data.setdefault("shipping_hidden", False)
+        data.setdefault("commission_mode", "fixed")
+        data.setdefault("commission_value", 0.0)
+        data.setdefault("commission_hidden", False)
+        data.setdefault("tax_percentage", 0.0)
+        data.setdefault("sites", {})
+        return data
+    except Exception:
+        return {
+            "shipping_mode": "fixed",
+            "shipping_value": 0.0,
+            "shipping_hidden": False,
+            "commission_mode": "fixed",
+            "commission_value": 0.0,
+            "commission_hidden": False,
+            "tax_percentage": 0.0,
+            "sites": {},
+        }
 
 
 @router.post("/pricing-policy")
@@ -912,7 +992,7 @@ async def save_pricing_policy(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_admin_user),
 ):
-    """Save global pricing policy (shipping & commission defaults)."""
+    """Save global and per-site pricing policy."""
     import json
     from app.models.app_setting import AppSetting
     payload = json.dumps(req.dict())

@@ -125,6 +125,13 @@ class _PriceBreakdown extends StatelessWidget {
       final commissionDisplay = ctrl.commissionFee > 0
           ? settings.formatPrice(ctrl.commissionFee, 'SAR')
           : settings.formatPrice(0.0, 'SAR');
+      final discountDisplay = ctrl.discount > 0
+          ? '-${settings.formatPrice(ctrl.discount, 'SAR')}'
+          : settings.formatPrice(0.0, 'SAR');
+      final taxLabel = ctrl.taxPercentage.value > 0
+          ? '${'tax'.tr()} (${ctrl.taxPercentage.value.toStringAsFixed(ctrl.taxPercentage.value.truncateToDouble() == ctrl.taxPercentage.value ? 0 : 1)}%)'
+          : 'tax'.tr();
+      final taxDisplay = settings.formatPrice(ctrl.tax, 'SAR');
 
       return Container(
         padding: const EdgeInsets.all(16),
@@ -138,6 +145,11 @@ class _PriceBreakdown extends StatelessWidget {
               'subtotal'.tr(),
               settings.formatPrice(ctrl.subtotal, 'SAR'),
               Colors.white70,
+            ),
+            _priceRow(
+              'discount'.tr(),
+              discountDisplay,
+              ctrl.discount > 0 ? const Color(0xFF4ADE80) : Colors.white70,
             ),
             _priceRow(
               'shipping_cost'.tr(),
@@ -155,6 +167,11 @@ class _PriceBreakdown extends StatelessWidget {
                 settings.formatPrice(ctrl.teamReviewFee, 'SAR'),
                 Colors.white70,
               ),
+            _priceRow(
+              taxLabel,
+              taxDisplay,
+              Colors.white70,
+            ),
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 10),
               child: Divider(color: Colors.white24, height: 1),

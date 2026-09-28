@@ -25,3 +25,8 @@ async def init_db():
     """Create all tables on startup."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        try:
+            from sqlalchemy import text
+            await conn.execute(text("ALTER TABLE orders ADD COLUMN tax_amount FLOAT DEFAULT 0.0"))
+        except Exception:
+            pass

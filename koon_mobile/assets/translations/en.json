@@ -369,5 +369,13 @@
   "rating_label": "Rating",
   "stock_label": "Stock",
   "failed_to_add_to_cart": "Failed to add to cart",
-  "auto_update_error": "Price Auto-Update"
+  "auto_update_error": "Price Auto-Update",
+  "tax": "Tax",
+  "discount": "Discount",
+  "apply_coupon": "Apply Coupon",
+  "coupon_code": "Coupon Code",
+  "apply": "Apply",
+  "remove": "Remove",
+  "coupon_applied": "Coupon applied",
+  "invalid_coupon": "Invalid coupon code"
 }

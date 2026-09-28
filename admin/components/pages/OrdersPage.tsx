@@ -616,6 +616,15 @@ export default function OrdersPage() {
                         )}
                         <div style={{ flex: 1 }}>
                           <div style={{ fontSize: 13, fontWeight: 600 }}>{item.title}</div>
+                          {item.variant_info && typeof item.variant_info === "object" && Object.keys(item.variant_info).length > 0 && (
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
+                              {Object.entries(item.variant_info).map(([k, v]) => (
+                                <span key={k} style={{ fontSize: 10, background: "var(--bg-secondary)", padding: "2px 6px", borderRadius: 4, color: "var(--text-primary)", border: "1px solid var(--border)" }}>
+                                  <strong>{k}:</strong> {String(v)}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                           <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
                             <span>{t("source")}: {item.source.toUpperCase()}</span>
                             {item.external_url && (

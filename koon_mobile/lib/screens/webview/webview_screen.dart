@@ -28,6 +28,7 @@ class WebViewScreen extends StatefulWidget {
   /// When set, the WebView will automatically click the matching variant swatches
   /// after the product page has loaded.
   final Map<String, String>? preselectedVariants;
+  final String? preselectedImageUrl;
   final DateTime? clickTime;
 
   final VoidCallback? onClose;
@@ -37,6 +38,7 @@ class WebViewScreen extends StatefulWidget {
     required this.initialUrl,
     required this.siteName,
     this.preselectedVariants,
+    this.preselectedImageUrl,
     this.clickTime,
     this.onClose,
   });
@@ -242,11 +244,14 @@ class _WebViewScreenState extends State<WebViewScreen> {
   Map<String, dynamic>? _currentConfig;
   Map<String, dynamic>? _currentProduct;
   String? _loadError;
+  bool _isActionLoading = false;
   /// Prevents injecting pre-selections more than once per navigation.
   bool _preselectInjected = false;
   /// When iHerb navigates to a variant URL, this completer is set so that
   /// _handleProductAction can await the page load before re-extracting the price.
   Completer<void>? _pendingIherbNavCompleter;
+  final ValueNotifier<Map<String, dynamic>?> _liveProductNotifier =
+      ValueNotifier<Map<String, dynamic>?>(null);
 
   // ── HTML source dumping (dev tool) ────────────────────────────────────────
   // Saves the live page HTML to <appExternalStorage>/<site>_source.html so we
@@ -1465,6 +1470,85 @@ class _WebViewScreenState extends State<WebViewScreen> {
                   }
                 }
               }
+            // ── SHEIN Size & Color Swatch selection ──
+            const isSheinSite = window.location.hostname.includes('shein') || window.location.href.includes('shein') || document.querySelector('.goods-size__sizes-item, .bs-color__item');
+            if (isSheinSite) {
+              const normName = (name || '').toLowerCase().trim();
+              const normVal = (value || '').toLowerCase().trim();
+              const isSizeIntent = normName.includes('size') || normName.includes('مقاس') || normName.includes('قياس');
+              const isColorIntent = normName.includes('color') || normName.includes('colour') || normName.includes('لون') || normName.includes('style');
+
+              function escapeReg(s) {
+                return (s || '').split('').map(function(c) { return '.*+?^()[]{}|\\'.indexOf(c) !== -1 ? '\\\\' + c : c; }).join('');
+              }
+
+              function matchesSheinSize(el, targetVal) {
+                const dataVal = (el.getAttribute('data-attr_value') || '').toLowerCase().trim();
+                const ariaVal = (el.getAttribute('aria-label') || '').toLowerCase().trim();
+                const textVal = (el.textContent || '').toLowerCase().trim();
+                if (!dataVal && !ariaVal && !textVal) return false;
+                if (dataVal === targetVal || ariaVal === targetVal || textVal === targetVal) return true;
+
+                const escaped = escapeReg(targetVal);
+                const wordRegex = new RegExp('(?:^|[^a-z0-9])' + escaped + '(?:[^a-z0-9]|\$)', 'i');
+                if (wordRegex.test(ariaVal) || wordRegex.test(textVal) || wordRegex.test(dataVal)) return true;
+
+                if (dataVal) {
+                  const dataEsc = escapeReg(dataVal);
+                  const dataRegex = new RegExp('(?:^|[^a-z0-9])' + dataEsc + '(?:[^a-z0-9]|\$)', 'i');
+                  if (dataRegex.test(targetVal)) return true;
+                }
+                return false;
+              }
+
+              function matchesSheinColor(el, targetVal) {
+                const dataVal = (el.getAttribute('data-attr_value') || '').toLowerCase().trim();
+                const ariaVal = (el.getAttribute('aria-label') || '').toLowerCase().trim();
+                const textVal = (el.textContent || '').toLowerCase().trim();
+                if (!dataVal && !ariaVal && !textVal) return false;
+                if (dataVal === targetVal || ariaVal === targetVal || textVal === targetVal) return true;
+                if (ariaVal && (ariaVal.includes(targetVal) || targetVal.includes(ariaVal))) return true;
+                return false;
+              }
+
+              if (isSizeIntent || !isColorIntent) {
+                const sizeItems = document.querySelectorAll('.goods-size__sizes-item, [class*="sizes-item"], [class*="size__item"], [class*="size-item"]');
+                let foundSize = false;
+                for (const item of sizeItems) {
+                  if (item.classList.contains('pdp-enhanced') || item.classList.contains('goods-size__options-item')) continue;
+                  if (matchesSheinSize(item, normVal)) {
+                    const cls = (item.className || '') + ' ' + (item.getAttribute('aria-selected') || '') + ' ' + (item.getAttribute('aria-checked') || '');
+                    const isSelected = /selected|active|true/i.test(cls);
+                    if (!isSelected) {
+                      try { item.scrollIntoView({ behavior: 'instant', block: 'nearest' }); } catch(e) {}
+                      simulateClick(item);
+                      const inner = item.querySelector('p, span, a, div');
+                      if (inner) simulateClick(inner);
+                    }
+                    foundSize = true;
+                  }
+                }
+                if (foundSize) return true;
+              }
+
+              if (isColorIntent || !isSizeIntent) {
+                const colorItems = document.querySelectorAll('.bs-color__item, [class*="color__item"], .bs-color-circle-image__item');
+                let foundColor = false;
+                for (const item of colorItems) {
+                  if (matchesSheinColor(item, normVal)) {
+                    const cls = (item.className || '') + ' ' + (item.getAttribute('aria-selected') || '') + ' ' + (item.getAttribute('aria-checked') || '');
+                    const isSelected = /selected|active|true/i.test(cls);
+                    if (!isSelected) {
+                      try { item.scrollIntoView({ behavior: 'instant', block: 'nearest' }); } catch(e) {}
+                      simulateClick(item);
+                      const inner = item.querySelector('img, span, div, a');
+                      if (inner) simulateClick(inner);
+                    }
+                    foundColor = true;
+                  }
+                }
+                if (foundColor) return true;
+              }
             }
           } catch(e) {}
           return false;
@@ -1495,6 +1579,95 @@ class _WebViewScreenState extends State<WebViewScreen> {
     return 'internal';
   }
 
+  static bool _matchAttrName(String a, String b) {
+    String clean(String s) {
+      var t = s.trim().toLowerCase().replaceAll(RegExp(r'[:：]'), '').trim();
+      t = t.replaceAll(RegExp(r'^(ال|al-?)', caseSensitive: false), '').trim();
+      return t;
+    }
+    final ca = clean(a);
+    final cb = clean(b);
+    if (ca.isEmpty || cb.isEmpty) return false;
+    if (ca == cb) return true;
+    if ((ca.contains('لون') || ca.contains('color')) &&
+        (cb.contains('لون') || cb.contains('color'))) return true;
+    if ((ca.contains('حجم') || ca.contains('مقاس') || ca.contains('سعة') || ca.contains('size')) &&
+        (cb.contains('حجم') || cb.contains('مقاس') || cb.contains('سعة') || cb.contains('size'))) return true;
+    return false;
+  }
+
+  void _applyPreselectedVariantsToProduct(Map<String, dynamic> product) {
+    final preselected = widget.preselectedVariants;
+    if (preselected == null || preselected.isEmpty) return;
+    if (_preselectInjected) return;
+
+    final rawSelections = product['selections'];
+    if (rawSelections is! List) return;
+
+    final selections = _parseSelections(rawSelections);
+    bool changed = false;
+    final rawVariantImages = product['variant_images'];
+    final variantImagesMap = (rawVariantImages is Map)
+        ? Map<String, dynamic>.from(rawVariantImages)
+        : <String, dynamic>{};
+
+    for (final s in selections) {
+      final name = (s['name'] ?? '').toString();
+      for (final entry in preselected.entries) {
+        if (_matchAttrName(entry.key, name)) {
+          if (entry.value.isNotEmpty && s['value'] != entry.value) {
+            s['value'] = entry.value;
+            changed = true;
+          }
+          final opts = (s['options'] is List)
+              ? List<String>.from((s['options'] as List).map((e) => e.toString()))
+              : <String>[];
+          if (!opts.contains(entry.value) && entry.value.isNotEmpty) {
+            final rawSkuRegex = RegExp(r'^\d+(-\d+)+$');
+            int replaceIdx = -1;
+            for (int i = 0; i < opts.length; i++) {
+              if (rawSkuRegex.hasMatch(opts[i])) {
+                replaceIdx = i;
+                break;
+              }
+            }
+            if (replaceIdx >= 0) {
+              final oldRaw = opts[replaceIdx];
+              opts[replaceIdx] = entry.value;
+              if (variantImagesMap.containsKey(oldRaw)) {
+                variantImagesMap[entry.value] = variantImagesMap.remove(oldRaw);
+              }
+            } else {
+              opts.add(entry.value);
+            }
+            s['options'] = opts;
+            changed = true;
+          }
+          break;
+        }
+      }
+    }
+
+    if (changed) {
+      product['selections'] = selections;
+      product['variant_images'] = variantImagesMap;
+      final summary = selections
+          .where((s) => (s['value'] ?? '').toString().isNotEmpty)
+          .map((s) => '${s['name']}: ${s['value']}')
+          .join(' | ');
+      if (summary.isNotEmpty) {
+        product['selection_summary'] = summary;
+      }
+      for (final entry in preselected.entries) {
+        final img = variantImagesMap[entry.value]?.toString();
+        if (img != null && img.isNotEmpty) {
+          product['image_url'] = img;
+          break;
+        }
+      }
+    }
+  }
+
   Future<Map<String, dynamic>?> _fetchProductFromPage() async {
     if (_webViewController == null) return _currentProduct;
     try {
@@ -1504,6 +1677,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
       );
       if (raw == null) return _currentProduct;
       final data = Map<String, dynamic>.from(raw as Map);
+      _applyPreselectedVariantsToProduct(data);
       if (mounted) setState(() => _currentProduct = data);
       return data;
     } catch (_) {
@@ -1533,18 +1707,29 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   Future<Map<String, dynamic>?> _onSkuOptionSelected(
     String name,
-    String value,
-  ) async {
+    String value, [
+    String? optImgUrl,
+  ]) async {
     if (_webViewController == null) return null;
     try {
       final js =
-          'window.__koonSelectOption ? window.__koonSelectOption(${jsonEncode(name)}, ${jsonEncode(value)}) : false';
+          'window.__koonSelectOption ? window.__koonSelectOption(${jsonEncode(name)}, ${jsonEncode(value)}, ${jsonEncode(optImgUrl)}) : false';
       await _webViewController!.evaluateJavascript(source: js);
       // Wait for DOM transition/network to update the price/image
-      // Amazon needs ~600-700ms for its JS to update the live price block
-      await Future.delayed(const Duration(milliseconds: 700));
+      // Amazon / AliExpress / Shein need ~800-1100ms, iHerb route transition needs ~1400ms
+      if (_cartTypeForSite() == 'iherb') {
+        await Future.delayed(const Duration(milliseconds: 1400));
+      } else if (_cartTypeForSite() == 'amazon') {
+        await Future.delayed(const Duration(milliseconds: 1200));
+      } else {
+        await Future.delayed(const Duration(milliseconds: 900));
+      }
       // Re-scrape the product metadata from the page
-      return await _fetchProductFromPage();
+      final data = await _fetchProductFromPage();
+      if (data != null && mounted) {
+        _liveProductNotifier.value = data;
+      }
+      return data;
     } catch (_) {
       return null;
     }
@@ -1568,9 +1753,12 @@ class _WebViewScreenState extends State<WebViewScreen> {
   }
 
   Future<void> _handleProductAction(String action) async {
-    final rawProduct = await _fetchProductFromPage();
-    if (rawProduct == null) return;
-    Map<String, dynamic> product = rawProduct;
+    if (_isActionLoading) return;
+    setState(() => _isActionLoading = true);
+    try {
+      final rawProduct = await _fetchProductFromPage();
+      if (rawProduct == null) return;
+      Map<String, dynamic> product = rawProduct;
 
     final authController = Get.find<AuthController>();
     if (!authController.isLoggedIn.value) {
@@ -1672,11 +1860,28 @@ class _WebViewScreenState extends State<WebViewScreen> {
           action: action,
           onOpenNativePicker: _openNativeSkuPicker,
           onSelectOption: _onSkuOptionSelected,
+          liveProductNotifier: _liveProductNotifier,
+          preselectedVariants: widget.preselectedVariants,
         ),
       );
       if (result == null) return;
       chosen = Map<String, String>.from(result['selections'] as Map? ?? {});
       quantity = (result['quantity'] as num?)?.toInt() ?? quantity;
+      if (result['product'] is Map) {
+        product = Map<String, dynamic>.from(result['product'] as Map);
+      }
+      // Ensure we have the latest scraped price/image after sheet actions
+      final latestScraped = await _fetchProductFromPage();
+      if (latestScraped != null) {
+        if (latestScraped['price'] != null &&
+            latestScraped['price'].toString().isNotEmpty) {
+          product['price'] = latestScraped['price'];
+        }
+        if (latestScraped['image_url'] != null &&
+            latestScraped['image_url'].toString().isNotEmpty) {
+          product['image_url'] = latestScraped['image_url'];
+        }
+      }
 
       // iHerb: if user picked a different pack/flavor option, navigate first
       // and WAIT for the new page to load before proceeding.
@@ -1724,15 +1929,13 @@ class _WebViewScreenState extends State<WebViewScreen> {
       chosen ?? _selectionsToMap(selections),
     );
     final cartType = _cartTypeForSite();
+    final effectiveSelections = chosen ?? _selectionsToMap(selections);
+    final String? selectionsJson = effectiveSelections.isNotEmpty
+        ? jsonEncode(effectiveSelections)
+        : null;
 
     if (action == 'cart') {
       final cartController = Get.find<CartController>();
-      // Build selections_json from the chosen variants so they can be replayed
-      // when the user taps the item in the cart to open the WebView again.
-      final effectiveSelections = chosen ?? _selectionsToMap(selections);
-      final String? selectionsJson = effectiveSelections.isNotEmpty
-          ? jsonEncode(effectiveSelections)
-          : null;
       final result = await cartController.addToCart(
         cartType: cartType,
         title: finalTitle,
@@ -1767,10 +1970,14 @@ class _WebViewScreenState extends State<WebViewScreen> {
         price: product['price']?.toString(),
         imageUrl: product['image_url']?.toString(),
         source: cartType,
+        selectionsJson: selectionsJson,
       );
       _showActionSnack(res != null, 'added_to_wishlist'.tr());
     }
+  } finally {
+    if (mounted) setState(() => _isActionLoading = false);
   }
+}
 
   List<Map<String, dynamic>> _parseSelections(dynamic raw) {
     if (raw is! List) return [];
@@ -2030,11 +2237,44 @@ class _WebViewScreenState extends State<WebViewScreen> {
         final name = entry.key;
         final value = entry.value;
         if (name.isEmpty || value.isEmpty) continue;
+        final targetImg = _currentProduct?['image_url']?.toString() ??
+            widget.preselectedImageUrl;
         final js =
-            'window.__koonSelectOption ? window.__koonSelectOption(${jsonEncode(name)}, ${jsonEncode(value)}) : false';
-        await _webViewController!.evaluateJavascript(source: js);
+            'window.__koonSelectOption ? window.__koonSelectOption(${jsonEncode(name)}, ${jsonEncode(value)}, ${jsonEncode(targetImg)}) : false';
+        var res = await _webViewController!.evaluateJavascript(source: js);
+
+        // JS may return 'probing' when async React-aware swatch probing was started.
+        // Poll window.__koonProbeResult up to ~2s (13 × 150ms) for it to finish.
+        if (res == 'probing') {
+          for (int i = 0; i < 13; i++) {
+            await Future.delayed(const Duration(milliseconds: 150));
+            if (!mounted) return;
+            final probeRes = await _webViewController!.evaluateJavascript(
+              source: 'window.__koonProbeResult',
+            );
+            if (probeRes == true || probeRes == 1) {
+              res = true;
+              break;
+            }
+            if (probeRes == false) break; // done but no match – fall through to retry
+            // null == still probing, keep waiting
+          }
+        }
+
+        if (res != true && res != 1 && res != 'true') {
+          // If not selected immediately, wait 600ms and retry once (for dynamic hydration)
+          await Future.delayed(const Duration(milliseconds: 600));
+          if (!mounted) return;
+          await _webViewController!.evaluateJavascript(source: js);
+        }
         await Future.delayed(const Duration(milliseconds: 600));
       } catch (_) {}
+    }
+
+    // After pre-selection completes, refresh product extraction to sync live price/SKU
+    await Future.delayed(const Duration(milliseconds: 500));
+    if (mounted) {
+      await _fetchProductFromPage();
     }
   }
 
@@ -2733,12 +2973,19 @@ class _WebViewScreenState extends State<WebViewScreen> {
                 return;
               }
               final data = Map<String, dynamic>.from(args[0]);
+              _applyPreselectedVariantsToProduct(data);
+              if (mounted) {
+                _liveProductNotifier.value = data;
+              }
               if (mounted &&
                   (_currentProduct == null ||
                       _currentProduct!['title'] != data['title'] ||
                       _currentProduct!['price'] != data['price'] ||
                       _currentProduct!['selection_summary'] !=
-                          data['selection_summary'])) {
+                          data['selection_summary'] ||
+                      _currentProduct!['image_url'] != data['image_url'] ||
+                      _currentProduct!['requires_selection'] !=
+                          data['requires_selection'])) {
                 setState(() => _currentProduct = data);
               }
             }
@@ -3225,12 +3472,21 @@ class _WebViewScreenState extends State<WebViewScreen> {
             ),
             const SizedBox(width: 6),
             IconButton(
-              onPressed: _onAddToWishlist,
-              icon: Icon(
-                Icons.favorite_border,
-                color: AppColors.error,
-                size: 22,
-              ),
+              onPressed: _isActionLoading ? null : _onAddToWishlist,
+              icon: _isActionLoading
+                  ? SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.error,
+                      ),
+                    )
+                  : Icon(
+                      Icons.favorite_border,
+                      color: AppColors.error,
+                      size: 22,
+                    ),
               tooltip: 'add_to_wishlist'.tr(),
               visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,
@@ -3240,10 +3496,19 @@ class _WebViewScreenState extends State<WebViewScreen> {
             SizedBox(
               height: 40,
               child: ElevatedButton.icon(
-                onPressed: _onAddToCart,
-                icon: const Icon(Icons.add_shopping_cart, size: 16),
+                onPressed: _isActionLoading ? null : _onAddToCart,
+                icon: _isActionLoading
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.add_shopping_cart, size: 16),
                 label: Text(
-                  'add_to_cart'.tr(),
+                  _isActionLoading ? 'loading'.tr() : 'add_to_cart'.tr(),
                   style: const TextStyle(
                     fontWeight: FontWeight.w700,
                     fontSize: 12,
@@ -3281,6 +3546,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   @override
   void dispose() {
+    _liveProductNotifier.dispose();
     _progressFallbackTimer?.cancel();
     _progressFallbackTimer = null;
     super.dispose();
@@ -3294,8 +3560,10 @@ class _ProductSelectionSheet extends StatefulWidget {
   final bool requiresSelection;
   final String action;
   final Future<void> Function() onOpenNativePicker;
-  final Future<Map<String, dynamic>?> Function(String name, String value)
+  final Future<Map<String, dynamic>?> Function(String name, String value, [String? optImgUrl])
   onSelectOption;
+  final ValueNotifier<Map<String, dynamic>?>? liveProductNotifier;
+  final Map<String, String>? preselectedVariants;
 
   const _ProductSelectionSheet({
     required this.product,
@@ -3305,6 +3573,8 @@ class _ProductSelectionSheet extends StatefulWidget {
     required this.action,
     required this.onOpenNativePicker,
     required this.onSelectOption,
+    this.liveProductNotifier,
+    this.preselectedVariants,
   });
 
   @override
@@ -3317,6 +3587,7 @@ class _ProductSelectionSheetState extends State<_ProductSelectionSheet> {
   late final List<Map<String, dynamic>> _activeSelections;
   late final Map<String, String> _variantImages;
   String? _currentVariantImage;
+  bool _isUpdating = false;
 
   @override
   void initState() {
@@ -3340,10 +3611,154 @@ class _ProductSelectionSheetState extends State<_ProductSelectionSheet> {
       if (name.isEmpty) continue;
       final opts = _optionsFor(s);
       final value = (s['value'] ?? '').toString().trim();
-      if (opts.length == 1) {
+
+      String? preselectedVal;
+      if (widget.preselectedVariants != null) {
+        for (final entry in widget.preselectedVariants!.entries) {
+          if (_WebViewScreenState._matchAttrName(entry.key, name)) {
+            preselectedVal = entry.value;
+            break;
+          }
+        }
+      }
+
+      if (preselectedVal != null && preselectedVal.isNotEmpty) {
+        _chosen[name] = preselectedVal;
+        if (!opts.contains(preselectedVal)) {
+          final rawSkuRegex = RegExp(r'^\d+(-\d+)+$');
+          int replaceIdx = -1;
+          for (int i = 0; i < opts.length; i++) {
+            if (rawSkuRegex.hasMatch(opts[i])) {
+              replaceIdx = i;
+              break;
+            }
+          }
+          if (replaceIdx >= 0) {
+            final oldRaw = opts[replaceIdx];
+            opts[replaceIdx] = preselectedVal;
+            if (_variantImages.containsKey(oldRaw)) {
+              _variantImages[preselectedVal] = _variantImages.remove(oldRaw)!;
+            }
+          } else {
+            // Only append the preselected value as a new option if the existing
+            // options are text-only (no variant images). If all opts have images,
+            // it means the page uses image-based swatches — adding a text-only
+            // pill would look broken next to them.
+            final allHaveImages = opts.isNotEmpty &&
+                opts.every((o) => _variantImages.containsKey(o));
+            if (!allHaveImages) {
+              opts.add(preselectedVal);
+            }
+            // Either way, still mark it as chosen so JS selection tries to activate it.
+          }
+          s['options'] = opts;
+        }
+        s['value'] = preselectedVal;
+      } else if (opts.length == 1) {
         _chosen[name] = opts.first;
       } else if (value.isNotEmpty) {
         _chosen[name] = value;
+      }
+    }
+    _updateVariantImage();
+    widget.liveProductNotifier?.addListener(_onLiveProductUpdated);
+  }
+
+  @override
+  void dispose() {
+    widget.liveProductNotifier?.removeListener(_onLiveProductUpdated);
+    super.dispose();
+  }
+
+  void _onLiveProductUpdated() {
+    final updated = widget.liveProductNotifier?.value;
+    if (updated == null || !mounted) return;
+    setState(() {
+      _syncWithUpdatedProduct(updated);
+    });
+  }
+
+  void _syncWithUpdatedProduct(Map<String, dynamic> updated) {
+    if (updated['price'] != null && updated['price'].toString().isNotEmpty) {
+      widget.product['price'] = updated['price'];
+    }
+    if (updated['title'] != null && updated['title'].toString().isNotEmpty) {
+      widget.product['title'] = updated['title'];
+    }
+    final imgUrl = updated['image_url']?.toString();
+    if (imgUrl != null && imgUrl.isNotEmpty) {
+      widget.product['image_url'] = imgUrl;
+      _currentVariantImage = imgUrl;
+    }
+    final rawVariantImages = updated['variant_images'];
+    if (rawVariantImages is Map) {
+      rawVariantImages.forEach((k, v) {
+        if (k != null && v != null) {
+          _variantImages[k.toString()] = v.toString();
+        }
+      });
+    }
+    final rawSelections = updated['selections'];
+    if (rawSelections is List && rawSelections.isNotEmpty) {
+      final newSelections = _WebViewScreenState._dedupeSelections(
+        rawSelections.map((e) => Map<String, dynamic>.from(e as Map)).toList(),
+      );
+
+      // Preserve stable ordering of groups and existing options
+      for (final newSel in newSelections) {
+        final newName = (newSel['name'] ?? '').toString().trim();
+        if (newName.isEmpty) continue;
+
+        final existingIndex = _activeSelections.indexWhere(
+          (s) =>
+              (s['name'] ?? '').toString().trim().toLowerCase() ==
+              newName.toLowerCase(),
+        );
+
+        if (existingIndex >= 0) {
+          final existing = _activeSelections[existingIndex];
+          final newVal = (newSel['value'] ?? '').toString().trim();
+          if (newVal.isNotEmpty) {
+            existing['value'] = newVal;
+          }
+          final existingOpts = _optionsFor(existing);
+          final incomingOpts = _optionsFor(newSel);
+          final rawSkuRegex = RegExp(r'^\d+(-\d+)+$');
+          for (final inc in incomingOpts) {
+            if (!existingOpts.contains(inc)) {
+              if (!rawSkuRegex.hasMatch(inc)) {
+                final rawIdx = existingOpts.indexWhere((e) => rawSkuRegex.hasMatch(e));
+                if (rawIdx >= 0) {
+                  final old = existingOpts[rawIdx];
+                  existingOpts[rawIdx] = inc;
+                  if (_variantImages.containsKey(old)) {
+                    _variantImages[inc] = _variantImages.remove(old)!;
+                  }
+                  continue;
+                }
+              }
+              existingOpts.add(inc);
+            }
+          }
+          existing['options'] = existingOpts;
+        } else {
+          _activeSelections.add(newSel);
+        }
+      }
+
+      for (final s in _activeSelections) {
+        final sName = (s['name'] ?? '').toString();
+        final sVal = (s['value'] ?? '').toString().trim();
+        final sOpts = _optionsFor(s);
+        if (_isUpdating && sVal.isNotEmpty) {
+          _chosen[sName] = sVal;
+        } else if (!_chosen.containsKey(sName) || (_chosen[sName] != null && !sOpts.contains(_chosen[sName]))) {
+          if (sVal.isNotEmpty) {
+            _chosen[sName] = sVal;
+          } else if (sOpts.isNotEmpty) {
+            _chosen[sName] = sOpts.first;
+          }
+        }
       }
     }
     _updateVariantImage();
@@ -3358,7 +3773,8 @@ class _ProductSelectionSheetState extends State<_ProductSelectionSheet> {
         return;
       }
     }
-    _currentVariantImage = null;
+    final mainImg = widget.product['image_url']?.toString();
+    _currentVariantImage = (mainImg != null && mainImg.isNotEmpty) ? mainImg : null;
   }
 
   String _getUpdatedPriceString(String priceRaw, int quantity) {
@@ -3444,25 +3860,26 @@ class _ProductSelectionSheetState extends State<_ProductSelectionSheet> {
   }
 
   void _selectOption(String name, String opt) async {
+    if (_isUpdating) return;
+    final optImg = _variantImages[opt] ?? widget.product['image_url']?.toString();
     setState(() {
       _chosen[name] = opt;
       _updateVariantImage();
+      _isUpdating = true;
     });
-    final updatedProduct = await widget.onSelectOption(name, opt);
-    if (updatedProduct != null && mounted) {
-      setState(() {
-        if (updatedProduct['price'] != null) {
-          widget.product['price'] = updatedProduct['price'];
-        }
-        if (updatedProduct['title'] != null) {
-          widget.product['title'] = updatedProduct['title'];
-        }
-        final imgUrl = updatedProduct['image_url']?.toString();
-        if (imgUrl != null && imgUrl.isNotEmpty) {
-          widget.product['image_url'] = imgUrl;
-          _currentVariantImage = imgUrl;
-        }
-      });
+    try {
+      final updatedProduct = await widget.onSelectOption(name, opt, optImg);
+      if (updatedProduct != null && mounted) {
+        setState(() {
+          _syncWithUpdatedProduct(updatedProduct);
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUpdating = false;
+        });
+      }
     }
   }
 
@@ -3476,11 +3893,24 @@ class _ProductSelectionSheetState extends State<_ProductSelectionSheet> {
       }
     }
     final current = (sel['value'] ?? '').toString().trim();
-    if (current.isNotEmpty && !opts.contains(current)) opts.insert(0, current);
+    if (current.isNotEmpty && !opts.contains(current)) {
+      final rawSkuRegex = RegExp(r'^\d+(-\d+)+$');
+      if (!rawSkuRegex.hasMatch(current)) {
+        final rawIdx = opts.indexWhere((o) => rawSkuRegex.hasMatch(o));
+        if (rawIdx >= 0) {
+          opts[rawIdx] = current;
+        } else {
+          opts.add(current);
+        }
+      } else {
+        opts.add(current);
+      }
+    }
     return opts;
   }
 
   bool get _canConfirm {
+    if (_isUpdating) return false;
     for (final s in _activeSelections) {
       final opts = _optionsFor(s);
       if (opts.isEmpty) continue;
@@ -3574,16 +4004,31 @@ class _ProductSelectionSheetState extends State<_ProductSelectionSheet> {
                         ),
                       ),
                       const SizedBox(height: 2),
-                      Text(
-                        _getUpdatedPriceString(
-                          (widget.product['price'] ?? '').toString(),
-                          _quantity,
-                        ),
-                        style: GoogleFonts.inter(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.primary,
-                        ),
+                      Row(
+                        children: [
+                          Text(
+                            _getUpdatedPriceString(
+                              (widget.product['price'] ?? '').toString(),
+                              _quantity,
+                            ),
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                          if (_isUpdating) ...[
+                            const SizedBox(width: 8),
+                            const SizedBox(
+                              width: 12,
+                              height: 12,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ],
                   ),
@@ -3634,7 +4079,7 @@ class _ProductSelectionSheetState extends State<_ProductSelectionSheet> {
                           final selected = _chosen[name] == opt;
                           final hasVariantImg = _variantImages.containsKey(opt);
                           return GestureDetector(
-                            onTap: () => _selectOption(name, opt),
+                            onTap: _isUpdating ? null : () => _selectOption(name, opt),
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 200),
                               padding: hasVariantImg
@@ -3791,18 +4236,30 @@ class _ProductSelectionSheetState extends State<_ProductSelectionSheet> {
                 Expanded(
                   flex: 2,
                   child: ElevatedButton.icon(
-                    onPressed: _canConfirm
+                    onPressed: (_canConfirm && !_isUpdating)
                         ? () => Navigator.pop(context, {
                             'selections': _chosen,
                             'quantity': _quantity,
+                            'product': widget.product,
                           })
                         : null,
-                    icon: Icon(
-                      isCart ? Icons.add_shopping_cart : Icons.favorite,
-                      size: 18,
-                    ),
+                    icon: _isUpdating
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Icon(
+                            isCart ? Icons.add_shopping_cart : Icons.favorite,
+                            size: 18,
+                          ),
                     label: Text(
-                      isCart ? 'add_to_cart'.tr() : 'add_to_wishlist'.tr(),
+                      _isUpdating
+                          ? 'loading'.tr()
+                          : (isCart ? 'add_to_cart'.tr() : 'add_to_wishlist'.tr()),
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: isCart

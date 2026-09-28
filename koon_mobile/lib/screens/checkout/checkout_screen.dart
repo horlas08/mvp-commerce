@@ -26,9 +26,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     super.initState();
     final cartCtrl = Get.find<CartController>();
 
+    final selected = cartCtrl.cartItems.where((i) => cartCtrl.isItemSelected(i)).toList();
     _ctrl = Get.put(CheckoutController());
     _ctrl.cartType = cartCtrl.selectedCartType.value;
-    _ctrl.cartItems = List<Map<String, dynamic>>.from(cartCtrl.cartItems);
+    _ctrl.cartItems = List<Map<String, dynamic>>.from(selected);
     _ctrl.subtotal = cartCtrl.totalAmount;
   }
 

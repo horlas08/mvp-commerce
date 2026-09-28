@@ -35,6 +35,7 @@ class Order(Base):
     shipping_address: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     coupon_code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     discount_amount: Mapped[float] = mapped_column(Float, default=0.0)
+    tax_amount: Mapped[float] = mapped_column(Float, default=0.0)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Checkout details
@@ -68,6 +69,7 @@ class Order(Base):
             "shipping_address": self.shipping_address,
             "coupon_code": self.coupon_code,
             "discount_amount": self.discount_amount,
+            "tax_amount": self.tax_amount,
             "notes": self.notes,
             "cart_type": self.cart_type,
             "shipping_type": self.shipping_type,

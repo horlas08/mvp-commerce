@@ -1,18 +1,32 @@
+import 'dart:convert';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:get/get.dart' hide Trans;
 import 'package:image_picker/image_picker.dart';
-import '../app/theme/app_colors.dart';
 import '../app/utils/app_snackbar.dart';
 import '../services/address_service.dart';
 import '../services/checkout_service.dart';
+import '../services/coupon_service.dart';
 import 'cart_controller.dart';
-import 'package:flutter/material.dart';
+
 class CheckoutController extends GetxController {
   final AddressService _addressService = AddressService();
   final CheckoutService _checkoutService = CheckoutService();
+  final CouponService _couponService = CouponService();
 
   // ── Step navigation ──────────────────────────────────────────────────────
   final RxInt currentStep = 0.obs; // 0=Address, 1=Shipping, 2=Review, 3=Payment
+
+  // ── Coupon & Tax ───────────────────────────────────────────────────────────
+  final RxString couponCode = ''.obs;
+  final Rx<Map<String, dynamic>?> appliedCoupon = Rx<Map<String, dynamic>?>(null);
+  final RxDouble discountAmount = 0.0.obs;
+  final RxBool isApplyingCoupon = false.obs;
+  final RxString couponError = ''.obs;
+  final RxDouble taxPercentage = 0.0.obs;
+  final RxDouble taxAmount = 0.0.obs;
+
+  double get discount => discountAmount.value;
+  double get tax => taxAmount.value;
 
   // ── Step 1: Address ───────────────────────────────────────────────────────
   final RxList<Map<String, dynamic>> addresses = <Map<String, dynamic>>[].obs;
@@ -182,6 +196,7 @@ class CheckoutController extends GetxController {
       pickupStationId: selectedPickupStation.value?['id']?.toString(),
       additionalNote: additionalNote.value,
       allowTeamReview: allowTeamReview.value,
+      couponCode: couponCode.value.isNotEmpty ? couponCode.value : null,
       paymentMethodId: payment['id']?.toString() ?? 'wallet',
       paymentFormData: Map<String, String>.from(paymentFormData),
       paymentProofImage: paymentProofImage.value,
@@ -193,14 +208,52 @@ class CheckoutController extends GetxController {
       placedOrder.value = result;
       orderPlaced.value = true;
 
-      // Clear the cart upon success
+      // Reload cart upon success (backend already removed checked-out items)
       try {
         final cartCtrl = Get.find<CartController>();
-        await cartCtrl.clearCurrentCart();
+        await cartCtrl.loadCart(autoRefresh: false);
       } catch (_) {}
     } else {
       AppSnackbar.error(null, 'error_occurred'.tr());
     }
+  }
+
+  // ── Coupon Application ─────────────────────────────────────────────────────
+  Future<bool> applyCoupon(String code) async {
+    final trimmed = code.trim().toUpperCase();
+    if (trimmed.isEmpty) return false;
+    isApplyingCoupon.value = true;
+    couponError.value = '';
+    try {
+      final res = await _couponService.validateCoupon(trimmed, subtotal);
+      if (res != null && res['valid'] == true) {
+        couponCode.value = trimmed;
+        appliedCoupon.value = res['coupon'] != null ? Map<String, dynamic>.from(res['coupon']) : null;
+        discountAmount.value = (res['discount'] as num?)?.toDouble() ?? 0.0;
+        AppSnackbar.success(null, 'coupon_applied'.tr());
+        await _updateDynamicFees();
+        return true;
+      } else {
+        couponError.value = 'invalid_coupon'.tr();
+        AppSnackbar.error(null, 'invalid_coupon'.tr());
+        return false;
+      }
+    } catch (e) {
+      final msg = e.toString().replaceFirst('Exception: ', '');
+      couponError.value = msg;
+      AppSnackbar.error(null, msg);
+      return false;
+    } finally {
+      isApplyingCoupon.value = false;
+    }
+  }
+
+  void removeCoupon() {
+    couponCode.value = '';
+    appliedCoupon.value = null;
+    discountAmount.value = 0.0;
+    couponError.value = '';
+    _updateDynamicFees();
   }
 
   final RxDouble dynamicShippingFee = 0.0.obs;
@@ -211,10 +264,18 @@ class CheckoutController extends GetxController {
   double get commissionFee => dynamicCommissionFee.value;
   double get teamReviewPrice => configuredTeamReviewFee.value;
   double get teamReviewFee => allowTeamReview.value ? configuredTeamReviewFee.value : 0.0;
-  double get orderTotal => subtotal + shippingFee + commissionFee + teamReviewFee;
+  double get orderTotal =>
+      double.parse((((subtotal - discount).clamp(0.0, double.infinity)) +
+              shippingFee +
+              commissionFee +
+              teamReviewFee +
+              tax)
+          .toStringAsFixed(2));
 
   Future<void> _updateDynamicFees() async {
-    // 1. Fetch configured team review fee from settings
+    Map<String, dynamic> policy = {};
+
+    // 1. Fetch configured fees & pricing policy from settings
     try {
       final settingsMap = await _checkoutService.getAppSettings();
       if (settingsMap.containsKey('team_review_fee')) {
@@ -224,72 +285,142 @@ class CheckoutController extends GetxController {
           configuredTeamReviewFee.value = parsed;
         }
       }
+
+      if (settingsMap.containsKey('pricing_policy')) {
+        final raw = settingsMap['pricing_policy']?['value_en'] ?? settingsMap['pricing_policy']?['value_ar'];
+        if (raw is String && raw.isNotEmpty) {
+          try {
+            policy = Map<String, dynamic>.from(jsonDecode(raw));
+          } catch (_) {}
+        } else if (raw is Map) {
+          policy = Map<String, dynamic>.from(raw);
+        }
+      }
     } catch (_) {}
 
-    final addr = selectedAddress.value;
-    if (addr == null) {
-      dynamicShippingFee.value = 0.0;
-      dynamicCommissionFee.value = 0.0;
-      return;
+    // Determine effective per-site policy with global fallback
+    Map<String, dynamic> effectivePolicy = Map<String, dynamic>.from(policy);
+    final sitesMap = policy['sites'];
+    if (sitesMap is Map && sitesMap.containsKey(cartType.toLowerCase())) {
+      final siteOverride = sitesMap[cartType.toLowerCase()];
+      if (siteOverride is Map) {
+        siteOverride.forEach((k, v) {
+          if (v != null) effectivePolicy[k.toString()] = v;
+        });
+      }
     }
 
-    final stateName = addr['state']?.toString().trim();
-    final cityName = addr['city']?.toString().trim();
+    // Tax percentage from effective policy (default 0.0)
+    final rawTax = effectivePolicy['tax_percentage'];
+    taxPercentage.value = (rawTax is num)
+        ? rawTax.toDouble()
+        : (double.tryParse(rawTax?.toString() ?? '0') ?? 0.0);
 
+    final addr = selectedAddress.value;
     double sFee = 0.0;
     double cFee = 0.0;
+    bool hasCustomStateOrCityShip = false;
+    bool hasCustomStateOrCityComm = false;
 
-    // Load states first if not loaded
-    List<Map<String, dynamic>> statesList = [];
-    try {
-      statesList = await _addressService.getStates();
-    } catch (_) {}
+    if (addr != null) {
+      final stateName = addr['state']?.toString().trim();
+      final cityName = addr['city']?.toString().trim();
 
-    final matchedState = statesList.firstWhereOrNull((s) {
-      final nEn = s['name_en']?.toString().trim();
-      final nAr = s['name_ar']?.toString().trim();
-      final n = s['name']?.toString().trim();
-      return nEn == stateName || nAr == stateName || n == stateName;
-    });
-
-    if (matchedState != null) {
-      final bool stateFree = matchedState['free_shipping'] == true || matchedState['free_shipping'] == 1;
-      final bool stateNoComm = matchedState['no_commission'] == true || matchedState['no_commission'] == 1;
-      final double stateShipFee = double.tryParse(matchedState['shipping_fee']?.toString() ?? '0') ?? 0.0;
-      final double stateComm = double.tryParse(matchedState['commission']?.toString() ?? '0') ?? 0.0;
-
-      sFee = stateFree ? 0.0 : stateShipFee;
-      cFee = stateNoComm ? 0.0 : stateComm;
-
-      // Check city overrides
+      // Load states first if not loaded
+      List<Map<String, dynamic>> statesList = [];
       try {
-        final citiesList = await _addressService.getCities(matchedState['id'].toString());
-        final matchedCity = citiesList.firstWhereOrNull((c) {
-          final nEn = c['name_en']?.toString().trim();
-          final nAr = c['name_ar']?.toString().trim();
-          final n = c['name']?.toString().trim();
-          return nEn == cityName || nAr == cityName || n == cityName;
-        });
-
-        if (matchedCity != null) {
-          final bool cityFree = matchedCity['free_shipping'] == true || matchedCity['free_shipping'] == 1;
-          final bool cityNoComm = matchedCity['no_commission'] == true || matchedCity['no_commission'] == 1;
-          final double cityShipFee = double.tryParse(matchedCity['shipping_fee']?.toString() ?? '0') ?? 0.0;
-          final double cityComm = double.tryParse(matchedCity['commission']?.toString() ?? '0') ?? 0.0;
-
-          if (cityFree) {
-            sFee = 0.0;
-          } else if (cityShipFee > 0) {
-            sFee = cityShipFee;
-          }
-
-          if (cityNoComm) {
-            cFee = 0.0;
-          } else if (cityComm > 0) {
-            cFee = cityComm;
-          }
-        }
+        statesList = await _addressService.getStates();
       } catch (_) {}
+
+      final matchedState = statesList.firstWhereOrNull((s) {
+        final nEn = s['name_en']?.toString().trim();
+        final nAr = s['name_ar']?.toString().trim();
+        final n = s['name']?.toString().trim();
+        return nEn == stateName || nAr == stateName || n == stateName;
+      });
+
+      if (matchedState != null) {
+        final bool stateFree = matchedState['free_shipping'] == true || matchedState['free_shipping'] == 1;
+        final bool stateNoComm = matchedState['no_commission'] == true || matchedState['no_commission'] == 1;
+        final double stateShipFee = double.tryParse(matchedState['shipping_fee']?.toString() ?? '0') ?? 0.0;
+        final double stateComm = double.tryParse(matchedState['commission']?.toString() ?? '0') ?? 0.0;
+
+        if (stateFree) {
+          sFee = 0.0;
+          hasCustomStateOrCityShip = true;
+        } else if (stateShipFee > 0) {
+          sFee = stateShipFee;
+          hasCustomStateOrCityShip = true;
+        }
+
+        if (stateNoComm) {
+          cFee = 0.0;
+          hasCustomStateOrCityComm = true;
+        } else if (stateComm > 0) {
+          cFee = stateComm;
+          hasCustomStateOrCityComm = true;
+        }
+
+        // Check city overrides
+        try {
+          final citiesList = await _addressService.getCities(matchedState['id'].toString());
+          final matchedCity = citiesList.firstWhereOrNull((c) {
+            final nEn = c['name_en']?.toString().trim();
+            final nAr = c['name_ar']?.toString().trim();
+            final n = c['name']?.toString().trim();
+            return nEn == cityName || nAr == cityName || n == cityName;
+          });
+
+          if (matchedCity != null) {
+            final bool cityFree = matchedCity['free_shipping'] == true || matchedCity['free_shipping'] == 1;
+            final bool cityNoComm = matchedCity['no_commission'] == true || matchedCity['no_commission'] == 1;
+            final double cityShipFee = double.tryParse(matchedCity['shipping_fee']?.toString() ?? '0') ?? 0.0;
+            final double cityComm = double.tryParse(matchedCity['commission']?.toString() ?? '0') ?? 0.0;
+
+            if (cityFree) {
+              sFee = 0.0;
+              hasCustomStateOrCityShip = true;
+            } else if (cityShipFee > 0) {
+              sFee = cityShipFee;
+              hasCustomStateOrCityShip = true;
+            }
+
+            if (cityNoComm) {
+              cFee = 0.0;
+              hasCustomStateOrCityComm = true;
+            } else if (cityComm > 0) {
+              cFee = cityComm;
+              hasCustomStateOrCityComm = true;
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
+    // If no state/city shipping fee and home delivery, apply pricing policy fallback
+    if (shippingType.value == 'home' && !hasCustomStateOrCityShip && effectivePolicy.isNotEmpty) {
+      final mode = effectivePolicy['shipping_mode']?.toString() ?? 'fixed';
+      final val = (effectivePolicy['shipping_value'] is num)
+          ? (effectivePolicy['shipping_value'] as num).toDouble()
+          : (double.tryParse(effectivePolicy['shipping_value']?.toString() ?? '0') ?? 0.0);
+      if (mode == 'fixed') {
+        sFee = val;
+      } else if (mode == 'formula') {
+        sFee = double.parse((subtotal * val).toStringAsFixed(2));
+      }
+    }
+
+    // If no state/city commission fee, apply pricing policy fallback
+    if (!hasCustomStateOrCityComm && effectivePolicy.isNotEmpty) {
+      final mode = effectivePolicy['commission_mode']?.toString() ?? 'fixed';
+      final val = (effectivePolicy['commission_value'] is num)
+          ? (effectivePolicy['commission_value'] as num).toDouble()
+          : (double.tryParse(effectivePolicy['commission_value']?.toString() ?? '0') ?? 0.0);
+      if (mode == 'fixed') {
+        cFee = val;
+      } else if (mode == 'formula') {
+        cFee = double.parse((subtotal * val).toStringAsFixed(2));
+      }
     }
 
     if (shippingType.value != 'home') {
@@ -298,5 +429,13 @@ class CheckoutController extends GetxController {
 
     dynamicShippingFee.value = sFee;
     dynamicCommissionFee.value = cFee;
+
+    // Calculate tax amount on taxable subtotal (subtotal - discount)
+    final taxableSubtotal = (subtotal - discountAmount.value).clamp(0.0, double.infinity);
+    if (taxPercentage.value > 0) {
+      taxAmount.value = double.parse((taxableSubtotal * (taxPercentage.value / 100.0)).toStringAsFixed(2));
+    } else {
+      taxAmount.value = 0.0;
+    }
   }
 }

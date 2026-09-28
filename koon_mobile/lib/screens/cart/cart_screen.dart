@@ -188,7 +188,10 @@ class CartScreen extends StatelessWidget {
                 }
                 return RefreshIndicator(
                   color: AppColors.primary,
-                  onRefresh: () => cartController.loadCart(autoRefresh: true),
+                  onRefresh: () => cartController.loadCart(
+                    autoRefresh: true,
+                    forceRefreshAll: true,
+                  ),
                   child: ListView.builder(
                     padding: const EdgeInsets.all(12),
                     itemCount: cartController.cartItems.length,
@@ -205,19 +208,29 @@ class CartScreen extends StatelessWidget {
             Obx(() {
               if (cartController.cartItems.isEmpty) return const SizedBox();
 
-              final selectedItems = cartController.cartItems.where((i) => i['is_selected'] == true).toList();
+              final selectedItems = cartController.cartItems
+                  .where((i) => cartController.isItemSelected(i))
+                  .toList();
               final hasNoSelection = selectedItems.isEmpty;
-              final hasUpdatingItems = selectedItems.any((i) =>
-                  cartController.itemStatuses[i['id']] == 'updating' ||
-                  cartController.itemStatuses[i['id']] == 'pending');
-              final hasFailedItems = selectedItems.any((i) => cartController.itemStatuses[i['id']] == 'error');
+              final hasUpdatingItems = selectedItems.any((i) {
+                final id = i['id']?.toString() ?? '';
+                final status = cartController.itemStatuses[id];
+                return status == 'updating' || status == 'pending';
+              });
+              final hasFailedItems = selectedItems.any((i) {
+                final id = i['id']?.toString() ?? '';
+                return cartController.itemStatuses[id] == 'error';
+              });
               final hasStaleItems = selectedItems.any((i) {
+                final id = i['id']?.toString() ?? '';
                 final extUrl = i['external_url']?.toString() ?? '';
-                return extUrl.isNotEmpty && !cartController.isItemFresh(i);
+                final isSuccess = cartController.itemStatuses[id] == 'success';
+                return extUrl.isNotEmpty && !isSuccess && !cartController.isItemFresh(i);
               });
               final hasOutOfStock = selectedItems.any((i) {
+                final id = i['id']?.toString() ?? '';
                 final rawPrice = (i['product']?['price'] ?? i['price'])?.toString() ?? '';
-                final status = cartController.itemStatuses[i['id']];
+                final status = cartController.itemStatuses[id];
                 return status == 'out_of_stock' ||
                     rawPrice.toLowerCase().contains('out of stock') ||
                     rawPrice.contains('غير متوفر');
@@ -436,8 +449,8 @@ class CartScreen extends StatelessWidget {
           children: [
             // Checkbox
             Checkbox(
-              value: item['is_selected'] ?? true,
-              onChanged: (v) => controller.toggleSelection(item['id'], v ?? true),
+              value: controller.isItemSelected(item),
+              onChanged: (v) => controller.toggleSelection(item['id']?.toString() ?? '', v ?? true),
               activeColor: AppColors.primary,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
             ),
@@ -464,6 +477,7 @@ class CartScreen extends StatelessWidget {
                               initialUrl: UrlHelper.convertToArabicUrl(externalUrl),
                               siteName: cartType.toString().toUpperCase(),
                               preselectedVariants: preselected,
+                              preselectedImageUrl: imageUrl,
                             ));
                       }
                     : null,
@@ -507,12 +521,12 @@ class CartScreen extends StatelessWidget {
                             String? sizeVal;
                             final List<Widget> otherChips = [];
                             for (final e in selMap.entries) {
-                              final key = e.key.toString().toLowerCase();
-                              final val = e.value.toString();
+                              final key = e.key.toString().toLowerCase().replaceAll(':', '').trim();
+                              final val = e.value.toString().trim();
                               if (val.isEmpty) continue;
-                              if (key == 'color' || key == 'colour' || key == 'اللون') {
+                              if (key == 'color' || key == 'colour' || key.contains('لون')) {
                                 colorVal = val;
-                              } else if (key == 'size' || key == 'الحجم' || key == 'المقاس') {
+                              } else if (key == 'size' || key.contains('حجم') || key.contains('مقاس') || key.contains('سعة')) {
                                 sizeVal = val;
                               } else {
                                 otherChips.add(_buildSelChip('${e.key}: $val'));
@@ -535,7 +549,8 @@ class CartScreen extends StatelessWidget {
                           }),
                           const SizedBox(height: 6),
                           Obx(() {
-                            final status = controller.itemStatuses[item['id']];
+                            final itemId = item['id']?.toString() ?? '';
+                            final status = controller.itemStatuses[itemId];
                             final isUpdating = status == 'updating';
                             final isFailed = status == 'error';
                             final isSuccess = status == 'success';
@@ -584,14 +599,14 @@ class CartScreen extends StatelessWidget {
                                   else if (isFailed)
                                     GestureDetector(
                                       onTap: () {
-                                        final err = controller.itemErrors[item['id']] ?? (Get.locale?.languageCode == 'ar' ? 'فشل التحديث' : 'Update failed');
+                                        final err = controller.itemErrors[itemId] ?? (Get.locale?.languageCode == 'ar' ? 'فشل التحديث' : 'Update failed');
                                         Get.snackbar(
                                           'auto_update_error'.tr(),
                                           err,
                                           snackPosition: SnackPosition.BOTTOM,
                                           duration: const Duration(seconds: 4),
                                           mainButton: TextButton(
-                                            onPressed: () => controller.retryItemRefresh(item['id']),
+                                            onPressed: () => controller.retryItemRefresh(itemId),
                                             child: Text('retry'.tr(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                                           ),
                                         );
@@ -608,7 +623,7 @@ class CartScreen extends StatelessWidget {
                                             const Icon(Icons.error_outline, size: 12, color: AppColors.error),
                                             const SizedBox(width: 4),
                                             GestureDetector(
-                                              onTap: () => controller.retryItemRefresh(item['id']),
+                                              onTap: () => controller.retryItemRefresh(itemId),
                                               child: const Icon(Icons.refresh, size: 12, color: AppColors.error),
                                             ),
                                           ],
@@ -920,15 +935,16 @@ class CartScreen extends StatelessWidget {
       if (currentItem == null) return const SizedBox.shrink();
 
       final externalUrl = currentItem['external_url']?.toString() ?? '';
+      final itemId = currentItem['id']?.toString() ?? '';
       if (externalUrl.isEmpty) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          cartController.onRefreshFailed(currentItem['id'], reason: 'External URL is missing');
+          cartController.onRefreshFailed(itemId, reason: 'External URL is missing');
         });
         return const SizedBox.shrink();
       }
 
       return _HiddenScraperWebView(
-        key: ValueKey(currentItem['id']),
+        key: ValueKey(itemId),
         item: currentItem,
         controller: cartController,
       );
@@ -960,7 +976,7 @@ class _HiddenScraperWebViewState extends State<_HiddenScraperWebView> {
     if (_completed || !mounted) return;
     _completed = true;
     widget.controller.onRefreshComplete(
-      widget.item['id'],
+      widget.item['id']?.toString() ?? '',
       price,
       outOfStock: isOutOfStock,
     );
@@ -970,7 +986,7 @@ class _HiddenScraperWebViewState extends State<_HiddenScraperWebView> {
     if (_completed || !mounted) return;
     _completed = true;
     widget.controller.onRefreshFailed(
-      widget.item['id'],
+      widget.item['id']?.toString() ?? '',
       reason: reason,
     );
   }
@@ -1001,13 +1017,15 @@ class _HiddenScraperWebViewState extends State<_HiddenScraperWebView> {
               source: 'window.__koonOpenSkuPicker && window.__koonOpenSkuPicker()',
             );
             await Future.delayed(const Duration(milliseconds: 350));
+            final itemImg = widget.item['image_url']?.toString();
             for (final entry in decoded.entries) {
               if (_completed || !mounted) return;
               final name = entry.key.toString();
               final value = entry.value.toString();
-              final js = 'window.__koonSelectOption ? window.__koonSelectOption(${jsonEncode(name)}, ${jsonEncode(value)}) : false';
+              final js =
+                  'window.__koonSelectOption ? window.__koonSelectOption(${jsonEncode(name)}, ${jsonEncode(value)}, ${jsonEncode(itemImg)}) : false';
               await webController.evaluateJavascript(source: js);
-              await Future.delayed(const Duration(milliseconds: 450));
+              await Future.delayed(const Duration(milliseconds: 650));
             }
           }
         } catch (e) {

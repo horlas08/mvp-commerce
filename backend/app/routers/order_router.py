@@ -7,14 +7,108 @@ from sqlalchemy.orm import selectinload
 import os
 import uuid
 import json
+from datetime import datetime, timezone
 
 from app.database import get_db
 from app.models.order import Order, OrderItem, OrderStatus, PaymentStatus
 from app.models.cart import CartItem
 from app.models.user import User
+from app.models.coupon import Coupon
 from app.auth.dependencies import get_current_user
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
+
+
+def get_effective_pricing_policy(policy_data: dict, cart_type: str) -> dict:
+    """
+    Returns effective pricing policy for a given cart_type (site),
+    falling back to the global default for any missing fields.
+    """
+    if not isinstance(policy_data, dict):
+        policy_data = {}
+
+    global_s_mode = policy_data.get("shipping_mode", "fixed")
+    global_s_val = float(policy_data.get("shipping_value", 0.0) or 0.0)
+    global_s_hidden = bool(policy_data.get("shipping_hidden", False))
+    global_c_mode = policy_data.get("commission_mode", "fixed")
+    global_c_val = float(policy_data.get("commission_value", 0.0) or 0.0)
+    global_c_hidden = bool(policy_data.get("commission_hidden", False))
+    global_tax = float(policy_data.get("tax_percentage", 0.0) or 0.0)
+
+    sites = policy_data.get("sites") or {}
+    site_key = cart_type.lower() if cart_type else ""
+    site_policy = sites.get(site_key) or {}
+
+    return {
+        "shipping_mode": site_policy.get("shipping_mode") or global_s_mode,
+        "shipping_value": float(site_policy.get("shipping_value") if site_policy.get("shipping_value") is not None else global_s_val),
+        "shipping_hidden": bool(site_policy.get("shipping_hidden") if site_policy.get("shipping_hidden") is not None else global_s_hidden),
+        "commission_mode": site_policy.get("commission_mode") or global_c_mode,
+        "commission_value": float(site_policy.get("commission_value") if site_policy.get("commission_value") is not None else global_c_val),
+        "commission_hidden": bool(site_policy.get("commission_hidden") if site_policy.get("commission_hidden") is not None else global_c_hidden),
+        "tax_percentage": float(site_policy.get("tax_percentage") if site_policy.get("tax_percentage") is not None else global_tax),
+    }
+
+
+async def calculate_coupon_discount(
+    db: AsyncSession,
+    code: Optional[str],
+    cart_items: list,
+    subtotal: float,
+) -> tuple[Optional[str], float, Optional[Coupon]]:
+    """
+    Validates a coupon code and calculates the discount amount.
+    Returns (coupon_code, discount_amount, coupon_model_or_None).
+    """
+    if not code or not code.strip():
+        return None, 0.0, None
+
+    clean_code = code.strip().upper()
+    result = await db.execute(select(Coupon).where(Coupon.code == clean_code))
+    coupon = result.scalar_one_or_none()
+
+    if not coupon:
+        return None, 0.0, None
+    if not coupon.is_active:
+        return None, 0.0, None
+    if coupon.expires_at and coupon.expires_at < datetime.now(timezone.utc).replace(tzinfo=None):
+        return None, 0.0, None
+    if coupon.usage_limit and coupon.used_count >= coupon.usage_limit:
+        return None, 0.0, None
+    if coupon.applicability in ["wallet", "funding"]:
+        return None, 0.0, None
+    if subtotal < coupon.min_order_amount:
+        return None, 0.0, None
+
+    eligible_total = 0.0
+    for ci in cart_items:
+        is_internal = ci.product is not None
+        if ci.product:
+            p = float(ci.product.discount_price or ci.product.price or 0)
+        else:
+            try:
+                p = float("".join(c for c in (ci.price or "0") if c.isdigit() or c == "."))
+            except ValueError:
+                p = 0.0
+        item_total = p * ci.quantity
+        if coupon.applicability == "all":
+            eligible_total += item_total
+        elif coupon.applicability == "internal" and is_internal:
+            eligible_total += item_total
+        elif coupon.applicability == "external" and not is_internal:
+            eligible_total += item_total
+
+    if eligible_total <= 0:
+        return None, 0.0, None
+
+    if coupon.discount_type == "percentage":
+        discount = eligible_total * (coupon.discount_value / 100.0)
+        if coupon.max_discount:
+            discount = min(discount, coupon.max_discount)
+    else:
+        discount = min(coupon.discount_value, eligible_total)
+
+    return coupon.code, round(discount, 2), coupon
 
 
 class CreateOrderRequest(BaseModel):
@@ -70,6 +164,12 @@ async def create_order(
 
         item_total = price * ci.quantity
         total += item_total
+        variant_data = None
+        if ci.selections_json:
+            try:
+                variant_data = json.loads(ci.selections_json)
+            except Exception:
+                variant_data = {"raw": ci.selections_json}
         order_items.append(OrderItem(
             product_id=ci.product_id,
             title=title,
@@ -78,13 +178,37 @@ async def create_order(
             image_url=image,
             source=ci.cart_type.value,
             external_url=ext_url,
+            variant_info=variant_data,
         ))
+
+    # Apply pricing policy, coupon discount, and tax
+    import json
+    result_policy = await db.execute(select(AppSetting).where(AppSetting.key == "pricing_policy"))
+    policy_setting = result_policy.scalar_one_or_none()
+    policy = {}
+    if policy_setting:
+        try:
+            policy = json.loads(policy_setting.value_en)
+        except Exception:
+            policy = {}
+
+    effective_policy = get_effective_pricing_policy(policy, req.cart_type or "internal")
+    valid_code, discount_amount, coupon_obj = await calculate_coupon_discount(db, req.coupon_code, cart_items, total)
+    if coupon_obj:
+        coupon_obj.used_count += 1
+
+    tax_percentage = effective_policy.get("tax_percentage", 0.0)
+    taxable_subtotal = max(0.0, total - discount_amount)
+    tax_amount = round(taxable_subtotal * (tax_percentage / 100.0), 2) if tax_percentage > 0 else 0.0
+    final_total = round(taxable_subtotal + tax_amount, 2)
 
     order = Order(
         user_id=user.id,
-        total=round(total, 2),
+        total=final_total,
         shipping_address=req.shipping_address,
-        coupon_code=req.coupon_code,
+        coupon_code=valid_code,
+        discount_amount=discount_amount,
+        tax_amount=tax_amount,
         notes=req.notes,
         items=order_items,
     )
@@ -156,6 +280,7 @@ async def place_order(
     payment_method_id: str = Form(...),
     payment_form_data: Optional[str] = Form(None),
     payment_proof: Optional[UploadFile] = File(None),
+    coupon_code: Optional[str] = Form(None),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -274,6 +399,12 @@ async def place_order(
 
         item_total = price * ci.quantity
         total += item_total
+        variant_data = None
+        if ci.selections_json:
+            try:
+                variant_data = json.loads(ci.selections_json)
+            except Exception:
+                variant_data = {"raw": ci.selections_json}
         order_items.append(
             OrderItem(
                 product_id=ci.product_id,
@@ -283,6 +414,7 @@ async def place_order(
                 image_url=image,
                 source=ci.cart_type.value,
                 external_url=ext_url,
+                variant_info=variant_data,
             )
         )
 
@@ -335,8 +467,7 @@ async def place_order(
             else:
                 commission = 0.0
 
-    # ── Apply global pricing policy as fallback if no state/city rates ────────
-    import json
+    # ── Apply global / per-site pricing policy as fallback if no state/city rates ────────
     result_policy = await db.execute(select(AppSetting).where(AppSetting.key == "pricing_policy"))
     policy_setting = result_policy.scalar_one_or_none()
     policy = {}
@@ -346,18 +477,20 @@ async def place_order(
         except Exception:
             policy = {}
 
-    if shipping_type == "home" and shipping_fee == 0.0 and policy:
-        mode = policy.get("shipping_mode", "fixed")
-        val = float(policy.get("shipping_value", 0.0))
+    effective_policy = get_effective_pricing_policy(policy, cart_type)
+
+    if shipping_type == "home" and shipping_fee == 0.0 and effective_policy:
+        mode = effective_policy.get("shipping_mode", "fixed")
+        val = float(effective_policy.get("shipping_value", 0.0))
         if mode == "fixed":
             shipping_fee = val
         elif mode == "formula":
             # val is a multiplier applied to subtotal
             shipping_fee = round(total * val, 2)
 
-    if commission == 0.0 and policy:
-        mode = policy.get("commission_mode", "fixed")
-        val = float(policy.get("commission_value", 0.0))
+    if commission == 0.0 and effective_policy:
+        mode = effective_policy.get("commission_mode", "fixed")
+        val = float(effective_policy.get("commission_value", 0.0))
         if mode == "fixed":
             commission = val
         elif mode == "formula":
@@ -372,17 +505,27 @@ async def place_order(
         except Exception:
             team_review_fee = 5.0
 
-    total += shipping_fee + commission + team_review_fee
-    total = round(total, 2)
+    # Calculate Coupon Discount
+    valid_code, discount_amount, coupon_obj = await calculate_coupon_discount(db, coupon_code, cart_items, total)
+    if coupon_obj:
+        coupon_obj.used_count += 1
+
+    # Calculate Tax
+    tax_percentage = float(effective_policy.get("tax_percentage", 0.0))
+    taxable_subtotal = max(0.0, total - discount_amount)
+    tax_amount = round(taxable_subtotal * (tax_percentage / 100.0), 2) if tax_percentage > 0 else 0.0
+
+    # Final Total
+    final_total = round(taxable_subtotal + shipping_fee + commission + team_review_fee + tax_amount, 2)
 
     # ── Determine payment status based on method ──────────────────────────
     is_wallet = payment_method_id == "wallet"
 
     if is_wallet:
-        if user.credit_balance < total:
+        if user.credit_balance < final_total:
             raise HTTPException(status_code=400, detail="Insufficient wallet balance")
         # Deduct wallet
-        user.credit_balance = round(user.credit_balance - total, 2)
+        user.credit_balance = round(user.credit_balance - final_total, 2)
         p_status = PaymentStatus.NOT_REQUIRED  # Wallet is auto-approved
         order_status = OrderStatus.CONFIRMED
     else:
@@ -394,12 +537,15 @@ async def place_order(
     # ── Create order ──────────────────────────────────────────────────────
     order = Order(
         user_id=user.id,
-        total=total,
+        total=final_total,
         status=order_status,
         cart_type=cart_type,
         shipping_address=shipping_address_data,
         shipping_type=shipping_type,
         pickup_station_id=pickup_station_id,
+        coupon_code=valid_code,
+        discount_amount=discount_amount,
+        tax_amount=tax_amount,
         notes=additional_note,
         allow_team_review=allow_team_review,
         payment_method_id=payment_method_id,
@@ -415,7 +561,7 @@ async def place_order(
     if is_wallet:
         tx = WalletTransaction(
             user_id=user.id,
-            amount=total,
+            amount=final_total,
             type=WalletTransactionType.DEBIT,
             reason=f"Order payment",
             reference_type="order",

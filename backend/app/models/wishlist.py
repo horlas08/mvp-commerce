@@ -18,6 +18,7 @@ class WishlistItem(Base):
     price: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     image_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     source: Mapped[str] = mapped_column(String(50), default="internal")
+    selections_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
@@ -38,4 +39,5 @@ class WishlistItem(Base):
             result["title"] = self.title
             result["price"] = self.price
             result["image_url"] = self.image_url
+            result["selections_json"] = self.selections_json
         return result

@@ -20,6 +20,7 @@ class AddWishlistRequest(BaseModel):
     price: Optional[str] = None
     image_url: Optional[str] = None
     source: str = "internal"
+    selections_json: Optional[str] = None
 
 
 @router.get("")
