@@ -362,6 +362,58 @@ class ScraperHelper {
           // variant_images: { optionLabel -> imageUrl } gathered from all sources
           const variantImages = {};
 
+          // ── Source 0: Alibaba structured SKU data (window.detailData.globalData.product.sku) ──
+          try {
+            let aliSkuAttrs = null;
+            if (typeof window !== 'undefined' && window.detailData && window.detailData.globalData && window.detailData.globalData.product && window.detailData.globalData.product.sku) {
+              const s = window.detailData.globalData.product.sku;
+              aliSkuAttrs = s.skuAttrs || s.skuSummaryAttrs;
+            }
+            if (!aliSkuAttrs) {
+              const scripts = document.querySelectorAll('script');
+              for (const s of scripts) {
+                const txt = s.textContent || '';
+                if (txt.includes('detailData') && (txt.includes('skuAttrs') || txt.includes('skuSummaryAttrs'))) {
+                  const m = txt.match(/["']skuAttrs["']\s*:\s*(\[\s*\{.*?\}\s*\])\s*,\s*["']skuInfoMap["']/s) ||
+                            txt.match(/["']skuSummaryAttrs["']\s*:\s*(\[.*?\])(?=\s*[,}])/s);
+                  if (m) {
+                    try { aliSkuAttrs = JSON.parse(m[1]); } catch(e2) {}
+                  }
+                }
+                if (aliSkuAttrs) break;
+              }
+            }
+
+            if (Array.isArray(aliSkuAttrs) && aliSkuAttrs.length > 0) {
+              hasVariants = true;
+              aliSkuAttrs.forEach(attr => {
+                const name = (attr.name || '').trim();
+                if (!name) return;
+                const options = [];
+                let value = '';
+                if (Array.isArray(attr.values)) {
+                  attr.values.forEach(v => {
+                    const opt = (v.name || '').trim();
+                    if (opt && options.indexOf(opt) === -1) options.push(opt);
+                    if (v.selected && opt) {
+                      value = opt;
+                    }
+                    const imgUrl = (v.largeImage || v.originImage || v.smallImage || v.hotIconUrl || v.imageUrl || '').trim();
+                    if (opt && imgUrl) {
+                      variantImages[opt] = imgUrl.startsWith('//') ? ('https:' + imgUrl) : imgUrl;
+                    }
+                  });
+                  if (!value && options.length === 1) value = options[0];
+                }
+                if (name && options.length > 0) {
+                  upsertSelection(selections, { name: name, value: value, options: options });
+                }
+              });
+            }
+          } catch(e) {
+            console.warn('[koon] Alibaba SKU structured extraction error:', e);
+          }
+
           // ── Source 1: Alibaba embedded JSON (skuSummaryAttrs.hotIconUrl) ──────
           try {
             const scripts = document.querySelectorAll('script');
@@ -378,7 +430,7 @@ class ScraperHelper {
                       attr.values.forEach(v => {
                         const label = (v.name || '').trim();
                         const imgUrl = (v.hotIconUrl || v.imageUrl || v.imgUrl || '').trim();
-                        if (label && imgUrl) variantImages[label] = imgUrl;
+                        if (label && imgUrl) variantImages[label] = imgUrl.startsWith('//') ? ('https:' + imgUrl) : imgUrl;
                       });
                     });
                   }
@@ -394,6 +446,7 @@ class ScraperHelper {
             document.querySelectorAll(
               '[data-testid="double-bordered-box"] img, '
               + '[data-testid="sku-summary-value"] img, '
+              + '[data-testid="sku-summary-value-image"], '
               + '.sku-item img, .product-sku img, '
               + '[class*="sku"] [class*="swatch"] img, '
               + '[class*="color"] img'
@@ -423,18 +476,30 @@ class ScraperHelper {
                 const v = el.textContent.trim();
                 if (v && options.indexOf(v) === -1) options.push(v);
               });
+              floor.querySelectorAll('[data-testid="sku-summary-value-image"], img').forEach(img => {
+                const v = (img.alt || img.getAttribute('title') || '').trim();
+                if (v && options.indexOf(v) === -1) options.push(v);
+                const src = img.src || '';
+                if (v && src && !variantImages[v]) {
+                  variantImages[v] = src.startsWith('//') ? ('https:' + src) : src;
+                }
+              });
               let value = '';
               floor.querySelectorAll('[data-testid="sku-summary-value"]').forEach(el => {
                 const cls = (el.className || '') + ' ' + (el.getAttribute('aria-selected') || '');
                 const selected = /selected|active|border|ring/i.test(cls);
                 const v = el.querySelector('[data-testid="sku-summary-value-name"]');
-                if (selected && v) value = v.textContent.trim();
+                const img = el.querySelector('[data-testid="sku-summary-value-image"], img');
+                const optVal = v ? v.textContent.trim() : (img ? (img.alt || img.getAttribute('title') || '').trim() : '');
+                if (selected && optVal) value = optVal;
               });
               if (!value && options.length === 1) value = options[0];
               const items = floor.querySelectorAll('[data-testid="sku-summary-value"]');
               if (!value && items.length === 1) {
                 const v = items[0].querySelector('[data-testid="sku-summary-value-name"]');
-                if (v) value = v.textContent.trim();
+                const img = items[0].querySelector('[data-testid="sku-summary-value-image"], img');
+                const optVal = v ? v.textContent.trim() : (img ? (img.alt || img.getAttribute('title') || '').trim() : '');
+                if (optVal) value = optVal;
               }
               if (!value && options.length > 1) requiresSelection = true;
               if (isPlaceholderValue(value)) requiresSelection = true;
@@ -1712,10 +1777,12 @@ class ScraperHelper {
               }
             }
 
-            // 2. AliExpress alternative / popup SKU boxes
-            const skuBoxes = document.querySelectorAll('[data-testid="double-bordered-box"], [data-testid="sku-summary-value"]');
+            // 2. AliExpress / Alibaba alternative / popup SKU boxes
+            const skuBoxes = document.querySelectorAll(
+              '[data-testid="double-bordered-box"], [data-testid="sku-summary-value"], [data-testid="sku-summary-item"], [data-testid="sku-summary-value-image"]'
+            );
             for (const box of skuBoxes) {
-              const img = box.querySelector('img');
+              const img = (box.tagName && box.tagName.toLowerCase() === 'img') ? box : box.querySelector('img');
               const textSpan = box.querySelector('[data-testid="sku-summary-value-name"], span, p');
               let label = (img ? (img.alt || img.title) : '') || (textSpan ? textSpan.textContent : '') || box.textContent || '';
               label = label.trim().toLowerCase();
