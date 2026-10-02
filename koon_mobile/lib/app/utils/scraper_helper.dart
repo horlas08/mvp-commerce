@@ -4,11 +4,11 @@ class ScraperHelper {
   static String buildScraperScript(Map<String, dynamic> config) {
     final hideSelectors = List<String>.from(config['hide_selectors'] ?? []);
     final titleSelector = config['title_selector'] ?? '';
-    final priceSelectorsJson = jsonEncode(config['price_selectors'] ?? []);
+    final priceSelectors = List<String>.from(config['price_selectors'] ?? []);
     final imageSelectorsJson = jsonEncode(config['image_selectors'] ?? []);
     final siteName = config['name'] ?? '';
 
-    // Add footer fallbacks for AliExpress/Alibaba etc
+    // Add footer and call-app fallbacks for AliExpress/Alibaba/Shein etc
     final nameLower = siteName.toLowerCase();
     if (nameLower.contains('aliexpress') || nameLower.contains('alibaba') || nameLower.contains('shein')) {
       final fallbacks = [
@@ -33,7 +33,49 @@ class ScraperHelper {
         }
       }
     }
+    if (nameLower.contains('alibaba')) {
+      final alibabaCallAppFallbacks = [
+        '#call-app-dialog',
+        '.call-app-dialog',
+        '.call-app-dialog-main',
+        '#call-app-button',
+        '.call-app-button',
+        '.call-app-dialog-mask',
+        '.call-app-btn-overlay',
+        '.call-app-page-overlay',
+        "[class*='call-app']",
+        "[id*='call-app']",
+        "[class*='callApp']",
+        "[id*='callApp']",
+        '.m-app-banner',
+        '.app-banner',
+        '.smart-banner',
+      ];
+      for (final f in alibabaCallAppFallbacks) {
+        if (!hideSelectors.contains(f)) {
+          hideSelectors.add(f);
+        }
+      }
+      final alibabaPriceFallbacks = [
+        "[data-testid='range-prices'] span",
+        "[data-testid='range-prices']",
+        "[data-testid='ladder-prices'] span",
+        "[data-testid='ladder-prices']",
+        "[data-testid*='price'] span",
+        "[data-testid*='price']",
+        ".product-price span",
+        ".product-price",
+        "[class*='product-price']",
+        ".module-pdp-price .price",
+      ];
+      for (final p in alibabaPriceFallbacks) {
+        if (!priceSelectors.contains(p)) {
+          priceSelectors.add(p);
+        }
+      }
+    }
     final hideSelectorsJson = jsonEncode(hideSelectors);
+    final priceSelectorsJson = jsonEncode(priceSelectors);
 
     String js = r"""
       (function() {
@@ -80,10 +122,24 @@ class ScraperHelper {
                   'display:none!important;visibility:hidden!important;' +
                   'pointer-events:none!important;opacity:0!important;' +
                   'width:0!important;height:0!important;max-height:0!important;' +
-                  'overflow:hidden!important;');
+                  'overflow:hidden!important;position:fixed!important;left:-99999px!important;');
+                if (sel.includes('call-app') || sel.includes('callApp') || sel.includes('smart-banner')) {
+                  try { node.remove(); } catch(e) {}
+                }
               });
             } catch(e) {}
           }
+          // Dismiss and remove any Alibaba call-app dialogs
+          try {
+            const closeBtns = document.querySelectorAll('#call-app-dialog-close, .ca-close, [class*="call-app"] [class*="close"], [class*="callApp"] [class*="close"]');
+            closeBtns.forEach(btn => { try { btn.click(); } catch(e) {} });
+            const callAppNodes = document.querySelectorAll('#call-app-dialog, .call-app-dialog, #call-app-button, .call-app-button, .call-app-dialog-mask, .call-app-btn-overlay, .call-app-page-overlay');
+            callAppNodes.forEach(n => {
+              if (n && n.tagName && n.tagName.toLowerCase() !== 'body' && n.tagName.toLowerCase() !== 'html') {
+                try { n.remove(); } catch(e) {}
+              }
+            });
+          } catch(e) {}
           // Only unlock modal-locked body/html overflow without forcing 'auto !important'
           // which breaks viewport-level scrolling and IntersectionObserver on WebKit/Chromium.
           try {
@@ -1184,6 +1240,94 @@ class ScraperHelper {
               }
             }
 
+            // ── Priority 0.9: Alibaba Dedicated Price Extractor ──
+            if (isAlibaba && !priceNum) {
+              // 1. Try window.detailData first (most accurate structured data)
+              try {
+                if (window.detailData && window.detailData.globalData && window.detailData.globalData.product && window.detailData.globalData.product.price) {
+                  const prObj = window.detailData.globalData.product.price;
+                  if (prObj.productRangePrices) {
+                    const rp = prObj.productRangePrices;
+                    if (rp.priceRangeLow && parseFloat(rp.priceRangeLow) > 0) {
+                      priceNum = '' + rp.priceRangeLow;
+                    } else if (rp.priceRangeText) {
+                      const p = parsePriceString(rp.priceRangeText);
+                      if (p && parseFloat(p) > 0) priceNum = p;
+                    }
+                  }
+                  if (!priceNum && prObj.productPrice) {
+                    const pp = prObj.productPrice;
+                    const val = pp.price || pp.minPrice || pp.formatPrice || '';
+                    const p = parsePriceString('' + val);
+                    if (p && parseFloat(p) > 0) priceNum = p;
+                  }
+                }
+              } catch(e) {}
+
+              try {
+                if (!priceNum && window.detailData && window.detailData.nodeMap) {
+                  const nm = window.detailData.nodeMap;
+                  const sampleMod = nm.module_sample_new || nm.module_price || nm.module_price_ladder;
+                  if (sampleMod && sampleMod.privateData && sampleMod.privateData.priceList && sampleMod.privateData.priceList.length > 0) {
+                    const pl = sampleMod.privateData.priceList[0];
+                    const val = pl.minPrice || pl.price || pl.formatPrice || '';
+                    const p = parsePriceString('' + val);
+                    if (p && parseFloat(p) > 0) priceNum = p;
+                  }
+                }
+              } catch(e) {}
+
+              // 2. Try Alibaba DOM selectors
+              if (!priceNum) {
+                const alibabaPriceSelectors = [
+                  '[data-testid="range-prices"] span',
+                  '[data-testid="range-prices"]',
+                  '[data-testid="ladder-prices"] span',
+                  '[data-testid="ladder-prices"]',
+                  '[data-testid*="price"] span',
+                  '[data-testid*="price"]',
+                  '.product-price span',
+                  '.product-price',
+                  '[class*="product-price"]',
+                  '.module-pdp-price .price',
+                  '.module-pdp-price',
+                  '.price-wrap .price',
+                  '.ma-spec-price span',
+                  '.ma-spec-price',
+                  '.pre-inquiry-price',
+                  '.ladder-price-item .price',
+                  '.promotion-price',
+                  '#J-ls-price'
+                ];
+                for (const sel of alibabaPriceSelectors) {
+                  const el = document.querySelector(sel);
+                  if (el) {
+                    const txt = (el.getAttribute('aria-label') || el.textContent || '').trim();
+                    if (!txt || txt.length > 60) continue;
+                    const currMatch = txt.match(/(\b(SAR|AED|USD|NGN|EUR|GBP|EGP|QAR|BHD|OMR|KWD)\b|ر\.س|ريال سعودي|ريال|درهم)/);
+                    if (currMatch) {
+                      currency = currMatch[1].trim();
+                    }
+                    let pVal = parsePriceString(txt);
+                    if (!pVal) {
+                      const m = txt.match(/(\d[\d,]*\.?\d*)\s*(?:ر\.س|SAR)/) || txt.match(/(?:ر\.س|SAR)\s*(\d[\d,]*\.?\d*)/) || txt.match(/\d[\d,]*\.\d{2}/);
+                      if (m) {
+                        pVal = (m[1] || m[0]).replace(/,/g, '');
+                      }
+                    }
+                    if (pVal && parseFloat(pVal) > 0) {
+                      priceNum = pVal;
+                      if (!currency) currency = 'SAR';
+                      break;
+                    }
+                  }
+                }
+              }
+              if (priceNum && (!currency || currency === 'ر.س' || currency === 'ريال' || currency === 'ريال سعودي')) {
+                currency = 'SAR';
+              }
+            }
+
             // ── Priority 1: Live Interactive DOM selectors (for AliExpress, Shein, Alibaba, etc.) ──
             // Checked FIRST so dynamic variant/size/color clicks update immediately rather than being stuck on static meta tags
             if (!priceNum && !isAmazonHost) {
@@ -1308,7 +1452,7 @@ class ScraperHelper {
             }
 
             // ── Priority 3: Fallback OpenGraph / product meta tags ──
-            if (!priceNum && !isAliExpress && !isAlibaba && !isAmazonHost) {
+            if (!priceNum && !isAliExpress && !isAmazonHost) {
               const priceMeta = document.querySelector(
                 'meta[property="product:price:amount"], meta[name="product:price:amount"],' +
                 'meta[property="og:price:amount"]'
@@ -1321,7 +1465,7 @@ class ScraperHelper {
             }
 
             // ── Priority 4: JSON-LD ──
-            if (!priceNum && !isAliExpress && !isAlibaba && !isAmazonHost && ld && ld.price) {
+            if (!priceNum && !isAliExpress && !isAmazonHost && ld && ld.price) {
               const m = ('' + ld.price).match(/\d+(?:\.\d+)?/);
               if (m) priceNum = m[0];
             }
@@ -1346,6 +1490,9 @@ class ScraperHelper {
             
             let price = "Unknown Price";
             if (priceNum) {
+              if (currency === 'ر.س' || currency === 'ريال' || currency === 'ريال سعودي') {
+                currency = 'SAR';
+              }
               if (currency) {
                 price = currency + " " + priceNum;
               } else {
