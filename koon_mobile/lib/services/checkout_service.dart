@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:image_picker/image_picker.dart';
 import '../app/constants/api_constants.dart';
@@ -74,6 +75,8 @@ class CheckoutService {
         'allow_team_review': allowTeamReview,
         if (couponCode != null && couponCode.isNotEmpty) 'coupon_code': couponCode,
         'payment_method_id': paymentMethodId,
+        if (paymentFormData != null && paymentFormData.isNotEmpty)
+          'payment_form_data': jsonEncode(paymentFormData),
       });
 
       if (paymentFormData != null) {

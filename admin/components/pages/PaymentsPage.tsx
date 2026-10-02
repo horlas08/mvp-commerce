@@ -134,6 +134,16 @@ export default function PaymentsPage() {
                       <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>
                         {order.payment_method_id === "wallet" ? t("pay_with_wallet") : order.payment_method_id}
                       </span>
+                      {order.payment_fields?.depositor_name && (
+                        <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
+                          {lang === "ar" ? "المودع: " : "Depositor: "}{order.payment_fields.depositor_name}
+                        </div>
+                      )}
+                      {order.payment_fields?.reference_number && (
+                        <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
+                          {lang === "ar" ? "المرجع: " : "Ref: "}{order.payment_fields.reference_number}
+                        </div>
+                      )}
                     </td>
                     <td>
                       {proofUrl ? (

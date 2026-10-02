@@ -10,6 +10,7 @@ import '../../controllers/settings_controller.dart';
 import 'steps/step1_address.dart';
 import 'steps/step2_shipping.dart';
 import 'steps/step4_payment.dart';
+import 'widgets/transfer_payment_sheet.dart';
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
@@ -348,51 +349,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                               padding: EdgeInsets.only(
                                 bottom: MediaQuery.of(ctx).viewInsets.bottom,
                               ),
-                              child: Container(
-                                decoration: const BoxDecoration(
-                                  color: AppColors.surface,
-                                  borderRadius: BorderRadius.vertical(
-                                    top: Radius.circular(24),
-                                  ),
-                                ),
-                                padding: const EdgeInsets.all(20),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    PaymentFormSheet(
-                                      method: method,
-                                      fields: List<Map<String, dynamic>>.from(
-                                          method['fields'] ?? []),
-                                      ctrl: _ctrl,
-                                    ),
-                                    const SizedBox(height: 12),
-                                    SizedBox(
-                                      width: double.infinity,
-                                      height: 52,
-                                      child: ElevatedButton(
-                                        onPressed: () {
-                                          Navigator.pop(ctx);
-                                          _ctrl.placeOrder();
-                                        },
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: AppColors.primary,
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(16),
-                                          ),
-                                        ),
-                                        child: Text(
-                                          'confirm_payment'.tr(),
-                                          style: GoogleFonts.inter(
-                                            fontSize: 15,
-                                            fontWeight: FontWeight.w700,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                              child: TransferPaymentSheet(
+                                ctrl: _ctrl,
+                                method: method,
                               ),
                             ),
                           );

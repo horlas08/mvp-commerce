@@ -379,6 +379,10 @@ async def place_order(
                 if field_key in form and field_key not in payment_fields_data:
                     payment_fields_data[field_key] = form[field_key]
 
+    for k in ["depositor_name", "reference_number", "transfer_number", "transfer_reference"]:
+        if k in form and k not in payment_fields_data:
+            payment_fields_data[k] = form[k]
+
     # ── Build order items & total ─────────────────────────────────────────
     total = 0.0
     order_items = []

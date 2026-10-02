@@ -376,5 +376,18 @@
   "apply": "تطبيق",
   "remove": "إزالة",
   "coupon_applied": "تم تطبيق الكوبون",
-  "invalid_coupon": "كود الخصم غير صالح"
+  "invalid_coupon": "كود الخصم غير صالح",
+  "depositor_name": "اسم المودع",
+  "enter_depositor_name": "أدخل اسم صاحب الحساب المحوِّل",
+  "transfer_or_ref_number": "رقم الحوالة أو المرجع",
+  "enter_transfer_or_ref_number": "أدخل رقم الحوالة أو الرقم المرجعي",
+  "upload_receipt_optional": "إرفاق إشعار التحويل (اختياري)",
+  "receipt_quick_confirm_tip": "إرفاق إشعار التحويل يسرع من تأكيد الدفع والطلب",
+  "confirm_and_place_order": "تأكيد وإتمام الطلب",
+  "depositor_name_required": "يرجى إدخال اسم المودع",
+  "ref_number_required": "يرجى إدخال رقم الحوالة أو الرقم المرجعي",
+  "bank_transfer_details": "بيانات التحويل البنكي",
+  "tap_to_upload_receipt": "اضغط هنا لإرفاق إشعار التحويل",
+  "receipt_attached": "تم إرفاق الإشعار",
+  "optional": "اختياري"
 }

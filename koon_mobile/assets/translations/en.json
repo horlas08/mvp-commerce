@@ -377,5 +377,18 @@
   "apply": "Apply",
   "remove": "Remove",
   "coupon_applied": "Coupon applied",
-  "invalid_coupon": "Invalid coupon code"
+  "invalid_coupon": "Invalid coupon code",
+  "depositor_name": "Depositor Name",
+  "enter_depositor_name": "Enter depositor full name",
+  "transfer_or_ref_number": "Transfer / Reference Number",
+  "enter_transfer_or_ref_number": "Enter transfer or reference number",
+  "upload_receipt_optional": "Upload Receipt (Optional)",
+  "receipt_quick_confirm_tip": "Upload receipt for a quick confirmation of the payment",
+  "confirm_and_place_order": "Confirm & Place Order",
+  "depositor_name_required": "Please enter the depositor name",
+  "ref_number_required": "Please enter the transfer or reference number",
+  "bank_transfer_details": "Bank Transfer Details",
+  "tap_to_upload_receipt": "Tap to upload receipt image",
+  "receipt_attached": "Receipt Attached",
+  "optional": "Optional"
 }

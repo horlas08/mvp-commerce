@@ -79,9 +79,7 @@ class Step4Payment extends StatelessWidget {
                 'title_ar': 'حوالة بنكية 💳',
                 'title_en': 'Bank Transfer 💳',
                 'bank_accounts': kDefaultBankAccounts,
-                'fields': [
-                  {'key': 'receipt_proof', 'label': 'Transfer Receipt Photo', 'type': 'file'}
-                ]
+                'fields': []
               });
             }
 
@@ -102,115 +100,6 @@ class Step4Payment extends StatelessWidget {
               }).toList(),
             );
           }),
-          const SizedBox(height: 24),
-          _PriceBreakdown(ctrl: ctrl, settings: settings),
-        ],
-      ),
-    );
-  }
-}
-
-class _PriceBreakdown extends StatelessWidget {
-  final CheckoutController ctrl;
-  final SettingsController settings;
-
-  const _PriceBreakdown({required this.ctrl, required this.settings});
-
-  @override
-  Widget build(BuildContext context) {
-    return Obx(() {
-      final shippingDisplay = ctrl.shippingFee > 0
-          ? settings.formatPrice(ctrl.shippingFee, 'SAR')
-          : 'free'.tr();
-      final commissionDisplay = ctrl.commissionFee > 0
-          ? settings.formatPrice(ctrl.commissionFee, 'SAR')
-          : settings.formatPrice(0.0, 'SAR');
-      final discountDisplay = ctrl.discount > 0
-          ? '-${settings.formatPrice(ctrl.discount, 'SAR')}'
-          : settings.formatPrice(0.0, 'SAR');
-      final taxLabel = ctrl.taxPercentage.value > 0
-          ? '${'tax'.tr()} (${ctrl.taxPercentage.value.toStringAsFixed(ctrl.taxPercentage.value.truncateToDouble() == ctrl.taxPercentage.value ? 0 : 1)}%)'
-          : 'tax'.tr();
-      final taxDisplay = settings.formatPrice(ctrl.tax, 'SAR');
-
-      return Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: AppColors.secondaryGradient,
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: Column(
-          children: [
-            _priceRow(
-              'subtotal'.tr(),
-              settings.formatPrice(ctrl.subtotal, 'SAR'),
-              Colors.white70,
-            ),
-            _priceRow(
-              'discount'.tr(),
-              discountDisplay,
-              ctrl.discount > 0 ? const Color(0xFF4ADE80) : Colors.white70,
-            ),
-            _priceRow(
-              'shipping_cost'.tr(),
-              shippingDisplay,
-              Colors.white70,
-            ),
-            _priceRow(
-              'commission_fee'.tr(),
-              commissionDisplay,
-              Colors.white70,
-            ),
-            if (ctrl.allowTeamReview.value)
-              _priceRow(
-                'team_review'.tr(),
-                settings.formatPrice(ctrl.teamReviewFee, 'SAR'),
-                Colors.white70,
-              ),
-            _priceRow(
-              taxLabel,
-              taxDisplay,
-              Colors.white70,
-            ),
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 10),
-              child: Divider(color: Colors.white24, height: 1),
-            ),
-            _priceRow(
-              'order_total'.tr(),
-              settings.formatPrice(ctrl.orderTotal, 'SAR'),
-              Colors.white,
-              isTotal: true,
-            ),
-          ],
-        ),
-      );
-    });
-  }
-
-  Widget _priceRow(String label, String value, Color color,
-      {bool isTotal = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: GoogleFonts.inter(
-              fontSize: isTotal ? 15 : 13,
-              fontWeight: isTotal ? FontWeight.w700 : FontWeight.w400,
-              color: color,
-            ),
-          ),
-          Text(
-            value,
-            style: GoogleFonts.inter(
-              fontSize: isTotal ? 18 : 13,
-              fontWeight: isTotal ? FontWeight.w800 : FontWeight.w500,
-              color: Colors.white,
-            ),
-          ),
         ],
       ),
     );
@@ -748,45 +637,6 @@ class _AdminPaymentCard extends StatelessWidget {
                     ),
                   );
                 },
-              ),
-
-              // Transfer Receipt Upload Dropzone
-              Padding(
-                padding: const EdgeInsets.fromLTRB(14, 12, 14, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'add_transfer_receipt'.tr(),
-                      style: GoogleFonts.inter(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Obx(() {
-                      final proofFile = ctrl.paymentProofImage.value;
-                      final hasFile = proofFile != null;
-                      return _UploadDropzone(
-                        hasFile: hasFile,
-                        fileName: proofFile?.name ?? proofFile?.path.split('/').last,
-                        imagePath: proofFile?.path,
-                        onTap: () async {
-                          final img = await showSourcePicker(context);
-                          if (img != null) {
-                            ctrl.paymentProofImage.value = img;
-                            ctrl.paymentFormData['receipt_proof'] = img.path;
-                          }
-                        },
-                        onClear: () {
-                          ctrl.paymentProofImage.value = null;
-                          ctrl.paymentFormData.remove('receipt_proof');
-                        },
-                      );
-                    }),
-                  ],
-                ),
               ),
             ],
           ],
