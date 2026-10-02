@@ -2603,14 +2603,15 @@ class _ProductSelectionSheetState extends State<_ProductSelectionSheet> {
         final sName = (s['name'] ?? '').toString();
         final sVal = (s['value'] ?? '').toString().trim();
         final sOpts = _optionsFor(s);
-        if (_isUpdating && sVal.isNotEmpty) {
+        final currentChosen = _chosen[sName];
+        if (currentChosen != null && currentChosen.isNotEmpty && sOpts.contains(currentChosen)) {
+          // Preserve the user's explicit selection
+          continue;
+        }
+        if (sVal.isNotEmpty && sOpts.contains(sVal)) {
           _chosen[sName] = sVal;
-        } else if (!_chosen.containsKey(sName) || (_chosen[sName] != null && !sOpts.contains(_chosen[sName]))) {
-          if (sVal.isNotEmpty) {
-            _chosen[sName] = sVal;
-          } else if (sOpts.isNotEmpty) {
-            _chosen[sName] = sOpts.first;
-          }
+        } else if (sOpts.isNotEmpty) {
+          _chosen[sName] = sOpts.first;
         }
       }
     }

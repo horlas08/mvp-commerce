@@ -393,9 +393,13 @@ class ScraperHelper {
                 let value = '';
                 if (Array.isArray(attr.values)) {
                   attr.values.forEach(v => {
-                    const opt = (v.name || '').trim();
+                    let opt = (v.name || '').trim();
+                    if (name.includes('تخزين') || name.toLowerCase().includes('storage')) {
+                      if (opt === 'رجم') opt = '512GB';
+                      else if (opt === 'GB') opt = '256GB';
+                    }
                     if (opt && options.indexOf(opt) === -1) options.push(opt);
-                    if (v.selected && opt) {
+                    if (v.selected && opt && !value) {
                       value = opt;
                     }
                     const imgUrl = (v.largeImage || v.originImage || v.smallImage || v.hotIconUrl || v.imageUrl || '').trim();
@@ -403,6 +407,12 @@ class ScraperHelper {
                       variantImages[opt] = imgUrl.startsWith('//') ? ('https:' + imgUrl) : imgUrl;
                     }
                   });
+                  if (window.__koonUserSelections && window.__koonUserSelections[name]) {
+                    const userOpt = window.__koonUserSelections[name];
+                    if (options.indexOf(userOpt) !== -1) {
+                      value = userOpt;
+                    }
+                  }
                   if (!value && options.length === 1) value = options[0];
                 }
                 if (name && options.length > 0) {
@@ -1636,6 +1646,11 @@ class ScraperHelper {
         };
         window.__koonSelectOption = function(name, value, optImgUrl) {
           try {
+            if (!window.__koonUserSelections) window.__koonUserSelections = {};
+            if (name && value) {
+              window.__koonUserSelections[name] = value;
+            }
+
             function cleanAttr(s) {
               if (!s) return '';
               let t = ('' + s).toLowerCase().replace(/[:：]/g, '').trim();
@@ -1648,12 +1663,18 @@ class ScraperHelper {
               if (!ca || !cb) return false;
               if (ca === cb) return true;
               if ((ca.includes('لون') || ca.includes('color')) && (cb.includes('لون') || cb.includes('color'))) return true;
-              if ((ca.includes('حجم') || ca.includes('مقاس') || ca.includes('سعة') || ca.includes('size')) &&
-                  (cb.includes('حجم') || cb.includes('مقاس') || cb.includes('سعة') || cb.includes('size'))) return true;
+              if ((ca.includes('حجم') || ca.includes('مقاس') || ca.includes('سعة') || ca.includes('size') || ca.includes('تخزين')) &&
+                  (cb.includes('حجم') || cb.includes('مقاس') || cb.includes('سعة') || cb.includes('size') || cb.includes('تخزين'))) return true;
               return false;
             }
 
             const normVal = ('' + (value || '')).toLowerCase().trim();
+            const aliases = [normVal];
+            if (normVal === '512gb') aliases.push('رجم', '512', '512g');
+            if (normVal === '256gb') aliases.push('gb', '256', '256g');
+            if (normVal === 'رجم') aliases.push('512gb', '512');
+            if (normVal === 'gb') aliases.push('256gb', '256');
+
             const targetImgUrl = (optImgUrl && ('' + optImgUrl).startsWith('http'))
                 ? ('' + optImgUrl)
                 : ((window.__koonVariantImages && window.__koonVariantImages[value])
@@ -1789,7 +1810,8 @@ class ScraperHelper {
               const boxImgSrc = (img && img.src) ? img.src.split('?')[0] : '';
               const imgMatch = targetImgUrl && boxImgSrc && (targetImgUrl.includes(boxImgSrc) || boxImgSrc.includes(targetImgUrl));
 
-              if ((label && (label === normVal || label.includes(normVal) || normVal.includes(label))) || imgMatch) {
+              const isMatch = aliases.some(al => label === al || label.includes(al) || al.includes(label)) || imgMatch;
+              if (isMatch) {
                 const cls = (box.className || '') + ' ' + (box.getAttribute('aria-selected') || '');
                 const isSelected = /selected|active|border|ring/i.test(cls);
                 if (!isSelected) {
