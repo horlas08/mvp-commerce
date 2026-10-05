@@ -644,14 +644,35 @@ class ScraperHelper {
               const raw = colorHeader.textContent.trim().split(/[:：]/)[0].trim();
               colorName = raw || 'اللون';
             }
-            const colorItems = document.querySelectorAll('.bs-color__item, [class*="color__item"], .bs-color-circle-image__item');
+            const colorItems = document.querySelectorAll(
+              '.bs-color__item, [class*="color__item"], .bs-color-circle-image__item, .bs-color-square-image__item'
+            );
             if (colorItems.length > 0) {
               hasVariants = true;
               const options = [];
               let value = '';
+
+              // Count raw labels to detect duplicates
+              const labelCounts = {};
               colorItems.forEach(el => {
-                const opt = (el.getAttribute('aria-label') || el.getAttribute('data-attr_value') || el.textContent.trim()).trim();
-                if (opt && options.indexOf(opt) === -1) options.push(opt);
+                const rawOpt = (el.getAttribute('aria-label') || el.getAttribute('data-attr_value') || el.textContent.trim()).trim();
+                if (rawOpt) {
+                  labelCounts[rawOpt] = (labelCounts[rawOpt] || 0) + 1;
+                }
+              });
+
+              const labelSeen = {};
+              colorItems.forEach(el => {
+                const rawOpt = (el.getAttribute('aria-label') || el.getAttribute('data-attr_value') || el.textContent.trim()).trim();
+                if (!rawOpt) return;
+
+                let opt = rawOpt;
+                if (labelCounts[rawOpt] > 1) {
+                  labelSeen[rawOpt] = (labelSeen[rawOpt] || 0) + 1;
+                  opt = rawOpt + ' ' + labelSeen[rawOpt];
+                }
+
+                if (options.indexOf(opt) === -1) options.push(opt);
                 
                 const cls = (el.className || '') + ' ' + (el.getAttribute('aria-selected') || '') + ' ' + (el.getAttribute('aria-checked') || '');
                 const selected = /selected|active|true/i.test(cls);
@@ -660,7 +681,9 @@ class ScraperHelper {
                 // Extract image swatch if available (img tag or CSS background-image)
                 let swatchUrl = '';
                 const img = el.querySelector('img:not([alt*="hot"]):not([src*="hot"])');
-                if (img && img.src) swatchUrl = img.src;
+                if (img) {
+                  swatchUrl = img.getAttribute('src') || img.getAttribute('data-src') || img.src || '';
+                }
                 if (!swatchUrl) {
                   const bgEl = el.querySelector('.bs-color-circle-image__item-inner, [style*="background-image"]') || el;
                   const styleStr = (bgEl && bgEl.getAttribute('style')) || '';
@@ -679,9 +702,7 @@ class ScraperHelper {
                   swatchUrl = swatchUrl.trim();
                   if (swatchUrl.startsWith('//')) swatchUrl = 'https:' + swatchUrl;
                   if (swatchUrl.startsWith('http') && opt) {
-                    if (!variantImages[opt] || selected) {
-                      variantImages[opt] = swatchUrl;
-                    }
+                    variantImages[opt] = swatchUrl;
                   }
                 }
               });
@@ -2010,22 +2031,86 @@ class ScraperHelper {
 
               // Try color items if color intent or not explicitly size
               if (isColorIntent || !isSizeIntent) {
-                const colorItems = document.querySelectorAll('.bs-color__item, [class*="color__item"], .bs-color-circle-image__item');
-                let foundColor = false;
-                for (const item of colorItems) {
-                  if (matchesSheinColor(item, normVal)) {
-                    const cls = (item.className || '') + ' ' + (item.getAttribute('aria-selected') || '') + ' ' + (item.getAttribute('aria-checked') || '');
-                    const isSelected = /selected|active|true/i.test(cls);
-                    if (!isSelected) {
-                      try { item.scrollIntoView({ behavior: 'instant', block: 'nearest' }); } catch(e) {}
-                      simulateClick(item);
-                      const inner = item.querySelector('img, span, div, a');
-                      if (inner) simulateClick(inner);
+                const colorItems = document.querySelectorAll(
+                  '.bs-color__item, [class*="color__item"], .bs-color-circle-image__item, .bs-color-square-image__item'
+                );
+
+                // Helper to get swatch image url from an element
+                function getSwatchUrl(el) {
+                  const img = el.querySelector('img:not([alt*="hot"]):not([src*="hot"])');
+                  if (img) {
+                    const s = img.getAttribute('src') || img.getAttribute('data-src') || img.src || '';
+                    if (s) return s.replace(/^\/\//, 'https://');
+                  }
+                  const bgEl = el.querySelector('.bs-color-circle-image__item-inner, [style*="background-image"]') || el;
+                  const styleStr = (bgEl && bgEl.getAttribute('style')) || '';
+                  const m = styleStr.match(/url\(["']?([^"')]+)["']?\)/i);
+                  if (m && m[1]) return m[1].replace(/^\/\//, 'https://');
+                  return '';
+                }
+
+                // If targetImgUrl is provided, match by image filename first
+                let matchedItem = null;
+                if (targetImgUrl) {
+                  for (const item of colorItems) {
+                    const itemUrl = getSwatchUrl(item);
+                    if (itemUrl) {
+                      const cleanTarget = targetImgUrl.split('?')[0].split('#')[0];
+                      const cleanItem = itemUrl.split('?')[0].split('#')[0];
+                      const fileTarget = cleanTarget.substring(cleanTarget.lastIndexOf('/') + 1);
+                      const fileItem = cleanItem.substring(cleanItem.lastIndexOf('/') + 1);
+                      if (fileTarget && fileItem && (fileTarget === fileItem || cleanTarget.includes(fileItem) || cleanItem.includes(fileTarget))) {
+                        matchedItem = item;
+                        break;
+                      }
                     }
-                    foundColor = true;
                   }
                 }
-                if (foundColor) return true;
+
+                // If not matched by image, check if value has a duplicate index suffix e.g. "متعدد الألوان 2"
+                if (!matchedItem) {
+                  const numMatch = normVal.match(/^(.+?)\s+(\d+)$/);
+                  if (numMatch) {
+                    const baseName = numMatch[1].trim();
+                    const targetIdx = parseInt(numMatch[2], 10) - 1; // 0-based
+                    let curIdx = 0;
+                    for (const item of colorItems) {
+                      const dataVal = (item.getAttribute('data-attr_value') || '').toLowerCase().trim();
+                      const ariaVal = (item.getAttribute('aria-label') || '').toLowerCase().trim();
+                      const textVal = (item.textContent || '').toLowerCase().trim();
+                      const itemBase = dataVal || ariaVal || textVal;
+                      if (itemBase === baseName || (ariaVal && ariaVal.includes(baseName)) || (baseName && baseName.includes(ariaVal))) {
+                        if (curIdx === targetIdx) {
+                          matchedItem = item;
+                          break;
+                        }
+                        curIdx++;
+                      }
+                    }
+                  }
+                }
+
+                // Fallback: standard label match
+                if (!matchedItem) {
+                  for (const item of colorItems) {
+                    if (matchesSheinColor(item, normVal)) {
+                      matchedItem = item;
+                      break;
+                    }
+                  }
+                }
+
+                if (matchedItem) {
+                  const cls = (matchedItem.className || '') + ' ' + (matchedItem.getAttribute('aria-selected') || '') + ' ' + (matchedItem.getAttribute('aria-checked') || '');
+                  const isSelected = /selected|active|true/i.test(cls);
+                  if (!isSelected) {
+                    try { matchedItem.scrollIntoView({ behavior: 'instant', block: 'nearest' }); } catch(e) {}
+                    simulateClick(matchedItem);
+                    const inner = matchedItem.querySelector('img, span, div, a');
+                    if (inner) simulateClick(inner);
+                  }
+                  return true;
+                }
               }
             }
 
