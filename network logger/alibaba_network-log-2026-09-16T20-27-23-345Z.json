@@ -1,0 +1,197 @@
+[
+  {
+    "method": "GET",
+    "url": "https://arabic.alibaba.com/",
+    "status": 200,
+    "statusText": "",
+    "type": "text/html",
+    "size": 52138,
+    "time": 3958.825999993862,
+    "timestamp": 1789590408497,
+    "requestHeaders": [
+      {
+        "name": ":authority",
+        "value": "arabic.alibaba.com"
+      },
+      {
+        "name": ":method",
+        "value": "GET"
+      },
+      {
+        "name": ":path",
+        "value": "/"
+      },
+      {
+        "name": ":scheme",
+        "value": "https"
+      },
+      {
+        "name": "accept",
+        "value": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"
+      },
+      {
+        "name": "accept-encoding",
+        "value": "gzip, deflate, br, zstd"
+      },
+      {
+        "name": "accept-language",
+        "value": "en-US,en;q=0.9,ru;q=0.8"
+      },
+      {
+        "name": "cookie",
+        "value": "ali_apache_id=33.1.205.97.1782041138983.614220.5; cna=Mri+IsF7Z2ACAS/2gMH1xu1F; uns_unc_f=trfc_i=safcps^f3c15t1s^gg3plg1jrkurlpeaga2AR^1jrkurlpl; __itrace_wid=1188ef7c-d2ca-446a-a0c3-f05dd62980ff; xman_us_f=x_l=0; xman_f=oh7UiwpLY2Fxr8x02fVCCS9om7TuJCL7WO8Mw2rR+tbJoKNhGlNeldcz/aqjCDFmSkAHYjI58cGQ11JW7zz+i9niAiI/QGsDqddWDgBA/NTp3GXBC0Eeuw==; m_havana_wp=5a9b0117da9e62f187fc835cffaa52693613dfc716150606e4441482272b0eacf0a1b769e34aaca21984f46f73efbd2d003597635d544e29ee183bdf6e1ff6b41b3cc93b859016aaee2c3141b257735c834e3ad7d91e2d40509fb5e41d494f57f9ccab312827d0f145fa7aa60c98940e3b5b8bf86631f320e7b252797d52bcd1230fb1b0f2efa51c607e8b58cbb28b0edf9c9a17eabc68177ff506f426bc60a60d242d7489c2e703e6d084fbda3d8fe160873a334bf5ffecb59e0eec35a5081021202eaea32e7db522379d4659f97432cd6e546b6100a2cd0853aac6e3f8f786a7f9116a3add75e2dba49dd6380c56ed5c9b78d01c7c9ccf08c0f4c1b21337b9f21abf11ecce4d6783bd10ba9e2acf6b514a73d89817720486563aace0c0f5e39abefe30d294f201f23382934acf4b7c; _yjsu_yjad=1782460261.cf49b8f6-fbe1-4452-bbf5-b735a9250fea; _fbp=fb.1.1782460262242.325767991266789924; _gcl_au=1.1.1942064825.1782460262; _ga=GA1.1.746006820.1782460262; _tt_enable_cookie=1; _ttp=01KW1EJDFPC9VCKQQKQ40QANTN_.tt.1; _uetvid=c1ea6650713311f1a3490b38c522d4e7; ttcsid=1782557545432::ctXYpMhCogWPuLCl92Ct.2.1782557555507.0::1.-34298.0::0.0.0.0::0.0.0; ttcsid_D856RLRC77U9FQKB84A0=1782557545418::9EXYb3OOOYKBYnyW1tS4.2.1782557555510.1; cto_bundle=m9Ywy194bUF6SXVVRTFyQjRCMkQlMkZ2azIlMkJvaERZaUElMkJTRVBldURIVTBDN08wQ1d2YXU1djMwUXZsRUo3ZzJWRFBzeFlxSDlmOFFlVmlZQXV2JTJGTFFCeXN4RkZtQ0VwYWdDVW1ReHlxekhkMXhLUW1xaEV6eE1VdSUyQlFoV1Q0cEMwMTY3U0tEVEU4U3Q4QUNiNVk0UmUyTzA1V21BJTNEJTNE; _ga_RVSKK1KF5N=GS2.1.s1782557543$o2$g0$t1782558683$j60$l0$h0; ali_apache_track=; sc_g_cfg_f=sc_b_currency=SAR&sc_b_locale=ar_SA&sc_b_site=NG; NWG=NNW; buyer_ship_to_info=local_country=NG; ug_se_c=organic_1782975991771; isg=BG9vNNltWaBDC13tu0CPnUeX_oV5FMM2w6sGY4H8U17l0I7SieWMhiBDV9hu45uu; tfstk=gj8EYubmxavsE7HRaCbrQXlVb87d8akftU65ZQAlO9XhRQaPZL9GRgmpF4SyFLGdqvQBzdJ63yaIveayQIvqwatCFz-wpIjB-wYyXzRvweGdPXQp9aQohxgjhBddyCsbKik6sbfRz6XU7xjH9aQoCoUaK2RpLEszuMbo_NfANJblx_caI66g-_4hZlcNwOXlr9fljlfPtyf3xzcwsOClrTvlrfSGB_blELboLbtBVl5cxXKEJ35bYWIlnBXarz2OTMXmkOzurF5FdtAhmz4k76Se5E7zi5bkxB9NcHk48OOHDLCDKJDPeFRM-nvi5y7ysnYPSFDg19xv_U7B-bghonpwzibqVXQDJQxvqBuZnG-2InC9XYrP33ABDFsUgkSHDptcbFMUWtxM_QswXbECFnCkeiLSHyBHZILvcZuUH6-MgNSPo8CiQ2YJY8qlx1CNhflwaiqeGvjN2HE82GXV_tGdpuERxt1Nhfla2uIKU1Wj9k1..; cbc=T2gAZw7p4wQcJXrXQ1Dp9hiezE0UANnyD6UdP_0_YIUlo0_S-u7LL8QPsIjlVgAVuOY="
+      },
+      {
+        "name": "priority",
+        "value": "u=0, i"
+      },
+      {
+        "name": "sec-ch-ua",
+        "value": "\"(Not(A:Brand\";v=\"99\", \"Google Chrome\";v=\"134\", \"Chromium\";v=\"134\""
+      },
+      {
+        "name": "sec-ch-ua-full-version-list",
+        "value": "\"(Not(A:Brand\";v=\"99.0.0.0\", \"Google Chrome\";v=\"134\", \"Chromium\";v=\"134\""
+      },
+      {
+        "name": "sec-ch-ua-mobile",
+        "value": "?1"
+      },
+      {
+        "name": "sec-ch-ua-platform",
+        "value": "\"Android\""
+      },
+      {
+        "name": "sec-fetch-dest",
+        "value": "document"
+      },
+      {
+        "name": "sec-fetch-mode",
+        "value": "navigate"
+      },
+      {
+        "name": "sec-fetch-site",
+        "value": "none"
+      },
+      {
+        "name": "sec-fetch-user",
+        "value": "?1"
+      },
+      {
+        "name": "upgrade-insecure-requests",
+        "value": "1"
+      },
+      {
+        "name": "user-agent",
+        "value": "Mozilla/5.0 (Linux; Android 14; Lenovo TB-X606FA) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.6895.92 Mobile Safari/537.36"
+      }
+    ],
+    "responseHeaders": [
+      {
+        "name": "alt-svc",
+        "value": "h3=\":443\"; ma=2592000"
+      },
+      {
+        "name": "cache-control",
+        "value": "max-age=0, no-cache, no-store"
+      },
+      {
+        "name": "content-encoding",
+        "value": "gzip"
+      },
+      {
+        "name": "content-type",
+        "value": "text/html;charset=UTF-8"
+      },
+      {
+        "name": "date",
+        "value": "Wed, 16 Sep 2026 20:26:51 GMT"
+      },
+      {
+        "name": "eagleeye-traceid",
+        "value": "2161386017895904108844086e0eeb"
+      },
+      {
+        "name": "eagleid",
+        "value": "2161386017895904108844086e0eeb"
+      },
+      {
+        "name": "edge-type",
+        "value": "akamai"
+      },
+      {
+        "name": "expires",
+        "value": "Wed, 16 Sep 2026 20:26:51 GMT"
+      },
+      {
+        "name": "link",
+        "value": "<https://s.alicdn.com>; rel=preconnect;"
+      },
+      {
+        "name": "pragma",
+        "value": "no-cache"
+      },
+      {
+        "name": "s-brt",
+        "value": "50"
+      },
+      {
+        "name": "s-rt",
+        "value": "52"
+      },
+      {
+        "name": "server-timing",
+        "value": "rt;dur=0.052,eagleid;desc=2161386017895904108844086e0eeb,brt;dur=50"
+      },
+      {
+        "name": "set-cookie",
+        "value": "cna=Mri+IsF7Z2ACAS/2gMH1xu1F; Domain=.alibaba.com; Path=/; Expires=Mon, 04-Oct-2094 23:40:57 GMT; Secure; SameSite=None"
+      },
+      {
+        "name": "set-cookie",
+        "value": "JSESSIONID=6A1BC9856FFE441BEEC9C473638FE41B; Path=/; HttpOnly"
+      },
+      {
+        "name": "set-cookie",
+        "value": "ug_se_c=organic_1789590410938; Domain=.alibaba.com; Expires=Sat, 25-May-2058 22:13:29 GMT; Path=/; Secure; SameSite=None"
+      },
+      {
+        "name": "set-cookie",
+        "value": "ug_se_c_tag=ts=1789590410938; Domain=.alibaba.com; Expires=Fri, 18-Sep-2026 20:26:50 GMT; Path=/; Secure; SameSite=None"
+      },
+      {
+        "name": "strict-transport-security",
+        "value": "max-age=31536000"
+      },
+      {
+        "name": "timing-allow-origin",
+        "value": "*"
+      },
+      {
+        "name": "ups-target-key",
+        "value": "duoyuyan.alibaba.com"
+      },
+      {
+        "name": "vary",
+        "value": "Accept-Encoding"
+      },
+      {
+        "name": "x-content-type-options",
+        "value": "nosniff"
+      },
+      {
+        "name": "x-frame-options",
+        "value": "DENY"
+      },
+      {
+        "name": "x-protocol",
+        "value": "HTTP/1.1"
+      }
+    ],
+    "queryString": [],
+    "responseContent": {
+      "size": 52138,
+      "mimeType": "text/html"
+    }
+  }
+]
