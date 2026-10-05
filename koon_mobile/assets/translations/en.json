@@ -228,6 +228,8 @@
   "pickup_station": "Select Pickup Station",
   "additional_note": "Additional Note (optional)",
   "additional_note_hint": "Any special instructions for your order...",
+  "add_note": "Add note",
+  "hide_note": "Hide note",
   "select_language": "Select Language",
   "select_language_desc": "Select your preferred app language",
   "arabic": "Arabic",

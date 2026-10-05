@@ -7,8 +7,22 @@ import '../../../app/theme/app_colors.dart';
 import '../../../controllers/checkout_controller.dart';
 import '../../../controllers/settings_controller.dart';
 
-class Step2Shipping extends StatelessWidget {
+class Step2Shipping extends StatefulWidget {
   const Step2Shipping({super.key});
+
+  @override
+  State<Step2Shipping> createState() => _Step2ShippingState();
+}
+
+class _Step2ShippingState extends State<Step2Shipping> {
+  bool _showNote = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final ctrl = Get.find<CheckoutController>();
+    _showNote = ctrl.additionalNote.value.trim().isNotEmpty;
+  }
 
   bool get isExternalCart {
     final ctrl = Get.find<CheckoutController>();
@@ -144,44 +158,70 @@ class Step2Shipping extends StatelessWidget {
           ],
 
           // ── Additional note (both cart types) ─────────────────────────
-          Text(
-            'additional_note'.tr(),
-            style: GoogleFonts.inter(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textSecondary,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'additional_note'.tr(),
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _showNote = !_showNote;
+                  });
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+                  child: Text(
+                    _showNote ? 'hide_note'.tr() : 'add_note'.tr(),
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primary,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ).animate(delay: 100.ms).fadeIn(duration: 300.ms),
-          const SizedBox(height: 8),
-          TextFormField(
-            initialValue: ctrl.additionalNote.value,
-            onChanged: (v) => ctrl.additionalNote.value = v,
-            maxLines: 4,
-            style: GoogleFonts.inter(fontSize: 14, color: AppColors.textPrimary),
-            decoration: InputDecoration(
-              hintText: 'additional_note_hint'.tr(),
-              hintStyle: GoogleFonts.inter(
-                fontSize: 13,
-                color: AppColors.textHint,
+          if (_showNote) ...[
+            const SizedBox(height: 8),
+            TextFormField(
+              initialValue: ctrl.additionalNote.value,
+              onChanged: (v) => ctrl.additionalNote.value = v,
+              maxLines: 4,
+              style: GoogleFonts.inter(fontSize: 14, color: AppColors.textPrimary),
+              decoration: InputDecoration(
+                hintText: 'additional_note_hint'.tr(),
+                hintStyle: GoogleFonts.inter(
+                  fontSize: 13,
+                  color: AppColors.textHint,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: AppColors.border),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: AppColors.border),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide:
+                      const BorderSide(color: AppColors.primary, width: 1.5),
+                ),
+                filled: true,
+                fillColor: AppColors.surfaceVariant,
+                contentPadding: const EdgeInsets.all(16),
               ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: AppColors.border),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: AppColors.border),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide:
-                    const BorderSide(color: AppColors.primary, width: 1.5),
-              ),
-              filled: true,
-              fillColor: AppColors.surfaceVariant,
-              contentPadding: const EdgeInsets.all(16),
-            ),
-          ).animate(delay: 120.ms).fadeIn(duration: 300.ms),
+            ).animate().fadeIn(duration: 200.ms),
+          ],
           const SizedBox(height: 24),
           _PriceBreakdown(ctrl: ctrl, settings: settings)
               .animate(delay: 140.ms)
@@ -443,17 +483,13 @@ class _PriceBreakdown extends StatelessWidget {
         ),
         child: Column(
           children: [
-            _priceRow(
-              'subtotal'.tr(),
-              settings.formatPrice(ctrl.subtotal, 'SAR'),
-              Colors.white70,
-            ),
-            _priceRow(
-              'discount'.tr(),
-              discountDisplay,
-              ctrl.discount > 0 ? const Color(0xFF4ADE80) : Colors.white70,
-              valueColor: ctrl.discount > 0 ? const Color(0xFF4ADE80) : Colors.white,
-            ),
+            if (ctrl.discount > 0)
+              _priceRow(
+                'discount'.tr(),
+                discountDisplay,
+                const Color(0xFF4ADE80),
+                valueColor: const Color(0xFF4ADE80),
+              ),
             _priceRow(
               'shipping_cost'.tr(),
               shippingDisplay,

@@ -228,6 +228,8 @@
   "pickup_station": "اختر نقطة الاستلام",
   "additional_note": "ملاحظة إضافية (اختياري)",
   "additional_note_hint": "أي تعليمات خاصة لطلبك...",
+  "add_note": "إضافة ملاحظة",
+  "hide_note": "إخفاء الملاحظة",
   "select_language": "اختيار اللغة",
   "select_language_desc": "اختر لغة التطبيق المفضلة",
   "arabic": "العربية",
