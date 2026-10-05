@@ -657,10 +657,32 @@ class ScraperHelper {
                 const selected = /selected|active|true/i.test(cls);
                 if (selected && opt) value = opt;
 
-                // Extract image swatch if available
-                const img = el.querySelector('img');
-                if (img && img.src && img.src.startsWith('http') && opt && !img.alt.includes('hot')) {
-                  variantImages[opt] = img.src;
+                // Extract image swatch if available (img tag or CSS background-image)
+                let swatchUrl = '';
+                const img = el.querySelector('img:not([alt*="hot"]):not([src*="hot"])');
+                if (img && img.src) swatchUrl = img.src;
+                if (!swatchUrl) {
+                  const bgEl = el.querySelector('.bs-color-circle-image__item-inner, [style*="background-image"]') || el;
+                  const styleStr = (bgEl && bgEl.getAttribute('style')) || '';
+                  const m = styleStr.match(/url\(["']?([^"')]+)["']?\)/i);
+                  if (m && m[1]) swatchUrl = m[1];
+                }
+                if (!swatchUrl && typeof window !== 'undefined' && window.getComputedStyle) {
+                  try {
+                    const bgEl = el.querySelector('.bs-color-circle-image__item-inner') || el;
+                    const cs = window.getComputedStyle(bgEl).backgroundImage;
+                    const m = cs && cs.match(/url\(["']?([^"')]+)["']?\)/i);
+                    if (m && m[1] && m[1] !== 'none') swatchUrl = m[1];
+                  } catch(e) {}
+                }
+                if (swatchUrl) {
+                  swatchUrl = swatchUrl.trim();
+                  if (swatchUrl.startsWith('//')) swatchUrl = 'https:' + swatchUrl;
+                  if (swatchUrl.startsWith('http') && opt) {
+                    if (!variantImages[opt] || selected) {
+                      variantImages[opt] = swatchUrl;
+                    }
+                  }
                 }
               });
               if (!value && options.length === 1) value = options[0];
@@ -675,23 +697,40 @@ class ScraperHelper {
             const sizeHeader = document.querySelector('.goods-size__title-txt, .goods-size__title-wrap');
             let sizeName = 'المقاس';
             if (sizeWrap && sizeWrap.textContent.trim()) {
-              sizeName = sizeWrap.textContent.trim();
+              const raw = sizeWrap.textContent.trim().split(/[:：]/)[0].trim();
+              sizeName = raw.startsWith('مقاس') ? 'المقاس' : (raw || 'المقاس');
             } else if (sizeHeader) {
               const raw = sizeHeader.textContent.trim().split(/[:：]/)[0].trim();
               sizeName = raw.startsWith('مقاس') ? 'المقاس' : (raw || 'المقاس');
             }
-            const sizeItems = document.querySelectorAll('.goods-size__sizes-item, [class*="sizes-item"]');
+            const sizeItems = document.querySelectorAll(
+              '.goods-size__sizes-item:not(.size-group__sizes-item):not(.pdp-enhanced):not(.goods-size__options-item):not(.goods-size__sizes-item-text)'
+            );
             if (sizeItems.length > 0) {
               hasVariants = true;
               const options = [];
               let value = '';
               sizeItems.forEach(el => {
-                if (el.classList.contains('pdp-enhanced') || el.classList.contains('goods-size__options-item')) return;
-                const opt = (el.getAttribute('data-attr_value') || el.getAttribute('aria-label') || el.textContent.trim()).trim();
-                if (opt && options.indexOf(opt) === -1) options.push(opt);
+                if (el.tagName === 'P' || el.tagName === 'SPAN') return;
+                const clsList = el.className || '';
+                if (/size-group|pdp-enhanced|options-item|sizes-item-text/i.test(clsList)) return;
+
+                const textEl = el.querySelector('.goods-size__sizes-item-text') || el.querySelector('p');
+                let opt = '';
+                if (textEl) {
+                  const clone = textEl.cloneNode(true);
+                  clone.querySelectorAll('.low-stock-tips, [class*="low-stock"], [class*="tips"]').forEach(t => t.remove());
+                  opt = (clone.textContent || '').trim();
+                }
+                if (!opt) {
+                  opt = (el.getAttribute('aria-label') || el.textContent || el.getAttribute('data-attr_value') || '').trim();
+                }
+                opt = opt.replace(/\(نفذت الكمية\)/g, '').replace(/\s+/g, ' ').trim();
+                if (!opt) return;
+                if (options.indexOf(opt) === -1) options.push(opt);
                 
-                const cls = (el.className || '') + ' ' + (el.getAttribute('aria-selected') || '') + ' ' + (el.getAttribute('aria-checked') || '');
-                const selected = /selected|active|true/i.test(cls);
+                const cls = clsList + ' ' + (el.getAttribute('aria-selected') || '') + ' ' + (el.getAttribute('aria-checked') || '');
+                const selected = /selected|size-active|active|true/i.test(cls);
                 if (selected && opt) value = opt;
               });
               if (!value && options.length === 1) value = options[0];
@@ -1637,9 +1676,17 @@ class ScraperHelper {
           if (layout) { layout.click(); return true; }
           const panel = document.querySelector('[data-testid="sku-panel-sku"]');
           if (panel) { panel.scrollIntoView({ behavior: 'smooth', block: 'center' }); return true; }
-          const sheinSize = document.querySelector('.goods-size__sizes-item, [class*="sizes-item"], .goods-size__wrapper');
-          if (sheinSize) {
-            try { sheinSize.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(e) {}
+          const sheinTarget = document.querySelector(
+            '.main-sales-attr-container, .bs-main-sales-attr, #color-heading, .goods-size, .goods-size__wrapper'
+          );
+          if (sheinTarget) {
+            try {
+              const y = sheinTarget.getBoundingClientRect().top + window.pageYOffset - 70;
+              window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+              sheinTarget.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } catch(e) {
+              try { sheinTarget.scrollIntoView(true); } catch(e2) {}
+            }
             return true;
           }
           return false;
@@ -1925,18 +1972,30 @@ class ScraperHelper {
                 if (!dataVal && !ariaVal && !textVal) return false;
                 if (dataVal === targetVal || ariaVal === targetVal || textVal === targetVal) return true;
                 if (ariaVal && (ariaVal.includes(targetVal) || targetVal.includes(ariaVal))) return true;
+                if (targetImgUrl) {
+                  const bgEl = el.querySelector('.bs-color-circle-image__item-inner, [style*="background-image"]') || el;
+                  const styleStr = (bgEl && bgEl.getAttribute('style')) || '';
+                  const m = styleStr.match(/url\(["']?([^"')]+)["']?\)/i);
+                  if (m && m[1]) {
+                    const bgUrl = m[1].replace(/^\/\//, 'https://');
+                    if (targetImgUrl.includes(bgUrl) || bgUrl.includes(targetImgUrl)) return true;
+                  }
+                }
                 return false;
               }
 
               // Try size items first if size intent or not explicitly color
               if (isSizeIntent || !isColorIntent) {
-                const sizeItems = document.querySelectorAll('.goods-size__sizes-item, [class*="sizes-item"], [class*="size__item"], [class*="size-item"]');
+                const sizeItems = document.querySelectorAll(
+                  '.goods-size__sizes-item:not(.size-group__sizes-item):not(.pdp-enhanced):not(.goods-size__options-item):not(.goods-size__sizes-item-text)'
+                );
                 let foundSize = false;
                 for (const item of sizeItems) {
-                  if (item.classList.contains('pdp-enhanced') || item.classList.contains('goods-size__options-item')) continue;
+                  if (item.tagName === 'P' || item.tagName === 'SPAN') continue;
+                  if (item.classList.contains('pdp-enhanced') || item.classList.contains('goods-size__options-item') || item.classList.contains('size-group__sizes-item')) continue;
                   if (matchesSheinSize(item, normVal)) {
                     const cls = (item.className || '') + ' ' + (item.getAttribute('aria-selected') || '') + ' ' + (item.getAttribute('aria-checked') || '');
-                    const isSelected = /selected|active|true/i.test(cls);
+                    const isSelected = /selected|size-active|active|true/i.test(cls);
                     if (!isSelected) {
                       try { item.scrollIntoView({ behavior: 'instant', block: 'nearest' }); } catch(e) {}
                       simulateClick(item);

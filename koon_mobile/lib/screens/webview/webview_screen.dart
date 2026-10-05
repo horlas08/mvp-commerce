@@ -2889,7 +2889,7 @@ class _ProductSelectionSheetState extends State<_ProductSelectionSheet> {
                 ),
               ],
             ),
-            if (widget.requiresSelection) ...[
+            if (widget.requiresSelection && !_canConfirm) ...[
               const SizedBox(height: 10),
               Container(
                 width: double.infinity,
@@ -3065,19 +3065,23 @@ class _ProductSelectionSheetState extends State<_ProductSelectionSheet> {
               ),
             ),
             const SizedBox(height: 12),
-            if (widget.requiresSelection)
+            if (widget.requiresSelection && !_canConfirm) ...[
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
-                  onPressed: () async {
-                    await widget.onOpenNativePicker();
-                    if (context.mounted) Navigator.pop(context);
+                  onPressed: () {
+                    final picker = widget.onOpenNativePicker;
+                    Navigator.pop(context);
+                    Future.delayed(const Duration(milliseconds: 300), () {
+                      picker();
+                    });
                   },
                   icon: const Icon(Icons.tune, size: 18),
                   label: Text('open_options_on_page'.tr()),
                 ),
               ),
-            if (widget.requiresSelection) const SizedBox(height: 10),
+              const SizedBox(height: 10),
+            ],
             Row(
               children: [
                 Expanded(
