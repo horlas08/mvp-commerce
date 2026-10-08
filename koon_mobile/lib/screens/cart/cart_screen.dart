@@ -1002,7 +1002,7 @@ class _HiddenScraperWebViewState extends State<_HiddenScraperWebView> {
 
       if (config == null) return;
 
-      final script = ScraperHelper.buildScraperScript(config);
+      final script = await ScraperHelper.buildScraperScript(config);
       await webController.evaluateJavascript(source: script);
 
       // Replay stored variant selections if present

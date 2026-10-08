@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import '../app/constants/api_constants.dart';
 import 'api_service.dart';
 import 'currency_service.dart';
@@ -42,10 +43,12 @@ class WishlistService {
           if (selectionsJson != null) 'selections_json': selectionsJson,
         },
       );
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 || response.statusCode == 201) {
         return response.data;
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[WishlistService] addToWishlist failed: $e');
+    }
     return null;
   }
 

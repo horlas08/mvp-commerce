@@ -13,9 +13,11 @@ import 'controllers/order_controller.dart';
 import 'controllers/support_controller.dart';
 import 'controllers/store_browser_controller.dart';
 import 'screens/splash/splash_screen.dart';
+import 'app/utils/scraper_helper.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  ScraperHelper.preload();
   await EasyLocalization.ensureInitialized();
 
   // Register global controllers

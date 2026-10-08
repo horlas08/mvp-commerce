@@ -343,7 +343,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
     }
     _lastInjectAt = now;
 
-    final scraperJs = ScraperHelper.buildScraperScript(_currentConfig!);
+    final scraperJs = await ScraperHelper.buildScraperScript(_currentConfig!);
     await _webViewController!.evaluateJavascript(source: scraperJs);
   }
 
@@ -627,6 +627,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
           final opts = s['options'];
           return opts is List && opts.length > 1;
         })) {
+      _webViewController?.evaluateJavascript(
+        source:
+            'window.__koonSetSheetOpen && window.__koonSetSheetOpen(true); window.__koonPauseVideos && window.__koonPauseVideos(true);',
+      );
       final result = await showModalBottomSheet<Map<String, dynamic>>(
         context: context,
         isScrollControlled: true,
@@ -642,6 +646,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
           liveProductNotifier: _liveProductNotifier,
           preselectedVariants: widget.preselectedVariants,
         ),
+      );
+      _webViewController?.evaluateJavascript(
+        source:
+            'window.__koonSetSheetOpen && window.__koonSetSheetOpen(false);',
       );
       if (result == null) return;
       chosen = Map<String, String>.from(result['selections'] as Map? ?? {});
@@ -1689,7 +1697,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
         allowsBackForwardNavigationGestures: true,
         transparentBackground: true,
         useShouldOverrideUrlLoading: true,
-        mediaPlaybackRequiresUserGesture: false,
+        mediaPlaybackRequiresUserGesture: true,
         supportZoom: true,
         supportMultipleWindows: true,
         javaScriptCanOpenWindowsAutomatically: true,
