@@ -391,5 +391,14 @@
   "bank_transfer_details": "بيانات التحويل البنكي",
   "tap_to_upload_receipt": "اضغط هنا لإرفاق إشعار التحويل",
   "receipt_attached": "تم إرفاق الإشعار",
-  "optional": "اختياري"
+  "optional": "اختياري",
+  "order_cost": "تكلفة الطلب",
+  "order_pickup_point": "استلام الطلب من نقطة التوزيع",
+  "pickup_zero_fees": "بدون رسوم شحن (مجاني)",
+  "home_delivery_desc": "توصيل إلى باب منزلك مع الرسوم المحسوبة",
+  "global_site_request": "طلب من أي موقع عالمي",
+  "global_site_request_desc": "أرسل رابط أو صورة أي منتج من أي موقع وسنوفره لك فوراً",
+  "point_number": "رقم النقطة",
+  "account_number": "رقم الحساب",
+  "select_bank_wallet": "اختر البنك أو المحفظة الإلكترونية"
 }

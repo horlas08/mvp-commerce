@@ -50,6 +50,7 @@ dependencies:
   # WebView (existing)
   flutter_inappwebview: ^6.1.5
   currency_converter: ^3.0.0
+  url_launcher: ^6.3.1
 
   # PDF Invoice
   pdf: ^3.11.1

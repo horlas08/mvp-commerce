@@ -50,105 +50,77 @@ class _Step2ShippingState extends State<Step2Shipping> {
           ).animate().fadeIn(duration: 300.ms),
           const SizedBox(height: 16),
 
-          if (!isExternal) ...[
-            // ── Internal cart: Home Delivery / Pickup ─────────────────
-            Obx(() => _ShippingOptionCard(
-                  icon: Icons.home_outlined,
-                  title: 'home_delivery'.tr(),
-                  subtitle: 'home_delivery_subtitle'.tr(),
-                  isSelected: ctrl.shippingType.value == 'home',
-                  onTap: () => ctrl.shippingType.value = 'home',
-                  color: AppColors.secondary,
-                )).animate().fadeIn(duration: 300.ms).slideX(begin: -0.04),
-            const SizedBox(height: 12),
-            Obx(() => _ShippingOptionCard(
-                  icon: Icons.storefront_outlined,
-                  title: 'pickup'.tr(),
-                  subtitle: 'pickup_subtitle'.tr(),
-                  isSelected: ctrl.shippingType.value == 'pickup',
-                  onTap: () => ctrl.shippingType.value = 'pickup',
-                  color: AppColors.primary,
-                )).animate(delay: 60.ms).fadeIn(duration: 300.ms).slideX(begin: -0.04),
-            const SizedBox(height: 16),
+          // ── Shipping Option: On/Off Switch ─────────────────────────
+          _ShippingToggleCard(ctrl: ctrl, settings: settings)
+              .animate()
+              .fadeIn(duration: 300.ms)
+              .slideX(begin: -0.04),
+          const SizedBox(height: 12),
 
-            // Pickup station dropdown (only when pickup selected)
-            Obx(() {
-              if (ctrl.shippingType.value != 'pickup') return const SizedBox();
-              if (ctrl.isLoadingShipping.value) {
-                return const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: LinearProgressIndicator(color: AppColors.primary),
-                );
-              }
-              if (ctrl.pickupStations.isEmpty) {
-                return Container(
-                  padding: const EdgeInsets.all(16),
+          // Pickup station dropdown (when Off / pickup selected)
+          Obx(() {
+            if (ctrl.shippingType.value != 'pickup') return const SizedBox();
+            if (ctrl.isLoadingShipping.value) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: LinearProgressIndicator(color: AppColors.primary),
+              );
+            }
+            if (ctrl.pickupStations.isEmpty) return const SizedBox();
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'pickup_station'.tr(),
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
                   decoration: BoxDecoration(
                     color: AppColors.surfaceVariant,
                     borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.border),
                   ),
-                  child: Text(
-                    'no_pickup_stations'.tr(),
-                    style: GoogleFonts.inter(
-                      color: AppColors.textSecondary,
-                      fontSize: 13,
-                    ),
-                  ),
-                );
-              }
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'pickup_station'.tr(),
-                    style: GoogleFonts.inter(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceVariant,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<Map<String, dynamic>>(
-                        value: ctrl.selectedPickupStation.value,
-                        isExpanded: true,
-                        hint: Text(
-                          'pickup_station'.tr(),
-                          style: GoogleFonts.inter(
-                            color: AppColors.textSecondary,
-                            fontSize: 13,
-                          ),
-                        ),
-                        icon: const Icon(
-                          Icons.keyboard_arrow_down,
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<Map<String, dynamic>>(
+                      value: ctrl.selectedPickupStation.value,
+                      isExpanded: true,
+                      hint: Text(
+                        'pickup_station'.tr(),
+                        style: GoogleFonts.inter(
                           color: AppColors.textSecondary,
+                          fontSize: 13,
                         ),
-                        items: ctrl.pickupStations.map((station) {
-                          return DropdownMenuItem(
-                            value: station,
-                            child: Text(
-                              station['name'] ?? '',
-                              style: GoogleFonts.inter(fontSize: 14),
-                            ),
-                          );
-                        }).toList(),
-                        onChanged: (v) =>
-                            ctrl.selectedPickupStation.value = v,
                       ),
+                      icon: const Icon(
+                        Icons.keyboard_arrow_down,
+                        color: AppColors.textSecondary,
+                      ),
+                      items: ctrl.pickupStations.map((station) {
+                        return DropdownMenuItem(
+                          value: station,
+                          child: Text(
+                            station['name'] ?? '',
+                            style: GoogleFonts.inter(fontSize: 14),
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (v) =>
+                          ctrl.selectedPickupStation.value = v,
                     ),
                   ),
-                  const SizedBox(height: 16),
-                ],
-              ).animate().fadeIn(duration: 300.ms);
-            }),
-          ] else ...[
+                ),
+                const SizedBox(height: 16),
+              ],
+            ).animate().fadeIn(duration: 300.ms);
+          }),
+
+          if (isExternal) ...[
             // ── External cart: Team Review toggle ─────────────────────
             _TeamReviewCard(ctrl: ctrl)
                 .animate()
@@ -236,56 +208,52 @@ class _Step2ShippingState extends State<Step2Shipping> {
   }
 }
 
-class _ShippingOptionCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final bool isSelected;
-  final VoidCallback onTap;
-  final Color color;
+class _ShippingToggleCard extends StatelessWidget {
+  final CheckoutController ctrl;
+  final SettingsController settings;
 
-  const _ShippingOptionCard({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.isSelected,
-    required this.onTap,
-    required this.color,
-  });
+  const _ShippingToggleCard({required this.ctrl, required this.settings});
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
+    return Obx(() {
+      final isHomeDelivery = ctrl.shippingType.value == 'home';
+      final shippingFeeVal = ctrl.dynamicShippingFee.value;
+
+      return AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: isSelected ? color : AppColors.divider,
-            width: isSelected ? 2 : 1.5,
+            color: isHomeDelivery ? AppColors.secondary : AppColors.primary,
+            width: 1.5,
           ),
-          color: isSelected ? color.withOpacity(0.06) : AppColors.surface,
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: color.withOpacity(0.15),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  )
-                ]
-              : null,
+          color: isHomeDelivery
+              ? AppColors.secondarySurface
+              : AppColors.primarySurface,
+          boxShadow: [
+            BoxShadow(
+              color: (isHomeDelivery ? AppColors.secondary : AppColors.primary).withOpacity(0.08),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            )
+          ],
         ),
         child: Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(10),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(12),
+                color: (isHomeDelivery ? AppColors.secondary : AppColors.primary).withOpacity(0.15),
+                borderRadius: BorderRadius.circular(14),
               ),
-              child: Icon(icon, color: color, size: 22),
+              child: Icon(
+                isHomeDelivery ? Icons.local_shipping_outlined : Icons.storefront_outlined,
+                color: isHomeDelivery ? AppColors.secondary : AppColors.primary,
+                size: 24,
+              ),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -293,44 +261,48 @@ class _ShippingOptionCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    title,
+                    isHomeDelivery
+                        ? 'home_delivery'.tr()
+                        : 'order_pickup_point'.tr(),
                     style: GoogleFonts.inter(
                       fontWeight: FontWeight.w700,
                       fontSize: 14,
-                      color: isSelected ? color : AppColors.textPrimary,
+                      color: AppColors.textPrimary,
                     ),
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 4),
                   Text(
-                    subtitle,
+                    isHomeDelivery
+                        ? '${'shipping_cost'.tr()}: ${shippingFeeVal > 0 ? settings.formatPrice(shippingFeeVal, 'SAR') : 'free'.tr()}'
+                        : 'pickup_zero_fees'.tr(),
                     style: GoogleFonts.inter(
-                      fontSize: 11,
-                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: isHomeDelivery
+                          ? AppColors.secondary
+                          : AppColors.primary,
                     ),
                   ),
                 ],
               ),
             ),
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: 22,
-              height: 22,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isSelected ? color : Colors.transparent,
-                border: Border.all(
-                  color: isSelected ? color : AppColors.border,
-                  width: 2,
-                ),
+            Transform.scale(
+              scale: 0.95,
+              child: Switch(
+                value: isHomeDelivery,
+                activeColor: AppColors.secondary,
+                activeTrackColor: AppColors.secondary.withOpacity(0.35),
+                inactiveThumbColor: AppColors.primary,
+                inactiveTrackColor: AppColors.primary.withOpacity(0.25),
+                onChanged: (val) {
+                  ctrl.shippingType.value = val ? 'home' : 'pickup';
+                },
               ),
-              child: isSelected
-                  ? const Icon(Icons.check, color: Colors.white, size: 14)
-                  : null,
             ),
           ],
         ),
-      ),
-    );
+      );
+    });
   }
 }
 
@@ -461,9 +433,13 @@ class _PriceBreakdown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Obx(() {
-      final shippingDisplay = ctrl.shippingFee > 0
+      final isHomeDelivery = ctrl.shippingType.value == 'home';
+      final shippingDisplay = (isHomeDelivery && ctrl.shippingFee > 0)
           ? settings.formatPrice(ctrl.shippingFee, 'SAR')
           : 'free'.tr();
+      final shippingLabel = isHomeDelivery
+          ? 'home_delivery'.tr()
+          : 'order_pickup_point'.tr();
       final commissionDisplay = ctrl.commissionFee > 0
           ? settings.formatPrice(ctrl.commissionFee, 'SAR')
           : settings.formatPrice(0.0, 'SAR');
@@ -483,6 +459,12 @@ class _PriceBreakdown extends StatelessWidget {
         ),
         child: Column(
           children: [
+            // Order cost at the very top
+            _priceRow(
+              'order_cost'.tr(),
+              settings.formatPrice(ctrl.subtotal, 'SAR'),
+              Colors.white,
+            ),
             if (ctrl.discount > 0)
               _priceRow(
                 'discount'.tr(),
@@ -491,7 +473,7 @@ class _PriceBreakdown extends StatelessWidget {
                 valueColor: const Color(0xFF4ADE80),
               ),
             _priceRow(
-              'shipping_cost'.tr(),
+              shippingLabel,
               shippingDisplay,
               Colors.white70,
             ),

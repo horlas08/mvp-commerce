@@ -48,12 +48,26 @@ class Step4Payment extends StatelessWidget {
               balance: ctrl.walletBalance.value,
               isSelected: isSelected,
               settings: settings,
-              onTap: () => ctrl.selectedPaymentMethod.value = walletMethod,
+              onTap: () {
+                ctrl.selectedPaymentMethod.value = walletMethod;
+                ctrl.paymentFormData.remove('selected_account_id');
+              },
             ).animate().fadeIn(duration: 300.ms).slideX(begin: -0.04);
           }),
+          const SizedBox(height: 16),
+
+          // ── Bank & E-Wallet Title ──────────────────────────────────────
+          Text(
+            'select_bank_wallet'.tr(),
+            style: GoogleFonts.inter(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+            ),
+          ).animate().fadeIn(duration: 300.ms),
           const SizedBox(height: 12),
 
-          // ── Admin payment methods ──────────────────────────────────────
+          // ── Bank & E-Wallet accounts list (one by one) ─────────────────
           Obx(() {
             if (ctrl.isLoadingPayment.value) {
               return const Padding(
@@ -64,36 +78,53 @@ class Step4Payment extends StatelessWidget {
               );
             }
             final rawMethods = List<Map<String, dynamic>>.from(ctrl.paymentMethods);
-            final methods = rawMethods
-                .where((m) =>
-                    m['id'] == 'payment-bank' ||
-                    (m['title_en']?.toString().toLowerCase().contains('bank transfer') == true) ||
-                    (m['title_ar']?.toString().contains('حوالة') == true))
-                .toList();
+            final bankMethod = rawMethods.firstWhereOrNull((m) =>
+                m['id'] == 'payment-bank' ||
+                (m['title_en']?.toString().toLowerCase().contains('bank transfer') == true) ||
+                (m['title_ar']?.toString().contains('حوالة') == true)) ??
+                {
+                  'id': 'payment-bank',
+                  'title': 'حوالة بنكية 💳',
+                  'title_ar': 'حوالة بنكية 💳',
+                  'title_en': 'Bank Transfer 💳',
+                  'fields': []
+                };
 
-            // Guarantee Bank Transfer method with 10 deposit accounts is always present
-            if (methods.isEmpty) {
-              methods.add({
-                'id': 'payment-bank',
-                'title': 'حوالة بنكية 💳',
-                'title_ar': 'حوالة بنكية 💳',
-                'title_en': 'Bank Transfer 💳',
-                'bank_accounts': kDefaultBankAccounts,
-                'fields': []
-              });
+            final rawAccounts = bankMethod['bank_accounts'] ?? bankMethod['raw_bank_accounts'];
+            final List<Map<String, dynamic>> bankAccounts = [];
+            if (rawAccounts is List && rawAccounts.isNotEmpty) {
+              for (var item in rawAccounts) {
+                if (item is Map) {
+                  bankAccounts.add(Map<String, dynamic>.from(item));
+                }
+              }
+            }
+            if (bankAccounts.isEmpty) {
+              bankAccounts.addAll(kDefaultBankAccounts);
             }
 
+            final isBankSelected = ctrl.selectedPaymentMethod.value?['id'] == bankMethod['id'];
+            final currentAccountId = ctrl.paymentFormData['selected_account_id'];
+            final effectiveSelectedId = (isBankSelected && currentAccountId != null)
+                ? currentAccountId
+                : (isBankSelected ? bankAccounts.first['id']?.toString() : null);
+
             return Column(
-              children: methods.asMap().entries.map((entry) {
+              children: bankAccounts.asMap().entries.map((entry) {
                 final index = entry.key;
-                final method = entry.value;
-                return _AdminPaymentCard(
-                  method: method,
+                final acc = entry.value;
+                final isThisSelected = isBankSelected &&
+                    (effectiveSelectedId == acc['id']?.toString());
+
+                return _BankAccountOptionCard(
+                  acc: acc,
+                  bankMethod: bankMethod,
                   ctrl: ctrl,
                   settings: settings,
+                  isSelected: isThisSelected,
                 )
                     .animate(
-                      delay: Duration(milliseconds: 60 + index * 60),
+                      delay: Duration(milliseconds: 60 + index * 40),
                     )
                     .fadeIn(duration: 300.ms)
                     .slideX(begin: -0.04);
@@ -285,364 +316,587 @@ Future<XFile?> showSourcePicker(BuildContext context) async {
 const List<Map<String, dynamic>> kDefaultBankAccounts = [
   {
     "id": "acc-1",
-    "bank_name_ar": "نقطة حاسب الكريمي",
-    "bank_name_en": "Kuraimi Haseb Point",
+    "bank_name_ar": "بنك الكريمي - حاسب",
+    "bank_name_en": "Kuraimi Bank - Haseb",
     "account_number": "1790096",
+    "account_type": "point",
     "logo_url": "/static/seed/banks/kuraimi_haseb.png",
     "asset_path": "assets/images/banks/kuraimi_haseb.png",
   },
   {
     "id": "acc-2",
+    "bank_name_ar": "محفظة جيب",
+    "bank_name_en": "Jeeb Wallet",
+    "account_number": "770000000",
+    "account_type": "wallet",
+    "logo_url": "/static/seed/banks/jeeb_wallet.png",
+    "asset_path": "assets/images/banks/jeeb_wallet.png",
+  },
+  {
+    "id": "acc-3",
+    "bank_name_ar": "محفظة فلوسك",
+    "bank_name_en": "Floosak Wallet",
+    "account_number": "770000001",
+    "account_type": "wallet",
+    "logo_url": "/static/seed/banks/floosak_wallet.png",
+    "asset_path": "assets/images/banks/floosak_wallet.png",
+  },
+  {
+    "id": "acc-4",
+    "bank_name_ar": "محفظة كاش",
+    "bank_name_en": "Cash Wallet",
+    "account_number": "770000002",
+    "account_type": "wallet",
+    "logo_url": "/static/seed/banks/cash_wallet.png",
+    "asset_path": "assets/images/banks/cash_wallet.png",
+  },
+  {
+    "id": "acc-5",
     "bank_name_ar": "الشامل موني",
     "bank_name_en": "Shamil Money",
     "account_number": "5901094",
+    "account_type": "wallet",
     "logo_url": "/static/seed/banks/shamil_money.png",
     "asset_path": "assets/images/banks/shamil_money.png",
   },
   {
-    "id": "acc-3",
+    "id": "acc-6",
     "bank_name_ar": "بنك القطيبي",
     "bank_name_en": "Al Qutaibi Bank",
     "account_number": "78266666",
+    "account_type": "bank",
     "logo_url": "/static/seed/banks/qutaibi_bank.png",
     "asset_path": "assets/images/banks/qutaibi_bank.png",
   },
   {
-    "id": "acc-4",
+    "id": "acc-7",
     "bank_name_ar": "بنك السلام كابيتال",
     "bank_name_en": "Al Salam Capital Bank",
     "account_number": "14433",
+    "account_type": "bank",
     "logo_url": "/static/seed/banks/salam_capital.png",
     "asset_path": "assets/images/banks/salam_capital.png",
   },
   {
-    "id": "acc-5",
+    "id": "acc-8",
     "bank_name_ar": "الكريمي",
     "bank_name_en": "Al Kuraimi Bank",
     "account_number": "3155416717",
+    "account_type": "bank",
     "logo_url": "/static/seed/banks/kuraimi_bank.png",
     "asset_path": "assets/images/banks/kuraimi_bank.png",
   },
   {
-    "id": "acc-6",
+    "id": "acc-9",
     "bank_name_ar": "بنك اليمن والكويت",
     "bank_name_en": "Yemen Kuwait Bank",
     "account_number": "0236971",
+    "account_type": "bank",
     "logo_url": "/static/seed/banks/ykb_bank.png",
     "asset_path": "assets/images/banks/ykb_bank.png",
   },
   {
-    "id": "acc-7",
+    "id": "acc-10",
     "bank_name_ar": "بنك الامل",
     "bank_name_en": "Al-Amal Bank",
     "account_number": "282201002777",
+    "account_type": "bank",
     "logo_url": "/static/seed/banks/alamal_bank.png",
     "asset_path": "assets/images/banks/alamal_bank.png",
   },
   {
-    "id": "acc-8",
+    "id": "acc-11",
     "bank_name_ar": "بيس",
     "bank_name_en": "Pyes",
     "account_number": "2471501",
+    "account_type": "wallet",
     "logo_url": "/static/seed/banks/pyes_wallet.png",
     "asset_path": "assets/images/banks/pyes_wallet.png",
   },
   {
-    "id": "acc-9",
+    "id": "acc-12",
     "bank_name_ar": "بنك الشرق",
     "bank_name_en": "Al Sharq Bank",
     "account_number": "422333444",
+    "account_type": "bank",
     "logo_url": "/static/seed/banks/alsharq_bank.png",
     "asset_path": "assets/images/banks/alsharq_bank.png",
   },
   {
-    "id": "acc-10",
+    "id": "acc-13",
     "bank_name_ar": "بنك السلام كابيتال نقطة سلام باي",
     "bank_name_en": "Al Salam Capital - Salam Pay Point",
     "account_number": "119501",
+    "account_type": "point",
     "logo_url": "/static/seed/banks/salam_pay.png",
     "asset_path": "assets/images/banks/salam_pay.png",
   },
 ];
 
-class _AdminPaymentCard extends StatelessWidget {
-  final Map<String, dynamic> method;
-  final CheckoutController ctrl;
-  final SettingsController settings;
+Widget _buildBankLogoWidget(Map<String, dynamic> acc) {
+  final logoUrl = acc['logo_url']?.toString();
+  String? assetPath = acc['asset_path']?.toString();
+  final bankName = acc['bank_name_ar']?.toString() ?? acc['bank_name_en']?.toString() ?? '';
 
-  const _AdminPaymentCard({
-    required this.method,
-    required this.ctrl,
-    required this.settings,
-  });
+  if (assetPath == null && logoUrl != null) {
+    final filename = logoUrl.split('/').last;
+    assetPath = 'assets/images/banks/$filename';
+  }
 
-  bool get isSelected =>
-      ctrl.selectedPaymentMethod.value?['id'] == method['id'];
+  final bool isJeeb = bankName.contains('جيب') || bankName.toLowerCase().contains('jeeb');
+  final bool isFloosak = bankName.contains('فلوسك') || bankName.toLowerCase().contains('floosak');
+  final bool isCash = bankName.contains('كاش') || bankName.toLowerCase().contains('cash');
 
-  Widget _buildBankLogo(String? logoUrl, {String? fallbackAsset}) {
-    if ((logoUrl == null || logoUrl.isEmpty) && (fallbackAsset == null || fallbackAsset.isEmpty)) {
-      return Container(
-        width: 44,
-        height: 44,
-        decoration: BoxDecoration(
-          color: AppColors.surfaceVariant,
-          borderRadius: BorderRadius.circular(10),
+  if (isJeeb) {
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Center(
+        child: Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: const Color(0xFFE11D48),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Center(
+            child: Icon(Icons.account_balance_wallet_rounded, color: Colors.white, size: 20),
+          ),
         ),
-        child: const Icon(Icons.account_balance, color: AppColors.textHint, size: 22),
-      );
-    }
-
-    String? assetPath = fallbackAsset;
-    if (assetPath == null && logoUrl != null) {
-      final filename = logoUrl.split('/').last;
-      assetPath = 'assets/images/banks/$filename';
-    }
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(10),
-      child: Image.asset(
-        assetPath ?? '',
-        width: 44,
-        height: 44,
-        fit: BoxFit.contain,
-        errorBuilder: (_, __, ___) {
-          if (logoUrl != null && logoUrl.isNotEmpty) {
-            final fullUrl = logoUrl.startsWith('http')
-                ? logoUrl
-                : '${ApiConstants.baseHost}$logoUrl';
-            return CachedNetworkImage(
-              imageUrl: fullUrl,
-              width: 44,
-              height: 44,
-              fit: BoxFit.contain,
-              errorWidget: (_, __, ___) => Container(
-                width: 44,
-                height: 44,
-                color: AppColors.surfaceVariant,
-                child: const Icon(Icons.account_balance, color: AppColors.textHint, size: 22),
-              ),
-            );
-          }
-          return Container(
-            width: 44,
-            height: 44,
-            color: AppColors.surfaceVariant,
-            child: const Icon(Icons.account_balance, color: AppColors.textHint, size: 22),
-          );
-        },
       ),
     );
   }
 
+  if (isFloosak) {
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Center(
+        child: Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF0284C7), Color(0xFF38BDF8)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Center(
+            child: Icon(Icons.payments_rounded, color: Colors.white, size: 20),
+          ),
+        ),
+      ),
+    );
+  }
+
+  if (isCash) {
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Center(
+        child: Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: const Color(0xFF047857),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Center(
+            child: Icon(Icons.currency_exchange_rounded, color: Colors.white, size: 20),
+          ),
+        ),
+      ),
+    );
+  }
+
+  return ClipRRect(
+    borderRadius: BorderRadius.circular(12),
+    child: Image.asset(
+      assetPath ?? '',
+      width: 44,
+      height: 44,
+      fit: BoxFit.contain,
+      errorBuilder: (_, __, ___) {
+        if (logoUrl != null && logoUrl.isNotEmpty) {
+          final fullUrl = logoUrl.startsWith('http')
+              ? logoUrl
+              : '${ApiConstants.baseHost}$logoUrl';
+          return CachedNetworkImage(
+            imageUrl: fullUrl,
+            width: 44,
+            height: 44,
+            fit: BoxFit.contain,
+            errorWidget: (_, __, ___) => Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppColors.surfaceVariant,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.account_balance, color: AppColors.textHint, size: 22),
+            ),
+          );
+        }
+        return Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: AppColors.surfaceVariant,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Icon(Icons.account_balance, color: AppColors.textHint, size: 22),
+        );
+      },
+    ),
+  );
+}
+
+class _BankAccountOptionCard extends StatelessWidget {
+  final Map<String, dynamic> acc;
+  final Map<String, dynamic> bankMethod;
+  final CheckoutController ctrl;
+  final SettingsController settings;
+  final bool isSelected;
+
+  const _BankAccountOptionCard({
+    required this.acc,
+    required this.bankMethod,
+    required this.ctrl,
+    required this.settings,
+    required this.isSelected,
+  });
+
   @override
   Widget build(BuildContext context) {
-    final rawAccounts = method['bank_accounts'] ?? method['raw_bank_accounts'];
-    final List<Map<String, dynamic>> bankAccounts = [];
-    if (rawAccounts is List && rawAccounts.isNotEmpty) {
-      for (var item in rawAccounts) {
-        if (item is Map) {
-          bankAccounts.add(Map<String, dynamic>.from(item));
-        }
-      }
-    } else if (method['id'] == 'payment-bank' ||
-        (method['title']?.toString().contains('Bank') == true) ||
-        (method['title']?.toString().contains('حوالة') == true)) {
-      bankAccounts.addAll(kDefaultBankAccounts);
-    }
+    final lang = context.locale.languageCode;
+    final bankName = (lang == 'ar' ? acc['bank_name_ar'] : acc['bank_name_en']) ??
+        acc['bank_name_ar'] ??
+        acc['bank_name'] ??
+        acc['bank_name_en'] ??
+        '';
+    final accountNum = acc['account_number']?.toString() ?? '';
+    final accountType = acc['account_type']?.toString() ?? 'account';
+    final accountTypeLabel = accountType == 'point' ? 'point_number'.tr() : 'account_number'.tr();
 
-    return Obx(() {
-      final selected = ctrl.selectedPaymentMethod.value?['id'] == method['id'];
-      return AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        margin: const EdgeInsets.only(bottom: 12),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: selected ? AppColors.secondary : AppColors.divider,
-            width: selected ? 2 : 1.5,
-          ),
-          color: selected
-              ? AppColors.secondarySurface
-              : AppColors.surface,
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: isSelected ? const Color(0xFFF0F4FF) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isSelected ? const Color(0xFF1E40AF) : AppColors.divider,
+          width: isSelected ? 2.0 : 1.0,
         ),
-        child: Column(
-          children: [
-            GestureDetector(
-              onTap: () => ctrl.selectedPaymentMethod.value = method,
-              behavior: HitTestBehavior.opaque,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: selected
-                            ? AppColors.secondary.withOpacity(0.12)
-                            : AppColors.surfaceVariant,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(
-                        Icons.account_balance_outlined,
-                        color: selected ? AppColors.secondary : AppColors.textHint,
-                        size: 24,
+        boxShadow: [
+          BoxShadow(
+            color: isSelected
+                ? const Color(0xFF1E40AF).withOpacity(0.08)
+                : Colors.black.withOpacity(0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          InkWell(
+            onTap: () {
+              ctrl.selectedPaymentMethod.value = bankMethod;
+              ctrl.paymentFormData['selected_account_id'] = acc['id']?.toString() ?? '';
+              ctrl.paymentFormData['selected_bank_name'] = bankName;
+              ctrl.paymentFormData['selected_account_number'] = accountNum;
+            },
+            borderRadius: BorderRadius.circular(16),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Row(
+                children: [
+                  // Radio Indicator matching Image 1
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white,
+                      border: Border.all(
+                        color: isSelected ? const Color(0xFF1E40AF) : const Color(0xFFCBD5E1),
+                        width: isSelected ? 2.5 : 1.5,
                       ),
                     ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            method['title'] ?? 'حوالة بنكية 💳',
-                            style: GoogleFonts.inter(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 14,
-                              color: selected
-                                  ? AppColors.secondary
-                                  : AppColors.textPrimary,
+                    child: isSelected
+                        ? Center(
+                            child: Container(
+                              width: 10,
+                              height: 10,
+                              decoration: const BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Color(0xFF1E40AF),
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'bank_accounts_available_desc'.tr(),
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      width: 22,
-                      height: 22,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: selected ? AppColors.secondary : Colors.transparent,
-                        border: Border.all(
-                          color: selected ? AppColors.secondary : AppColors.border,
-                          width: 2,
-                        ),
-                      ),
-                      child: selected
-                          ? const Icon(Icons.check, color: Colors.white, size: 14)
-                          : null,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // Bank Accounts Expanded List + Upload Proof Dropzone
-            if (selected && bankAccounts.isNotEmpty) ...[
-              const Divider(height: 1, color: AppColors.divider),
-              ListView.separated(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                itemCount: bankAccounts.length,
-                separatorBuilder: (_, __) => Divider(height: 1, color: AppColors.divider.withOpacity(0.4)),
-                itemBuilder: (context, idx) {
-                  final acc = bankAccounts[idx];
-                  final bankName = acc['bank_name_ar'] ?? acc['bank_name'] ?? acc['bank_name_en'] ?? '';
-                  final accountNum = acc['account_number']?.toString() ?? '';
-                  final logoUrl = acc['logo_url']?.toString();
-
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    child: Row(
+                          )
+                        : null,
+                  ),
+                  const SizedBox(width: 14),
+                  // Bank / Wallet Logo
+                  _buildBankLogoWidget(acc),
+                  const SizedBox(width: 14),
+                  // Title & Account Number
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Bank logo image FIRST before space and details
-                        _buildBankLogo(logoUrl, fallbackAsset: acc['asset_path']?.toString()),
-                        const SizedBox(width: 12),
-                        // Details column
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '${'bank_name_label'.tr()}: $bankName',
-                                style: GoogleFonts.inter(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.textPrimary,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  Text(
-                                    '${'account_number_label'.tr()}: ',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w500,
-                                      color: AppColors.textSecondary,
-                                    ),
-                                  ),
-                                  Text(
-                                    accountNum,
-                                    style: GoogleFonts.inter(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.textPrimary,
-                                      letterSpacing: 0.5,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  // Copy Icon Button
-                                  InkWell(
-                                    onTap: () {
-                                      Clipboard.setData(ClipboardData(text: accountNum));
-                                      Get.rawSnackbar(
-                                        messageText: Row(
-                                          children: [
-                                            const Icon(Icons.check_circle, color: Colors.white, size: 16),
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              'account_number_copied'.tr(),
-                                              style: GoogleFonts.inter(
-                                                color: Colors.white,
-                                                fontSize: 13,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        backgroundColor: AppColors.secondary,
-                                        snackPosition: SnackPosition.BOTTOM,
-                                        duration: const Duration(seconds: 2),
-                                        margin: const EdgeInsets.all(12),
-                                        borderRadius: 12,
-                                      );
-                                    },
-                                    borderRadius: BorderRadius.circular(4),
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(2.0),
-                                      child: Icon(
-                                        Icons.copy_rounded,
-                                        size: 16,
-                                        color: AppColors.textHint,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
+                        Text(
+                          bankName,
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '$accountTypeLabel: $accountNum',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ],
                     ),
-                  );
-                },
+                  ),
+                ],
               ),
-            ],
+            ),
+          ),
+
+          if (isSelected) ...[
+            const Divider(height: 1, color: Color(0xFFDBEAFE)),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Account / Point number box + Copy button
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFBFDBFE)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              accountTypeLabel,
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              accountNum,
+                              style: GoogleFonts.inter(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFF1E40AF),
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            Clipboard.setData(ClipboardData(text: accountNum));
+                            Get.rawSnackbar(
+                              messageText: Row(
+                                children: [
+                                  const Icon(Icons.check_circle, color: Colors.white, size: 16),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'account_number_copied'.tr(),
+                                    style: GoogleFonts.inter(
+                                      color: Colors.white,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              backgroundColor: const Color(0xFF1E40AF),
+                              snackPosition: SnackPosition.BOTTOM,
+                              duration: const Duration(seconds: 2),
+                              margin: const EdgeInsets.all(12),
+                              borderRadius: 12,
+                            );
+                          },
+                          icon: const Icon(Icons.copy_rounded, size: 14),
+                          label: Text('copy'.tr(), style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF1E40AF),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Upload Receipt
+                  Text(
+                    'upload_receipt_optional'.tr(),
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'receipt_quick_confirm_tip'.tr(),
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Obx(() {
+                    final hasProof = ctrl.paymentProofImage.value != null;
+                    final proofPath = ctrl.paymentProofImage.value?.path;
+                    return _UploadDropzone(
+                      hasFile: hasProof,
+                      fileName: proofPath?.split('/').last,
+                      imagePath: proofPath,
+                      onTap: () async {
+                        final img = await showSourcePicker(context);
+                        if (img != null) {
+                          ctrl.paymentProofImage.value = img;
+                          ctrl.paymentFormData['receipt_proof'] = img.path;
+                        }
+                      },
+                      onClear: () {
+                        ctrl.paymentProofImage.value = null;
+                        ctrl.paymentFormData.remove('receipt_proof');
+                      },
+                    );
+                  }),
+                  const SizedBox(height: 14),
+
+                  // Depositor Name
+                  TextFormField(
+                    initialValue: ctrl.paymentFormData['depositor_name'],
+                    onChanged: (v) => ctrl.paymentFormData['depositor_name'] = v,
+                    style: GoogleFonts.inter(fontSize: 13, color: AppColors.textPrimary),
+                    decoration: InputDecoration(
+                      labelText: 'depositor_name'.tr(),
+                      hintText: 'enter_depositor_name'.tr(),
+                      labelStyle: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary),
+                      hintStyle: GoogleFonts.inter(fontSize: 12, color: AppColors.textHint),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: AppColors.border),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: AppColors.border),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFF1E40AF), width: 1.5),
+                      ),
+                      filled: true,
+                      fillColor: Colors.white,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Transfer / Reference Number
+                  TextFormField(
+                    initialValue: ctrl.paymentFormData['ref_number'],
+                    onChanged: (v) => ctrl.paymentFormData['ref_number'] = v,
+                    style: GoogleFonts.inter(fontSize: 13, color: AppColors.textPrimary),
+                    decoration: InputDecoration(
+                      labelText: 'transfer_or_ref_number'.tr(),
+                      hintText: 'enter_transfer_or_ref_number'.tr(),
+                      labelStyle: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary),
+                      hintStyle: GoogleFonts.inter(fontSize: 12, color: AppColors.textHint),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: AppColors.border),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: AppColors.border),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFF1E40AF), width: 1.5),
+                      ),
+                      filled: true,
+                      fillColor: Colors.white,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
-        ),
-      );
-    });
+        ],
+      ),
+    );
   }
 }
 

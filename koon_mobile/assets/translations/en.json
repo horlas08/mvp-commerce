@@ -392,5 +392,14 @@
   "bank_transfer_details": "Bank Transfer Details",
   "tap_to_upload_receipt": "Tap to upload receipt image",
   "receipt_attached": "Receipt Attached",
-  "optional": "Optional"
+  "optional": "Optional",
+  "order_cost": "Order Cost",
+  "order_pickup_point": "Order pickup from distribution point",
+  "pickup_zero_fees": "Zero shipping fees (Free)",
+  "home_delivery_desc": "Home delivery with calculated charges",
+  "global_site_request": "Global Site Request",
+  "global_site_request_desc": "Send any product link or image from any site and we will provide it",
+  "point_number": "Point Number",
+  "account_number": "Account Number",
+  "select_bank_wallet": "Select Bank or E-Wallet"
 }

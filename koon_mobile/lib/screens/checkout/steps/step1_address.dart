@@ -4,9 +4,10 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get/get.dart' hide Trans;
 import 'package:google_fonts/google_fonts.dart';
 import '../../../app/theme/app_colors.dart';
-import '../../../app/utils/app_snackbar.dart';
 import '../../../controllers/checkout_controller.dart';
+import '../../../controllers/address_controller.dart';
 import '../../address/address_list_screen.dart';
+import '../../address/address_form_bottom_sheet.dart';
 
 class Step1Address extends StatelessWidget {
   const Step1Address({super.key});
@@ -299,11 +300,39 @@ class _AddressSelectCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                // Location pin
-                Icon(
-                  hasLocation ? Icons.location_on : Icons.location_off,
-                  color: hasLocation ? AppColors.success : AppColors.textHint,
-                  size: 20,
+                // Edit icon & Location pin
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.edit_outlined, size: 20, color: AppColors.secondary),
+                      tooltip: 'edit'.tr(),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                      onPressed: () async {
+                        if (!Get.isRegistered<AddressController>()) {
+                          Get.put(AddressController());
+                        }
+                        await AddressFormBottomSheet.show(
+                          context,
+                          existingAddress: address,
+                        );
+                        await ctrl.loadAddresses();
+                        if (ctrl.selectedAddress.value?['id'] == address['id']) {
+                          final updated = ctrl.addresses.firstWhereOrNull((a) => a['id'] == address['id']);
+                          if (updated != null) {
+                            ctrl.selectedAddress.value = updated;
+                          }
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 4),
+                    Icon(
+                      hasLocation ? Icons.location_on : Icons.location_off,
+                      color: hasLocation ? AppColors.success : AppColors.textHint,
+                      size: 20,
+                    ),
+                  ],
                 ),
               ],
             ),

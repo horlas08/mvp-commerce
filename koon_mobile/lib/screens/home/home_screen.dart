@@ -7,6 +7,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../services/api_service.dart';
 import '../../app/constants/api_constants.dart';
 import '../../app/theme/app_colors.dart';
@@ -507,10 +508,14 @@ class _HomeScreenState extends State<HomeScreen> {
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: _externalStores.length,
+        itemCount: _externalStores.length + 1,
         itemBuilder: (context, index) {
-          final store = _externalStores[index];
-          return _buildStoreCard(store, index, isGrid: false);
+          if (index < _externalStores.length) {
+            final store = _externalStores[index];
+            return _buildStoreCard(store, index, isGrid: false);
+          } else {
+            return _buildGlobalSiteRequestCard(isGrid: false);
+          }
         },
       ),
     );
@@ -523,19 +528,126 @@ class _HomeScreenState extends State<HomeScreen> {
         spacing: 12,
         runSpacing: 12,
         alignment: WrapAlignment.start,
-        children: _externalStores.asMap().entries.map((entry) {
-          final index = entry.key;
-          final store = entry.value;
-          // Calculate width for 2 columns with spacing
-          final width = (MediaQuery.of(context).size.width - 52) / 2;
-          return SizedBox(
-            width: width,
-            height: 110,
-            child: _buildStoreCard(store, index, isGrid: true),
-          );
-        }).toList(),
+        children: [
+          ..._externalStores.asMap().entries.map((entry) {
+            final index = entry.key;
+            final store = entry.value;
+            final width = (MediaQuery.of(context).size.width - 52) / 2;
+            return SizedBox(
+              width: width,
+              height: 110,
+              child: _buildStoreCard(store, index, isGrid: true),
+            );
+          }),
+          Builder(builder: (context) {
+            final width = (MediaQuery.of(context).size.width - 52) / 2;
+            return SizedBox(
+              width: width,
+              height: 110,
+              child: _buildGlobalSiteRequestCard(isGrid: true),
+            );
+          }),
+        ],
       ),
     );
+  }
+
+  Future<void> _openWhatsAppGlobalRequest() async {
+    const defaultMsg = 'أهلاً بك في تطبيق وِدّي Widdi 🛍 يسعدنا تواصلك معنا. يرجى إرسال صورة أو رابط المنتج الذي تريده من أي موقع، وسنقوم بالرد عليك في أقرب وقت.';
+    final encoded = Uri.encodeComponent(defaultMsg);
+    final uri = Uri.parse('https://wa.me/967783118668?text=$encoded');
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        await launchUrl(uri, mode: LaunchMode.platformDefault);
+      }
+    } catch (_) {
+      await launchUrl(uri, mode: LaunchMode.platformDefault);
+    }
+  }
+
+  Widget _buildGlobalSiteRequestCard({required bool isGrid}) {
+    return GestureDetector(
+      onTap: _openWhatsAppGlobalRequest,
+      child: Container(
+        width: isGrid ? null : 155,
+        margin: isGrid ? EdgeInsets.zero : const EdgeInsets.symmetric(horizontal: 6),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: const Color(0xFF25D366),
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF25D366).withOpacity(0.12),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Stack(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF25D366).withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.chat_bubble_outline_rounded, size: 10, color: Color(0xFF128C7E)),
+                        const SizedBox(width: 4),
+                        Text(
+                          'WhatsApp',
+                          style: GoogleFonts.inter(
+                            color: const Color(0xFF128C7E),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Spacer(),
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF25D366).withOpacity(0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Center(
+                      child: Icon(Icons.add_link_rounded, color: Color(0xFF128C7E), size: 20),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'global_site_request'.tr(),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                      color: AppColors.textPrimary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      height: 1.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    ).animate(delay: Duration(milliseconds: 350 + (_externalStores.length * 60))).fadeIn(duration: 400.ms).slideX(begin: 0.1);
   }
 
   Widget _buildStoreCard(Map<String, dynamic> store, int index, {required bool isGrid}) {
