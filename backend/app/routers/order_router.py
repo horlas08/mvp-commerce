@@ -265,6 +265,33 @@ async def get_order(
     return order.to_dict()
 
 
+class UpdateOrderAddressRequest(BaseModel):
+    shipping_address: dict
+
+
+@router.patch("/{order_id}/shipping-address")
+async def update_order_shipping_address(
+    order_id: str,
+    req: UpdateOrderAddressRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Allows customer to directly modify their delivery address if order is pending/confirmed."""
+    result = await db.execute(
+        select(Order).where(Order.id == order_id, Order.user_id == user.id)
+    )
+    order = result.scalar_one_or_none()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.status not in (OrderStatus.PENDING, OrderStatus.CONFIRMED):
+        raise HTTPException(status_code=400, detail="Cannot edit address after order has shipped")
+
+    order.shipping_address = req.shipping_address
+    await db.commit()
+    await db.refresh(order)
+    return order.to_dict()
+
+
 # ── Place Order (multipart — Flutter checkout) ──────────────────────────────
 
 @router.post("/place")

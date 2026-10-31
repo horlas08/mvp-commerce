@@ -29,9 +29,34 @@ router = APIRouter(prefix="/admin", tags=["Admin"])
 # ── Admin guard dependency ──────────────────────────────────────────────────
 
 async def get_admin_user(user: User = Depends(get_current_user)) -> User:
-    if user.role != "admin":
+    if user.role not in ("admin", "sub_admin"):
         raise HTTPException(status_code=403, detail="Admin access required")
     return user
+
+
+async def get_full_admin_user(user: User = Depends(get_current_user)) -> User:
+    """Only allows full admin (not sub_admin)."""
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Full admin access required")
+    return user
+
+
+def require_permission(permission_name: str):
+    """Returns a dependency that checks whether admin/sub_admin has the given permission."""
+    async def _check(user: User = Depends(get_admin_user)) -> User:
+        if user.role == "admin":
+            return user  # full admin always has all permissions
+        import json
+        perms: dict = {}
+        if user.admin_permissions:
+            try:
+                perms = json.loads(user.admin_permissions)
+            except Exception:
+                perms = {}
+        if not perms.get(permission_name):
+            raise HTTPException(status_code=403, detail=f"Permission '{permission_name}' required")
+        return user
+    return _check
 
 
 @router.post("/upload-image")
@@ -439,7 +464,7 @@ class CreateProductRequest(BaseModel):
 async def create_product(
     req: CreateProductRequest,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_admin_user),
+    _: User = Depends(require_permission("can_manage_products")),
 ):
     product = Product(**req.model_dump())
     db.add(product)
@@ -466,7 +491,7 @@ async def update_product(
     product_id: str,
     req: UpdateProductRequest,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_admin_user),
+    _: User = Depends(require_permission("can_manage_products")),
 ):
     result = await db.execute(select(Product).where(Product.id == product_id))
     product = result.scalar_one_or_none()
@@ -504,7 +529,7 @@ async def list_orders_admin(
     cart_type: Optional[str] = None,
     search: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_admin_user),
+    _: User = Depends(require_permission("can_view_orders")),
 ):
     query = select(Order).options(selectinload(Order.items), selectinload(Order.user))
     if status:
@@ -1444,7 +1469,7 @@ async def update_order_status(
     req: UpdateOrderStatusRequest,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_admin_user),
+    _: User = Depends(require_permission("can_update_order_status")),
 ):
     result = await db.execute(
         select(Order).where(Order.id == order_id).options(selectinload(Order.user))
@@ -1543,16 +1568,16 @@ class AdminLoginRequest(BaseModel):
 
 @router.post("/login")
 async def admin_login(req: AdminLoginRequest, db: AsyncSession = Depends(get_db)):
-    """Admin-specific login endpoint that only accepts admin-role users."""
+    """Admin-specific login endpoint that accepts admin and sub_admin roles."""
     from app.auth.security import verify_password
     from app.auth.jwt_handler import create_access_token, create_refresh_token
 
-    result = await db.execute(select(User).where(User.email == req.email, User.role == "admin"))
+    result = await db.execute(select(User).where(User.email == req.email, User.role.in_(["admin", "sub_admin"])))
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials or not an admin")
     if not user.is_active:
-        raise HTTPException(status_code=401, detail="Admin account is inactive")
+        raise HTTPException(status_code=401, detail="Account is inactive")
     if not user.password_hash:
         raise HTTPException(status_code=401, detail="Password login not configured for this account")
     if not verify_password(req.password, user.password_hash):
@@ -1600,10 +1625,15 @@ async def seed_admin(db: AsyncSession = Depends(get_db)):
 class StateRequest(BaseModel):
     name_en: str
     name_ar: str
+    sort_order: Optional[int] = 0
     shipping_fee: Optional[float] = 0.0
     commission: Optional[float] = 0.0
     free_shipping: Optional[bool] = False
     no_commission: Optional[bool] = False
+
+class StateOrderItem(BaseModel):
+    id: str
+    sort_order: int
 
 class CityRequest(BaseModel):
     state_id: str
@@ -1619,8 +1649,22 @@ async def list_states_admin(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_admin_user)
 ):
-    result = await db.execute(select(State).order_by(State.name_en))
+    result = await db.execute(select(State).order_by(State.sort_order.asc(), State.name_en.asc()))
     return [s.to_dict() for s in result.scalars().all()]
+
+@router.post("/states/reorder")
+async def reorder_states_admin(
+    items: list[StateOrderItem],
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_full_admin_user)
+):
+    for item in items:
+        res = await db.execute(select(State).where(State.id == item.id))
+        st = res.scalar_one_or_none()
+        if st:
+            st.sort_order = item.sort_order
+    await db.commit()
+    return {"message": "States reordered successfully"}
 
 @router.post("/states")
 async def create_state_admin(
@@ -2012,5 +2056,206 @@ async def update_setting_admin(
     await db.commit()
     await db.refresh(setting)
     return setting.to_dict()
+
+
+# ── Sub-Admin / Supervisor Management ────────────────────────────────────────
+
+class CreateSubAdminRequest(BaseModel):
+    name: str
+    email: str
+    password: str
+    permissions: Optional[Dict[str, bool]] = None
+
+
+class UpdateSubAdminPermissionsRequest(BaseModel):
+    permissions: Dict[str, bool]
+
+
+@router.get("/sub-admins")
+async def list_sub_admins(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_full_admin_user),
+):
+    """List all supervisor/sub-admin accounts."""
+    result = await db.execute(select(User).where(User.role == "sub_admin").order_by(User.created_at.desc()))
+    users = result.scalars().all()
+    return [u.to_dict() for u in users]
+
+
+@router.post("/sub-admins")
+async def create_sub_admin(
+    req: CreateSubAdminRequest,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_full_admin_user),
+):
+    """Create a new restricted supervisor/sub-admin account."""
+    import json
+    from app.auth.security import hash_password
+
+    # Check email duplicate
+    existing = await db.execute(select(User).where(User.email == req.email))
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    default_perms = {
+        "can_manage_products": True,
+        "can_view_orders": True,
+        "can_update_order_status": True,
+    }
+    actual_perms = {**default_perms, **(req.permissions or {})}
+
+    sub_admin = User(
+        email=req.email,
+        password_hash=hash_password(req.password),
+        name=req.name,
+        role="sub_admin",
+        is_active=True,
+        is_verified=True,
+        admin_permissions=json.dumps(actual_perms),
+    )
+    db.add(sub_admin)
+    await db.commit()
+    await db.refresh(sub_admin)
+    return sub_admin.to_dict()
+
+
+@router.patch("/sub-admins/{user_id}/permissions")
+async def update_sub_admin_permissions(
+    user_id: str,
+    req: UpdateSubAdminPermissionsRequest,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_full_admin_user),
+):
+    """Update permissions for a supervisor/sub-admin account."""
+    import json
+    result = await db.execute(select(User).where(User.id == user_id, User.role == "sub_admin"))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="Sub-admin not found")
+
+    user.admin_permissions = json.dumps(req.permissions)
+    await db.commit()
+    return user.to_dict()
+
+
+@router.delete("/sub-admins/{user_id}")
+async def delete_sub_admin(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_full_admin_user),
+):
+    result = await db.execute(select(User).where(User.id == user_id, User.role == "sub_admin"))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="Sub-admin not found")
+    await db.delete(user)
+    await db.commit()
+    return {"message": "Sub-admin deleted"}
+
+
+# ── Exchange Rates Endpoints ────────────────────────────────────────────────
+
+DEFAULT_EXCHANGE_RATES = {
+    "SAR": 1.0,
+    "USD": 3.75,
+    "YER_OLD": 530.0,
+    "YER_NEW": 1850.0,
+    "EUR": 4.10,
+    "AED": 1.02,
+    "CNY": 0.52,
+    "GBP": 4.75,
+}
+
+@router.get("/exchange-rates")
+async def get_exchange_rates_admin(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user),
+):
+    """Get manual exchange rates (1 unit of currency in SAR)."""
+    import json
+    from app.models.app_setting import AppSetting
+    result = await db.execute(select(AppSetting).where(AppSetting.key == "exchange_rates"))
+    setting = result.scalar_one_or_none()
+    if not setting:
+        return DEFAULT_EXCHANGE_RATES
+    try:
+        data = json.loads(setting.value_en)
+        return {**DEFAULT_EXCHANGE_RATES, **data}
+    except Exception:
+        return DEFAULT_EXCHANGE_RATES
+
+
+@router.post("/exchange-rates")
+async def update_exchange_rates_admin(
+    rates: Dict[str, float],
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_full_admin_user),
+):
+    """Manually update exchange rates (admin only)."""
+    import json
+    from app.models.app_setting import AppSetting
+
+    rates["SAR"] = 1.0  # SAR base is always 1.0
+    payload = json.dumps(rates)
+
+    result = await db.execute(select(AppSetting).where(AppSetting.key == "exchange_rates"))
+    setting = result.scalar_one_or_none()
+    if not setting:
+        setting = AppSetting(key="exchange_rates", value_en=payload, value_ar=payload)
+        db.add(setting)
+    else:
+        setting.value_en = payload
+        setting.value_ar = payload
+
+    await db.commit()
+    return rates
+
+
+# ── Store Icon Order Endpoints ──────────────────────────────────────────────
+
+DEFAULT_STORE_ORDER = ["shein", "amazon", "iherb", "aliexpress", "alibaba"]
+
+@router.get("/store-order")
+async def get_store_order_admin(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user),
+):
+    """Get custom store icons ordering."""
+    import json
+    from app.models.app_setting import AppSetting
+    result = await db.execute(select(AppSetting).where(AppSetting.key == "store_icon_order"))
+    setting = result.scalar_one_or_none()
+    if not setting:
+        return DEFAULT_STORE_ORDER
+    try:
+        data = json.loads(setting.value_en)
+        return data if isinstance(data, list) else DEFAULT_STORE_ORDER
+    except Exception:
+        return DEFAULT_STORE_ORDER
+
+
+@router.post("/store-order")
+async def update_store_order_admin(
+    order: list[str],
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_full_admin_user),
+):
+    """Set custom store icons ordering."""
+    import json
+    from app.models.app_setting import AppSetting
+
+    payload = json.dumps(order)
+    result = await db.execute(select(AppSetting).where(AppSetting.key == "store_icon_order"))
+    setting = result.scalar_one_or_none()
+    if not setting:
+        setting = AppSetting(key="store_icon_order", value_en=payload, value_ar=payload)
+        db.add(setting)
+    else:
+        setting.value_en = payload
+        setting.value_ar = payload
+
+    await db.commit()
+    return order
+
 
 

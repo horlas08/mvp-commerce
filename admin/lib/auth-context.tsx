@@ -9,6 +9,7 @@ interface AuthContextType {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
+  hasPermission: (permKey: string) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -17,6 +18,7 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   login: async () => {},
   logout: () => {},
+  hasPermission: () => false,
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -29,7 +31,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const savedUser = localStorage.getItem("admin_user");
     if (savedToken && savedUser) {
       setToken(savedToken);
-      setUser(JSON.parse(savedUser));
+      try {
+        setUser(JSON.parse(savedUser));
+      } catch {
+        setUser(null);
+      }
     }
     setLoading(false);
   }, []);
@@ -49,8 +55,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem("admin_user");
   };
 
+  const hasPermission = (permKey: string): boolean => {
+    if (user?.role === "admin") return true;
+    if (user?.role === "sub_admin") return !!user?.admin_permissions?.[permKey];
+    return false;
+  };
+
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, token, loading, login, logout, hasPermission }}>
       {children}
     </AuthContext.Provider>
   );

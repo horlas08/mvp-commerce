@@ -177,6 +177,8 @@ export const adminApi = {
 
   // States & Cities
   listStates: () => apiFetch<State[]>("/admin/states"),
+  reorderStates: (items: { id: string; sort_order: number }[]) =>
+    apiFetch<{ message: string }>("/admin/states/reorder", { method: "POST", body: JSON.stringify(items) }),
   createState: (data: { name_en: string; name_ar: string }) =>
     apiFetch<State>("/admin/states", { method: "POST", body: JSON.stringify(data) }),
   updateState: (id: string, data: Partial<{ name_en: string; name_ar: string }>) =>
@@ -300,6 +302,24 @@ export const adminApi = {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   },
+
+  // Sub-Admins / Supervisors
+  listSubAdmins: () => apiFetch<SubAdmin[]>("/admin/sub-admins"),
+  createSubAdmin: (data: { name: string; email: string; password: string; permissions?: Record<string, boolean> }) =>
+    apiFetch<SubAdmin>("/admin/sub-admins", { method: "POST", body: JSON.stringify(data) }),
+  updateSubAdminPermissions: (id: string, permissions: Record<string, boolean>) =>
+    apiFetch<SubAdmin>(`/admin/sub-admins/${id}/permissions`, { method: "PATCH", body: JSON.stringify({ permissions }) }),
+  deleteSubAdmin: (id: string) => apiFetch<{ message: string }>(`/admin/sub-admins/${id}`, { method: "DELETE" }),
+
+  // Exchange Rates
+  getExchangeRates: () => apiFetch<ExchangeRates>("/admin/exchange-rates"),
+  saveExchangeRates: (rates: ExchangeRates) =>
+    apiFetch<ExchangeRates>("/admin/exchange-rates", { method: "POST", body: JSON.stringify(rates) }),
+
+  // Store Icon Order
+  getStoreOrder: () => apiFetch<string[]>("/admin/store-order"),
+  saveStoreOrder: (order: string[]) =>
+    apiFetch<string[]>("/admin/store-order", { method: "POST", body: JSON.stringify(order) }),
 };
 
 
@@ -364,7 +384,30 @@ export interface AdminUser {
   credit_balance: number;
   governorate?: string;
   created_at: string;
+  admin_permissions?: {
+    can_manage_products?: boolean;
+    can_view_orders?: boolean;
+    can_update_order_status?: boolean;
+    [key: string]: boolean | undefined;
+  } | null;
 }
+
+export interface SubAdmin {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  is_active: boolean;
+  admin_permissions?: {
+    can_manage_products?: boolean;
+    can_view_orders?: boolean;
+    can_update_order_status?: boolean;
+    [key: string]: boolean | undefined;
+  } | null;
+  created_at: string;
+}
+
+export type ExchangeRates = Record<string, number>;
 
 export interface Stats {
   total_users: number;
@@ -460,6 +503,7 @@ export interface State {
   commission: number;
   free_shipping: boolean;
   no_commission: boolean;
+  sort_order?: number;
 }
 
 export interface City {

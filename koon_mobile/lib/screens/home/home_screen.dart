@@ -7,6 +7,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../services/api_service.dart';
+import '../../app/constants/api_constants.dart';
 import '../../app/theme/app_colors.dart';
 import '../../controllers/home_controller.dart';
 import '../../controllers/config_controller.dart';
@@ -34,21 +36,63 @@ class _HomeScreenState extends State<HomeScreen> {
   int _bannerIndex = 0;
   bool _globalStoreViewGrid = false; // false = scroll (default), true = grid
 
-  final List<Map<String, dynamic>> _externalStores = [
-    {'name': 'Alibaba', 'logo': '🏭', 'color': Color(0xFFFF6B00), 'url': 'https://arabic.alibaba.com', 'subtitle': 'Wholesale', 'enabled': true},
-    {'name': 'AliExpress', 'logo': '🛒', 'color': Color(0xFFE53935), 'url': 'https://ar.aliexpress.com', 'subtitle': '', 'enabled': true},
+  List<Map<String, dynamic>> _externalStores = [
     {'name': 'SHEIN', 'logo': '👗', 'color': Color(0xFF1A1A2E), 'url': 'https://m.shein.com/ar/', 'subtitle': '', 'enabled': true},
-    {'name': 'iHerb', 'logo': '🌿', 'color': Color(0xFF007943), 'url': 'https://ar.iherb.com', 'subtitle': '', 'enabled': true},
     {'name': 'Amazon', 'logo': '📦', 'color': Color(0xFFFFA726), 'url': 'https://www.amazon.sa/-/language=ar_AE', 'subtitle': '', 'enabled': true},
+    {'name': 'iHerb', 'logo': '🌿', 'color': Color(0xFF007943), 'url': 'https://ar.iherb.com', 'subtitle': '', 'enabled': true},
+    {'name': 'AliExpress', 'logo': '🛒', 'color': Color(0xFFE53935), 'url': 'https://ar.aliexpress.com', 'subtitle': '', 'enabled': true},
+    {'name': 'Alibaba', 'logo': '🏭', 'color': Color(0xFFFF6B00), 'url': 'https://arabic.alibaba.com', 'subtitle': 'Wholesale', 'enabled': true},
   ];
 
   @override
   void initState() {
     super.initState();
     _loadStoreViewPreference();
+    _loadStoreOrder();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _fetchIfEmpty();
     });
+  }
+
+  Future<void> _loadStoreOrder() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cachedOrder = prefs.getStringList('store_icon_order');
+      if (cachedOrder != null && cachedOrder.isNotEmpty) {
+        _applyStoreOrder(cachedOrder);
+      }
+
+      final response = await ApiService().dio.get('${ApiConstants.baseUrl}/config/store-order');
+      if (response.statusCode == 200 && response.data is List) {
+        final List<String> remoteOrder = List<String>.from(response.data);
+        if (remoteOrder.isNotEmpty) {
+          _applyStoreOrder(remoteOrder);
+          await prefs.setStringList('store_icon_order', remoteOrder);
+        }
+      }
+    } catch (_) {}
+  }
+
+  void _applyStoreOrder(List<String> orderKeys) {
+    final Map<String, Map<String, dynamic>> storeMap = {
+      for (var s in _externalStores) s['name'].toString().toLowerCase(): s,
+    };
+    final List<Map<String, dynamic>> reordered = [];
+    for (final key in orderKeys) {
+      final k = key.toLowerCase().trim();
+      if (storeMap.containsKey(k)) {
+        reordered.add(storeMap[k]!);
+        storeMap.remove(k);
+      }
+    }
+    reordered.addAll(storeMap.values);
+    if (mounted) {
+      setState(() {
+        _externalStores = reordered;
+      });
+    } else {
+      _externalStores = reordered;
+    }
   }
 
   Future<void> _fetchIfEmpty() async {

@@ -1,8 +1,22 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Save, RefreshCw, AlertCircle, Truck, Percent, Globe, Plus, Trash2, Receipt } from "lucide-react";
-import { adminApi, PricingPolicy, SitePricingPolicy } from "@/lib/api";
+import {
+  Save,
+  RefreshCw,
+  AlertCircle,
+  Truck,
+  Percent,
+  Globe,
+  Plus,
+  Trash2,
+  Receipt,
+  ArrowUp,
+  ArrowDown,
+  DollarSign,
+  ShoppingBag,
+} from "lucide-react";
+import { adminApi, PricingPolicy, SitePricingPolicy, ExchangeRates } from "@/lib/api";
 import { useLang } from "@/lib/lang-context";
 
 interface PolicyState {
@@ -19,12 +33,54 @@ const AVAILABLE_SITES = [
   { key: "internal", label: "Internal Store" },
 ];
 
+const CURRENCIES = [
+  { code: "SAR", flag: "🇸🇦", nameEn: "Saudi Riyal", nameAr: "ريال سعودي", isBase: true },
+  { code: "USD", flag: "🇺🇸", nameEn: "US Dollar", nameAr: "دولار أمريكي" },
+  { code: "YER_OLD", flag: "🇾🇪", nameEn: "Yemeni Rial (Sana'a)", nameAr: "ريال يمني (صنعاء)" },
+  { code: "YER_NEW", flag: "🇾🇪", nameEn: "Yemeni Rial (Aden)", nameAr: "ريال يمني (عدن)" },
+  { code: "EUR", flag: "🇪🇺", nameEn: "Euro", nameAr: "يورو" },
+  { code: "AED", flag: "🇦🇪", nameEn: "UAE Dirham", nameAr: "درهم إماراتي" },
+  { code: "CNY", flag: "🇨🇳", nameEn: "Chinese Yuan", nameAr: "يوان صيني" },
+  { code: "GBP", flag: "🇬🇧", nameEn: "British Pound", nameAr: "جنيه إسترليني" },
+];
+
+const DEFAULT_STORE_DEFINITIONS: Record<string, { name: string; icon: string; badge: string }> = {
+  shein: { name: "SHEIN", icon: "👗", badge: "shein.com" },
+  amazon: { name: "Amazon", icon: "📦", badge: "amazon.sa" },
+  iherb: { name: "iHerb", icon: "🌿", badge: "iherb.com" },
+  aliexpress: { name: "AliExpress", icon: "🛍️", badge: "aliexpress.com" },
+  alibaba: { name: "Alibaba", icon: "🏭", badge: "alibaba.com" },
+};
+
 export default function SettingsPage() {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  // Exchange Rates state
+  const [exchangeRates, setExchangeRates] = useState<ExchangeRates>({
+    SAR: 1.0,
+    USD: 3.75,
+    YER_OLD: 530.0,
+    YER_NEW: 1850.0,
+    EUR: 4.10,
+    AED: 1.02,
+    CNY: 0.52,
+    GBP: 4.75,
+  });
+  const [savingRates, setSavingRates] = useState(false);
+
+  // Store Icon Order state
+  const [storeOrder, setStoreOrder] = useState<string[]>([
+    "shein",
+    "amazon",
+    "iherb",
+    "aliexpress",
+    "alibaba",
+  ]);
+  const [savingStoreOrder, setSavingStoreOrder] = useState(false);
 
   // Policies & Checkout fees form state
   const [shippingConfirmation, setShippingConfirmation] = useState<PolicyState>({ value_en: "", value_ar: "" });
@@ -77,15 +133,73 @@ export default function SettingsPage() {
           value_ar: res.team_review_fee.value_ar,
         });
       }
-      // Load pricing policy
-      const policy = await adminApi.getPricingPolicy();
-      setPricingPolicy(policy);
+      // Load pricing policy, exchange rates, and store order
+      const [policy, ratesRes, storeOrderRes] = await Promise.all([
+        adminApi.getPricingPolicy().catch(() => null),
+        adminApi.getExchangeRates().catch(() => null),
+        adminApi.getStoreOrder().catch(() => null),
+      ]);
+      if (policy) setPricingPolicy(policy);
+      if (ratesRes) setExchangeRates(ratesRes);
+      if (storeOrderRes && Array.isArray(storeOrderRes)) setStoreOrder(storeOrderRes);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load settings");
     } finally {
       setLoading(false);
     }
   }, []);
+
+  const handleSaveExchangeRates = async () => {
+    setSavingRates(true);
+    setError("");
+    setSuccess("");
+    try {
+      const updated = await adminApi.saveExchangeRates(exchangeRates);
+      setExchangeRates(updated);
+      setSuccess(t("ratesSaved"));
+      setTimeout(() => setSuccess(""), 3000);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : t("failedToUpdate"));
+    } finally {
+      setSavingRates(false);
+    }
+  };
+
+  const handleRateChange = (code: string, value: string) => {
+    const num = parseFloat(value);
+    setExchangeRates(prev => ({
+      ...prev,
+      [code]: isNaN(num) ? 0 : num,
+    }));
+  };
+
+  const moveStore = (index: number, direction: "up" | "down") => {
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= storeOrder.length) return;
+    setStoreOrder(prev => {
+      const next = [...prev];
+      const temp = next[index];
+      next[index] = next[targetIndex];
+      next[targetIndex] = temp;
+      return next;
+    });
+  };
+
+  const handleSaveStoreOrder = async () => {
+    setSavingStoreOrder(true);
+    setError("");
+    setSuccess("");
+    try {
+      const updated = await adminApi.saveStoreOrder(storeOrder);
+      setStoreOrder(updated);
+      setSuccess(t("orderSaved"));
+      setTimeout(() => setSuccess(""), 3000);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : t("failedToUpdate"));
+    } finally {
+      setSavingStoreOrder(false);
+    }
+  };
 
   const handleSavePricingPolicy = async () => {
     setSavingPolicy(true);
@@ -203,6 +317,217 @@ export default function SettingsPage() {
       )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+        {/* Exchange Rates Card */}
+        <div className="card" style={{ padding: 20, background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
+            <div>
+              <h3 style={{ fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
+                <DollarSign size={18} className="text-primary" />
+                {t("exchangeRates")}
+              </h3>
+              <p style={{ color: "var(--text-muted)", fontSize: 12, marginTop: 4, maxWidth: 640 }}>
+                {t("ratesDescription")}
+              </p>
+            </div>
+            <button
+              id="save-exchange-rates-btn"
+              className="btn btn-primary btn-sm"
+              disabled={savingRates}
+              onClick={handleSaveExchangeRates}
+              style={{ display: "flex", alignItems: "center", gap: 6 }}
+            >
+              {savingRates ? (
+                <div className="spinner" style={{ width: 14, height: 14 }} />
+              ) : (
+                <>
+                  <Save size={14} />
+                  {t("saveExchangeRates")}
+                </>
+              )}
+            </button>
+          </div>
+
+          <div className="table-container" style={{ margin: 0, border: "1px solid var(--border)", borderRadius: 8 }}>
+            <table>
+              <thead>
+                <tr>
+                  <th style={{ width: 60, textAlign: "center" }}></th>
+                  <th>{t("currencyCode")}</th>
+                  <th>{lang === "ar" ? "الرمز" : "Code"}</th>
+                  <th style={{ minWidth: 200 }}>{t("rateValue")} (1 unit in SAR)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {CURRENCIES.map(curr => {
+                  const rate = exchangeRates[curr.code] ?? (curr.isBase ? 1.0 : 0);
+                  const isBase = curr.isBase;
+                  return (
+                    <tr key={curr.code}>
+                      <td style={{ textAlign: "center", fontSize: 24, verticalAlign: "middle" }}>
+                        {curr.flag}
+                      </td>
+                      <td>
+                        <div style={{ fontWeight: 600, fontSize: 14 }}>
+                          {lang === "ar" ? curr.nameAr : curr.nameEn}
+                        </div>
+                        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                          {lang === "ar" ? curr.nameEn : curr.nameAr}
+                        </div>
+                      </td>
+                      <td>
+                        <span className="badge badge-secondary" style={{ fontFamily: "monospace", fontWeight: 700 }}>
+                          {curr.code}
+                        </span>
+                      </td>
+                      <td>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <input
+                            type="number"
+                            step="any"
+                            min="0"
+                            className="input"
+                            style={{ maxWidth: 160, padding: "6px 10px", fontSize: 13, fontWeight: 600 }}
+                            value={rate}
+                            onChange={e => handleRateChange(curr.code, e.target.value)}
+                            disabled={isBase}
+                          />
+                          <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                            {isBase ? (
+                              <span className="badge badge-admin" style={{ fontSize: 10 }}>
+                                {lang === "ar" ? "العملة الأساسية" : "Base Currency"}
+                              </span>
+                            ) : (
+                              <span>1 {curr.code} = {rate} SAR</span>
+                            )}
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Store Icon Order Card */}
+        <div className="card" style={{ padding: 20, background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
+            <div>
+              <h3 style={{ fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
+                <ShoppingBag size={18} className="text-primary" />
+                {t("storeIconOrder")}
+              </h3>
+              <p style={{ color: "var(--text-muted)", fontSize: 12, marginTop: 4, maxWidth: 640 }}>
+                {t("storeOrderDescription")}
+              </p>
+            </div>
+            <button
+              id="save-store-order-btn"
+              className="btn btn-primary btn-sm"
+              disabled={savingStoreOrder}
+              onClick={handleSaveStoreOrder}
+              style={{ display: "flex", alignItems: "center", gap: 6 }}
+            >
+              {savingStoreOrder ? (
+                <div className="spinner" style={{ width: 14, height: 14 }} />
+              ) : (
+                <>
+                  <Save size={14} />
+                  {t("saveStoreOrder")}
+                </>
+              )}
+            </button>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {storeOrder.map((storeKey, index) => {
+              const def = DEFAULT_STORE_DEFINITIONS[storeKey] || {
+                name: storeKey.toUpperCase(),
+                icon: "🛍️",
+                badge: `${storeKey}.com`,
+              };
+              const isFirst = index === 0;
+              const isLast = index === storeOrder.length - 1;
+
+              return (
+                <div
+                  key={storeKey}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    padding: "12px 16px",
+                    background: "var(--bg-page)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 10,
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                    <span
+                      style={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: "50%",
+                        background: "var(--bg-card)",
+                        border: "1px solid var(--border)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: "var(--text-muted)",
+                      }}
+                    >
+                      {index + 1}
+                    </span>
+                    <span style={{ fontSize: 24 }}>{def.icon}</span>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 14, color: "var(--text-primary)" }}>
+                        {def.name}
+                      </div>
+                      <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 1 }}>
+                        {def.badge}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <button
+                      type="button"
+                      id={`move-up-store-${storeKey}`}
+                      className="btn btn-ghost btn-icon btn-sm"
+                      disabled={isFirst}
+                      onClick={() => moveStore(index, "up")}
+                      title={t("moveUp")}
+                      style={{
+                        opacity: isFirst ? 0.25 : 0.8,
+                        cursor: isFirst ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      <ArrowUp size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      id={`move-down-store-${storeKey}`}
+                      className="btn btn-ghost btn-icon btn-sm"
+                      disabled={isLast}
+                      onClick={() => moveStore(index, "down")}
+                      title={t("moveDown")}
+                      style={{
+                        opacity: isLast ? 0.25 : 0.8,
+                        cursor: isLast ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      <ArrowDown size={15} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Team Review Before Shipping Fee */}
         <div className="card" style={{ padding: 20, background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>

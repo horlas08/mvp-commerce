@@ -11,8 +11,8 @@ router = APIRouter(tags=["Locations"])
 
 @router.get("/states")
 async def list_states(db: AsyncSession = Depends(get_db)):
-    """Fetch all states ordered alphabetically by English name."""
-    result = await db.execute(select(State).order_by(State.name_en))
+    """Fetch all states ordered by sort_order and name."""
+    result = await db.execute(select(State).order_by(State.sort_order.asc(), State.name_en.asc()))
     states = result.scalars().all()
     return [s.to_dict() for s in states]
 

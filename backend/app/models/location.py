@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import String, ForeignKey, Float, Boolean
+from sqlalchemy import String, ForeignKey, Float, Boolean, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
@@ -10,6 +10,7 @@ class State(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     name_en: Mapped[str] = mapped_column(String(255), nullable=False)
     name_ar: Mapped[str] = mapped_column(String(255), nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     
     shipping_fee: Mapped[float] = mapped_column(Float, default=0.0, server_default="0.0")
     commission: Mapped[float] = mapped_column(Float, default=0.0, server_default="0.0")
@@ -24,6 +25,7 @@ class State(Base):
             "name": self.name_en,
             "name_en": self.name_en,
             "name_ar": self.name_ar,
+            "sort_order": self.sort_order,
             "shipping_fee": self.shipping_fee,
             "commission": self.commission,
             "free_shipping": self.free_shipping,

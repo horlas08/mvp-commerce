@@ -10,7 +10,9 @@ import '../../app/theme/app_colors.dart';
 import '../../controllers/order_controller.dart';
 import '../webview/webview_screen.dart';
 import '../../app/constants/api_constants.dart';
+import '../../app/utils/app_snackbar.dart';
 import '../../app/utils/url_helper.dart';
+import '../../services/api_service.dart';
 
 class OrderDetailScreen extends StatefulWidget {
   final Map<String, dynamic> order;
@@ -24,12 +26,11 @@ class OrderDetailScreen extends StatefulWidget {
 class _OrderDetailScreenState extends State<OrderDetailScreen> {
   late Map<String, dynamic> _order;
   bool _isSubmittingRefund = false;
-  bool _isSubmittingCancel = false;
 
   @override
   void initState() {
     super.initState();
-    _order = widget.order;
+    _order = Map<String, dynamic>.from(widget.order);
   }
 
   String get _orderId => (_order['id'] ?? '').toString();
@@ -38,7 +39,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   String get _paymentStatus => _order['payment_status'] ?? 'not_required';
   double get _total => double.tryParse(_order['total']?.toString() ?? '0') ?? 0;
   List<dynamic> get _items => _order['items'] as List? ?? [];
-  Map<String, dynamic>? get _shippingAddress => _order['shipping_address'] as Map<String, dynamic>?;
+  Map<String, dynamic>? get _shippingAddress =>
+      _order['shipping_address'] != null ? Map<String, dynamic>.from(_order['shipping_address'] as Map) : null;
+  bool get _canEditAddress => _status == 'pending' || _status == 'confirmed';
 
   Color _getStatusColor(String status) {
     switch (status) {
@@ -191,6 +194,193 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               );
             }),
           ],
+        ),
+      ),
+    );
+  }
+
+  void _showEditShippingAddressBottomSheet() {
+    final formKey = GlobalKey<FormState>();
+    final current = _shippingAddress ?? {};
+    final nameCtrl = TextEditingController(text: current['full_name'] ?? current['recipient_name'] ?? '');
+    final phoneCtrl = TextEditingController(text: current['phone'] ?? '');
+    final streetCtrl = TextEditingController(text: current['street'] ?? '');
+    final cityCtrl = TextEditingController(text: current['city'] ?? '');
+    final stateCtrl = TextEditingController(text: current['state'] ?? '');
+    final notesCtrl = TextEditingController(text: current['notes'] ?? '');
+    final lang = context.locale.languageCode;
+    bool isSaving = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (bottomCtx) => StatefulBuilder(
+        builder: (context, setModalState) => Padding(
+          padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.of(context).viewInsets.bottom + 20),
+          child: SingleChildScrollView(
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.divider,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    lang == 'ar' ? 'تعديل عنوان التوصيل' : 'Edit Delivery Address',
+                    style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 20),
+                  TextFormField(
+                    controller: nameCtrl,
+                    decoration: InputDecoration(
+                      labelText: lang == 'ar' ? 'اسم المستلم' : 'Recipient Name',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    validator: (v) => v == null || v.trim().isEmpty ? (lang == 'ar' ? 'هذا الحقل مطلوب' : 'Required') : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: phoneCtrl,
+                    keyboardType: TextInputType.phone,
+                    decoration: InputDecoration(
+                      labelText: lang == 'ar' ? 'رقم الهاتف' : 'Phone Number',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    validator: (v) => v == null || v.trim().isEmpty ? (lang == 'ar' ? 'هذا الحقل مطلوب' : 'Required') : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: streetCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'street'.tr(),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    validator: (v) => v == null || v.trim().isEmpty ? (lang == 'ar' ? 'هذا الحقل مطلوب' : 'Required') : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: cityCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'city'.tr(),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    validator: (v) => v == null || v.trim().isEmpty ? (lang == 'ar' ? 'هذا الحقل مطلوب' : 'Required') : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: stateCtrl,
+                    decoration: InputDecoration(
+                      labelText: lang == 'ar' ? 'المحافظة / المنطقة' : 'State / Province',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: notesCtrl,
+                    maxLines: 2,
+                    decoration: InputDecoration(
+                      labelText: lang == 'ar' ? 'ملاحظات التوصيل (اختياري)' : 'Delivery Notes (Optional)',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: isSaving
+                          ? null
+                          : () async {
+                              if (!formKey.currentState!.validate()) return;
+                              setModalState(() => isSaving = true);
+
+                              final updatedAddress = Map<String, dynamic>.from(_shippingAddress ?? {});
+                              updatedAddress['full_name'] = nameCtrl.text.trim();
+                              updatedAddress['recipient_name'] = nameCtrl.text.trim();
+                              updatedAddress['phone'] = phoneCtrl.text.trim();
+                              updatedAddress['street'] = streetCtrl.text.trim();
+                              updatedAddress['city'] = cityCtrl.text.trim();
+                              if (stateCtrl.text.trim().isNotEmpty) {
+                                updatedAddress['state'] = stateCtrl.text.trim();
+                              } else {
+                                updatedAddress.remove('state');
+                              }
+                              if (notesCtrl.text.trim().isNotEmpty) {
+                                updatedAddress['notes'] = notesCtrl.text.trim();
+                              } else {
+                                updatedAddress.remove('notes');
+                              }
+
+                              try {
+                                final response = await ApiService().dio.patch(
+                                  '${ApiConstants.baseUrl}/orders/$_orderId/shipping-address',
+                                  data: {'shipping_address': updatedAddress},
+                                );
+                                if (bottomCtx.mounted) {
+                                  Navigator.pop(bottomCtx);
+                                }
+                                if (!mounted) return;
+                                if (response.statusCode == 200) {
+                                  setState(() {
+                                    if (response.data is Map && response.data['shipping_address'] != null) {
+                                      _order['shipping_address'] = response.data['shipping_address'];
+                                    } else {
+                                      _order['shipping_address'] = updatedAddress;
+                                    }
+                                  });
+                                  AppSnackbar.success(
+                                    null,
+                                    lang == 'ar'
+                                        ? 'تم تحديث عنوان التوصيل بنجاح'
+                                        : 'Delivery address updated successfully',
+                                  );
+                                } else {
+                                  AppSnackbar.error(
+                                    null,
+                                    lang == 'ar' ? 'فشل في تحديث العنوان' : 'Failed to update address',
+                                  );
+                                }
+                              } catch (e) {
+                                if (!mounted) return;
+                                setModalState(() => isSaving = false);
+                                AppSnackbar.error(
+                                  null,
+                                  lang == 'ar' ? 'حدث خطأ أثناء حفظ العنوان' : 'Error saving address',
+                                );
+                              }
+                            },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: isSaving
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                            )
+                          : Text(
+                              lang == 'ar' ? 'حفظ عنوان التوصيل' : 'Save Delivery Address',
+                              style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white),
+                            ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -418,12 +608,28 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 ),
               ).animate().fadeIn(duration: 450.ms),
 
-            if (_shippingAddress != null) ...[
+            if (_shippingAddress != null || _canEditAddress) ...[
               const SizedBox(height: 12),
               _buildSectionCard(
                 title: 'shipping_address'.tr(),
+                action: _canEditAddress
+                    ? TextButton.icon(
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        ),
+                        onPressed: _showEditShippingAddressBottomSheet,
+                        icon: const Icon(Icons.edit_outlined, size: 16, color: AppColors.primary),
+                        label: Text(
+                          context.locale.languageCode == 'ar' ? 'تعديل عنوان التوصيل' : 'Edit Delivery Address',
+                          style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primary),
+                        ),
+                      )
+                    : null,
                 child: Text(
-                  _formatAddress(_shippingAddress!),
+                  _shippingAddress != null
+                      ? _formatAddress(_shippingAddress!)
+                      : (context.locale.languageCode == 'ar' ? 'لم يتم تحديد عنوان التوصيل' : 'No delivery address specified'),
                   style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary, height: 1.5),
                 ),
               ).animate().fadeIn(duration: 500.ms),
@@ -472,7 +678,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     );
   }
 
-  Widget _buildSectionCard({required Widget child, String? title}) {
+  Widget _buildSectionCard({required Widget child, String? title, Widget? action}) {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -487,7 +693,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (title != null) ...[
-              Text(title, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(title, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                  if (action != null) action,
+                ],
+              ),
               const SizedBox(height: 12),
             ],
             child,
@@ -525,14 +737,47 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   String _formatAddress(Map<String, dynamic> addr) {
-    final parts = <String>[];
-    if (addr['street'] != null) parts.add(addr['street'].toString());
-    if (addr['district'] != null) parts.add(addr['district'].toString());
-    if (addr['city'] != null) parts.add(addr['city'].toString());
-    if (addr['state'] != null) parts.add(addr['state'].toString());
-    if (addr['zip_code'] != null) parts.add(addr['zip_code'].toString());
-    if (addr['country'] != null) parts.add(addr['country'].toString());
-    if (addr['address_id'] != null && parts.isEmpty) return 'Address ID: ${addr['address_id']}';
-    return parts.isNotEmpty ? parts.join(', ') : 'N/A';
+    final lines = <String>[];
+    final name = addr['full_name'] ?? addr['recipient_name'];
+    final phone = addr['phone'];
+    if (name != null && name.toString().trim().isNotEmpty) {
+      if (phone != null && phone.toString().trim().isNotEmpty) {
+        lines.add('${name.toString().trim()} (${phone.toString().trim()})');
+      } else {
+        lines.add(name.toString().trim());
+      }
+    } else if (phone != null && phone.toString().trim().isNotEmpty) {
+      lines.add(phone.toString().trim());
+    }
+
+    final locationParts = <String>[];
+    if (addr['street'] != null && addr['street'].toString().trim().isNotEmpty) {
+      locationParts.add(addr['street'].toString().trim());
+    }
+    if (addr['district'] != null && addr['district'].toString().trim().isNotEmpty) {
+      locationParts.add(addr['district'].toString().trim());
+    }
+    if (addr['city'] != null && addr['city'].toString().trim().isNotEmpty) {
+      locationParts.add(addr['city'].toString().trim());
+    }
+    if (addr['state'] != null && addr['state'].toString().trim().isNotEmpty) {
+      locationParts.add(addr['state'].toString().trim());
+    }
+    if (addr['zip_code'] != null && addr['zip_code'].toString().trim().isNotEmpty) {
+      locationParts.add(addr['zip_code'].toString().trim());
+    }
+    if (addr['country'] != null && addr['country'].toString().trim().isNotEmpty) {
+      locationParts.add(addr['country'].toString().trim());
+    }
+    if (locationParts.isNotEmpty) {
+      lines.add(locationParts.join(', '));
+    }
+    if (addr['notes'] != null && addr['notes'].toString().trim().isNotEmpty) {
+      lines.add('${context.locale.languageCode == 'ar' ? 'ملاحظات: ' : 'Notes: '}${addr['notes'].toString().trim()}');
+    }
+    if (lines.isEmpty && addr['address_id'] != null) {
+      return 'Address ID: ${addr['address_id']}';
+    }
+    return lines.isNotEmpty ? lines.join('\n') : 'N/A';
   }
 }

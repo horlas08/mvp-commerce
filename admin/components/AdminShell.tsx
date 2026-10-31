@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -16,6 +16,7 @@ import {
   RotateCcw,
   Ticket,
   Settings,
+  Shield,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { useLang } from "@/lib/lang-context";
@@ -32,39 +33,85 @@ import PaymentsPage from "./pages/PaymentsPage";
 import RefundsPage from "./pages/RefundsPage";
 import CouponsPage from "./pages/CouponsPage";
 import SettingsPage from "./pages/SettingsPage";
+import SubAdminsPage from "./pages/SubAdminsPage";
 
-type Page = "dashboard" | "users" | "products" | "orders" | "categories" | "statesAndCities" | "paymentMethods" | "support" | "payments" | "refunds" | "coupons" | "settings";
-
-const NAV_ITEMS = [
-  {
-    sectionKey: "overview" as const,
-    items: [
-      { id: "dashboard" as Page, labelKey: "dashboard" as const, icon: LayoutDashboard },
-    ],
-  },
-  {
-    sectionKey: "management" as const,
-    items: [
-      { id: "orders" as Page, labelKey: "orders" as const, icon: ShoppingBag },
-      { id: "payments" as Page, labelKey: "payments" as const, icon: Coins },
-      { id: "refunds" as Page, labelKey: "refunds" as const, icon: RotateCcw },
-      { id: "coupons" as Page, labelKey: "coupons" as const, icon: Ticket },
-      // { id: "products" as Page, labelKey: "products" as const, icon: Package },
-      // { id: "categories" as Page, labelKey: "categories" as const, icon: Tag },
-      { id: "statesAndCities" as Page, labelKey: "statesAndCities" as const, icon: MapPin },
-      { id: "paymentMethods" as Page, labelKey: "paymentMethods" as const, icon: CreditCard },
-      { id: "support" as Page, labelKey: "support" as const, icon: MessageSquare },
-      { id: "users" as Page, labelKey: "users" as const, icon: Users },
-      { id: "settings" as Page, labelKey: "settings" as const, icon: Settings },
-    ],
-  },
-];
+type Page =
+  | "dashboard"
+  | "users"
+  | "products"
+  | "orders"
+  | "categories"
+  | "statesAndCities"
+  | "paymentMethods"
+  | "support"
+  | "payments"
+  | "refunds"
+  | "coupons"
+  | "settings"
+  | "subAdmins";
 
 export default function AdminShell() {
-  const { user, logout } = useAuth();
+  const { user, logout, hasPermission } = useAuth();
   const { t, lang } = useLang();
-  const [currentPage, setCurrentPage] = useState<Page>("dashboard");
+  const isSubAdmin = user?.role === "sub_admin";
+  const [currentPage, setCurrentPage] = useState<Page>(() => (user?.role === "sub_admin" ? "orders" : "dashboard"));
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Filter navigation items based on user role and permissions
+  const navSections = isSubAdmin
+    ? [
+        {
+          sectionKey: "management" as const,
+          items: [
+            ...(hasPermission("can_view_orders")
+              ? [{ id: "orders" as Page, labelKey: "orders" as const, icon: ShoppingBag }]
+              : []),
+            ...(hasPermission("can_manage_products")
+              ? [{ id: "products" as Page, labelKey: "products" as const, icon: Package }]
+              : []),
+          ],
+        },
+      ].filter(s => s.items.length > 0)
+    : [
+        {
+          sectionKey: "overview" as const,
+          items: [
+            { id: "dashboard" as Page, labelKey: "dashboard" as const, icon: LayoutDashboard },
+          ],
+        },
+        {
+          sectionKey: "management" as const,
+          items: [
+            { id: "orders" as Page, labelKey: "orders" as const, icon: ShoppingBag },
+            { id: "payments" as Page, labelKey: "payments" as const, icon: Coins },
+            { id: "refunds" as Page, labelKey: "refunds" as const, icon: RotateCcw },
+            { id: "coupons" as Page, labelKey: "coupons" as const, icon: Ticket },
+            { id: "products" as Page, labelKey: "products" as const, icon: Package },
+            { id: "categories" as Page, labelKey: "categories" as const, icon: Tag },
+            { id: "statesAndCities" as Page, labelKey: "statesAndCities" as const, icon: MapPin },
+            { id: "paymentMethods" as Page, labelKey: "paymentMethods" as const, icon: CreditCard },
+            { id: "support" as Page, labelKey: "support" as const, icon: MessageSquare },
+            { id: "users" as Page, labelKey: "users" as const, icon: Users },
+            { id: "subAdmins" as Page, labelKey: "subAdmins" as const, icon: Shield },
+            { id: "settings" as Page, labelKey: "settings" as const, icon: Settings },
+          ],
+        },
+      ];
+
+  // If sub_admin visits an unauthorized page, default to orders or products
+  useEffect(() => {
+    if (isSubAdmin) {
+      const allowedPages: Page[] = [];
+      if (hasPermission("can_view_orders")) allowedPages.push("orders");
+      if (hasPermission("can_manage_products")) allowedPages.push("products");
+
+      if (!allowedPages.includes(currentPage)) {
+        if (allowedPages.length > 0) {
+          setCurrentPage(allowedPages[0]);
+        }
+      }
+    }
+  }, [isSubAdmin, hasPermission, currentPage]);
 
   const initials = user?.name
     ?.split(" ")
@@ -74,6 +121,22 @@ export default function AdminShell() {
     .slice(0, 2) || "A";
 
   const renderPage = () => {
+    if (isSubAdmin) {
+      if (currentPage === "orders" && hasPermission("can_view_orders")) {
+        return <OrdersPage />;
+      }
+      if (currentPage === "products" && hasPermission("can_manage_products")) {
+        return <ProductsPage />;
+      }
+      if (hasPermission("can_view_orders")) return <OrdersPage />;
+      if (hasPermission("can_manage_products")) return <ProductsPage />;
+      return (
+        <div style={{ textAlign: "center", padding: 60, color: "var(--text-muted)" }}>
+          {lang === "ar" ? "ليس لديك صلاحية للوصول إلى هذا القسم." : "You do not have permission to access this section."}
+        </div>
+      );
+    }
+
     switch (currentPage) {
       case "dashboard": return <DashboardPage onNavigate={setCurrentPage} />;
       case "users": return <UsersPage />;
@@ -86,7 +149,9 @@ export default function AdminShell() {
       case "payments": return <PaymentsPage />;
       case "refunds": return <RefundsPage />;
       case "coupons": return <CouponsPage />;
+      case "subAdmins": return <SubAdminsPage />;
       case "settings": return <SettingsPage />;
+      default: return <DashboardPage onNavigate={setCurrentPage} />;
     }
   };
 
@@ -116,7 +181,7 @@ export default function AdminShell() {
 
         {/* Navigation */}
         <nav className="sidebar-nav">
-          {NAV_ITEMS.map(section => (
+          {navSections.map(section => (
             <div key={section.sectionKey} style={{ marginBottom: 8 }}>
               <div className="nav-section-title">{t(section.sectionKey)}</div>
               {section.items.map(item => {
@@ -191,7 +256,9 @@ export default function AdminShell() {
             }}>
               <div className="avatar" style={{ width: 28, height: 28, fontSize: 11 }}>{initials}</div>
               <span style={{ fontSize: 13, fontWeight: 500 }}>{user?.name}</span>
-              <span className="badge badge-admin" style={{ fontSize: 10, padding: "1px 7px" }}>{t("adminBadge")}</span>
+              <span className="badge badge-admin" style={{ fontSize: 10, padding: "1px 7px" }}>
+                {isSubAdmin ? t("subAdminBadge") : t("adminBadge")}
+              </span>
             </div>
           </div>
         </header>

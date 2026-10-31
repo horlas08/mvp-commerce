@@ -1,9 +1,44 @@
 import 'package:currency_converter/currency.dart';
 import 'package:currency_converter/currency_converter.dart';
 import 'package:flutter/material.dart';
+import '../app/constants/api_constants.dart';
+import 'api_service.dart';
 
 class KoonCurrencyService {
   KoonCurrencyService._();
+
+  static Map<String, double>? _cachedRates;
+  static DateTime? _lastFetchTime;
+  static const Duration _cacheDuration = Duration(minutes: 15);
+
+  /// Fetch manual exchange rates from backend config and cache for 15 minutes.
+  static Future<Map<String, double>?> getExchangeRates({bool forceRefresh = false}) async {
+    if (!forceRefresh &&
+        _cachedRates != null &&
+        _lastFetchTime != null &&
+        DateTime.now().difference(_lastFetchTime!) < _cacheDuration) {
+      return _cachedRates;
+    }
+
+    try {
+      final response = await ApiService().dio.get('${ApiConstants.baseUrl}/config/exchange-rates');
+      if (response.statusCode == 200 && response.data is Map) {
+        final Map<String, dynamic> raw = Map<String, dynamic>.from(response.data);
+        final Map<String, double> rates = {};
+        raw.forEach((k, v) {
+          if (v is num) {
+            rates[k.toUpperCase()] = v.toDouble();
+          }
+        });
+        _cachedRates = rates;
+        _lastFetchTime = DateTime.now();
+        return _cachedRates;
+      }
+    } catch (e) {
+      debugPrint('[currency_service] Failed to fetch exchange rates: $e');
+    }
+    return _cachedRates;
+  }
 
   static Currency? _detectCurrency(String priceStr) {
     final lower = priceStr.toLowerCase();
@@ -41,6 +76,30 @@ class KoonCurrencyService {
 
     if (matches.isEmpty) return priceStr;
 
+    // 1. Check if backend manual exchange rate exists
+    final rates = await getExchangeRates();
+    final currencyCode = currency.name.toUpperCase();
+    final manualRate = rates?[currencyCode];
+
+    if (manualRate != null) {
+      if (matches.length == 1) {
+        final amount = double.tryParse(matches[0].group(0) ?? '');
+        if (amount != null) {
+          final converted = amount * manualRate;
+          return '${converted.toStringAsFixed(2)} SAR';
+        }
+      } else if (matches.length >= 2) {
+        final amount1 = double.tryParse(matches[0].group(0) ?? '');
+        final amount2 = double.tryParse(matches[1].group(0) ?? '');
+        if (amount1 != null && amount2 != null) {
+          final converted1 = amount1 * manualRate;
+          final converted2 = amount2 * manualRate;
+          return '${converted1.toStringAsFixed(2)} - ${converted2.toStringAsFixed(2)} SAR';
+        }
+      }
+    }
+
+    // 2. Fall back to live CurrencyConverter
     try {
       if (matches.length == 1) {
         final amount = double.tryParse(matches[0].group(0) ?? '');

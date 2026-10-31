@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { adminApi, Order, getMediaUrl } from "@/lib/api";
 import { useLang } from "@/lib/lang-context";
+import { useAuth } from "@/lib/auth-context";
 
 const ORDER_STATUSES = ["pending", "confirmed", "processing", "shipped", "delivered", "cancelled", "refunded"];
 const CART_TYPES = ["", "internal", "amazon", "aliexpress", "shein", "alibaba", "iherb"];
@@ -66,6 +67,8 @@ const getAddressRegion = (addr: any): string => {
 
 export default function OrdersPage() {
   const { t, lang } = useLang();
+  const { hasPermission } = useAuth();
+  const canUpdateStatus = hasPermission("can_update_order_status");
   const [orders, setOrders] = useState<Order[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -547,7 +550,8 @@ export default function OrdersPage() {
                         style={{ width: "auto", minWidth: 120, fontSize: 12, padding: "5px 10px" }}
                         value={order.status}
                         onChange={e => handleStatusChange(order.id, e.target.value)}
-                        disabled={updatingStatus === order.id}
+                        disabled={updatingStatus === order.id || !canUpdateStatus}
+                        title={!canUpdateStatus ? (lang === "ar" ? "ليس لديك صلاحية لتحديث حالة الطلب" : "You do not have permission to update order status") : undefined}
                       >
                         {ORDER_STATUSES.map(s => (
                           <option key={s} value={s}>{t(s as any)}</option>

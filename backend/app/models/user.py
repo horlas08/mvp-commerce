@@ -16,8 +16,9 @@ class User(Base):
     phone: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     avatar_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     google_id: Mapped[Optional[str]] = mapped_column(String(255), unique=True, nullable=True, index=True)
-    role: Mapped[str] = mapped_column(String(20), default="customer")  # customer, seller, admin
+    role: Mapped[str] = mapped_column(String(20), default="customer")  # customer, seller, admin, sub_admin
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    admin_permissions: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON for sub_admin permissions
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     verification_code: Mapped[Optional[str]] = mapped_column(String(6), nullable=True)
     preferred_language: Mapped[str] = mapped_column(String(5), default="en")
@@ -37,6 +38,13 @@ class User(Base):
     wallet_transactions = relationship("WalletTransaction", back_populates="user", cascade="all, delete-orphan")
 
     def to_dict(self):
+        import json
+        perms = None
+        if self.admin_permissions:
+            try:
+                perms = json.loads(self.admin_permissions)
+            except Exception:
+                perms = None
         return {
             "id": self.id,
             "email": self.email,
@@ -50,5 +58,6 @@ class User(Base):
             "preferred_language": self.preferred_language,
             "preferred_currency": self.preferred_currency,
             "credit_balance": self.credit_balance,
+            "admin_permissions": perms,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }

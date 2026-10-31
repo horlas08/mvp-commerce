@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Plus, Pencil, Trash2, RefreshCw, MapPin, Building } from "lucide-react";
+import { Plus, Pencil, Trash2, RefreshCw, MapPin, Building, ArrowUp, ArrowDown, Save } from "lucide-react";
 import { adminApi, State, City } from "@/lib/api";
 import { useLang } from "@/lib/lang-context";
 
@@ -35,6 +35,9 @@ export default function StatesCitiesPage() {
   const [stateForm, setStateForm] = useState({ ...EMPTY_STATE_FORM });
   const [savingState, setSavingState] = useState(false);
   const [stateSearch, setStateSearch] = useState("");
+  const [orderChanged, setOrderChanged] = useState(false);
+  const [savingOrder, setSavingOrder] = useState(false);
+  const [orderSuccess, setOrderSuccess] = useState("");
 
   // Cities list and city form
   const [cities, setCities] = useState<City[]>([]);
@@ -62,6 +65,7 @@ export default function StatesCitiesPage() {
     try {
       const res = await adminApi.listStates();
       setStates(res);
+      setOrderChanged(false);
       // Keep selection if it still exists, else select the first state
       if (res.length > 0) {
         setSelectedState(prev => {
@@ -161,6 +165,38 @@ export default function StatesCitiesPage() {
       loadStates();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : t("failedToDelete"));
+    }
+  };
+
+  const moveStateById = (stateId: string, direction: "up" | "down", e: React.MouseEvent) => {
+    e.stopPropagation();
+    setStates(prev => {
+      const index = prev.findIndex(s => s.id === stateId);
+      if (index === -1) return prev;
+      const targetIndex = direction === "up" ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= prev.length) return prev;
+      const updated = [...prev];
+      const temp = updated[index];
+      updated[index] = updated[targetIndex];
+      updated[targetIndex] = temp;
+      return updated;
+    });
+    setOrderChanged(true);
+  };
+
+  const handleSaveOrder = async () => {
+    setSavingOrder(true);
+    setError("");
+    try {
+      const items = states.map((s, idx) => ({ id: s.id, sort_order: idx }));
+      await adminApi.reorderStates(items);
+      setOrderChanged(false);
+      setOrderSuccess(t("orderSaved"));
+      setTimeout(() => setOrderSuccess(""), 3000);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : t("failedToUpdate"));
+    } finally {
+      setSavingOrder(false);
     }
   };
 
@@ -278,6 +314,52 @@ export default function StatesCitiesPage() {
             onChange={e => setStateSearch(e.target.value)}
           />
 
+          {orderSuccess && (
+            <div
+              className="alert"
+              style={{
+                marginBottom: 12,
+                padding: "8px 12px",
+                fontSize: 13,
+                background: "var(--success-bg, rgba(16, 185, 129, 0.1))",
+                color: "var(--success, #10b981)",
+                border: "1px solid var(--success-border, rgba(16, 185, 129, 0.2))",
+                borderRadius: 8,
+              }}
+            >
+              {orderSuccess}
+            </div>
+          )}
+
+          {orderChanged && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "10px 14px",
+                background: "rgba(99, 102, 241, 0.12)",
+                border: "1px solid var(--primary, #6366f1)",
+                borderRadius: 8,
+                marginBottom: 12,
+              }}
+            >
+              <span style={{ fontSize: 13, fontWeight: 600, color: "var(--primary, #6366f1)" }}>
+                {lang === "ar" ? "تم تعديل الترتيب" : "Order modified"}
+              </span>
+              <button
+                id="save-states-order-btn"
+                className="btn btn-primary btn-sm"
+                onClick={handleSaveOrder}
+                disabled={savingOrder}
+                style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 600 }}
+              >
+                {savingOrder ? <div className="spinner" style={{ width: 14, height: 14 }} /> : <Save size={14} />}
+                {t("saveOrder")}
+              </button>
+            </div>
+          )}
+
           {loadingStates ? (
             <div style={{ padding: 40, display: "flex", justifyContent: "center" }}>
               <div className="spinner" style={{ width: 28, height: 28 }} />
@@ -292,6 +374,9 @@ export default function StatesCitiesPage() {
             }}>
               {filteredStates.map(state => {
                 const isActive = selectedState?.id === state.id;
+                const stateIndex = states.findIndex(s => s.id === state.id);
+                const isFirst = stateIndex === 0;
+                const isLast = stateIndex === states.length - 1;
                 return (
                   <div
                     key={state.id}
@@ -301,7 +386,7 @@ export default function StatesCitiesPage() {
                       display: "flex",
                       justifyContent: "space-between",
                       alignItems: "center",
-                      padding: "12px 14px",
+                      padding: "10px 12px",
                       borderRadius: 10,
                       background: isActive ? "var(--bg-active)" : "var(--bg-card)",
                       border: isActive ? "1px solid var(--accent)" : "1px solid var(--border)",
@@ -309,12 +394,50 @@ export default function StatesCitiesPage() {
                       transition: "all 0.2s ease",
                     }}
                   >
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: 14, color: isActive ? "var(--accent)" : "var(--text-primary)" }}>
-                        {lang === "ar" ? state.name_ar : state.name_en}
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                        <button
+                          type="button"
+                          id={`move-up-state-${state.id}`}
+                          className="btn btn-ghost btn-icon btn-sm"
+                          disabled={isFirst}
+                          onClick={(e) => moveStateById(state.id, "up", e)}
+                          title={t("moveUp")}
+                          style={{
+                            padding: 2,
+                            width: 22,
+                            height: 22,
+                            opacity: isFirst ? 0.25 : 0.8,
+                            cursor: isFirst ? "not-allowed" : "pointer",
+                          }}
+                        >
+                          <ArrowUp size={12} />
+                        </button>
+                        <button
+                          type="button"
+                          id={`move-down-state-${state.id}`}
+                          className="btn btn-ghost btn-icon btn-sm"
+                          disabled={isLast}
+                          onClick={(e) => moveStateById(state.id, "down", e)}
+                          title={t("moveDown")}
+                          style={{
+                            padding: 2,
+                            width: 22,
+                            height: 22,
+                            opacity: isLast ? 0.25 : 0.8,
+                            cursor: isLast ? "not-allowed" : "pointer",
+                          }}
+                        >
+                          <ArrowDown size={12} />
+                        </button>
                       </div>
-                      <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
-                        {lang === "ar" ? state.name_en : state.name_ar}
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 14, color: isActive ? "var(--accent)" : "var(--text-primary)" }}>
+                          {lang === "ar" ? state.name_ar : state.name_en}
+                        </div>
+                        <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
+                          {lang === "ar" ? state.name_en : state.name_ar}
+                        </div>
                       </div>
                     </div>
 

@@ -42,14 +42,18 @@ class _AddressesScreenState extends State<AddressesScreen> {
     }
   }
 
-  void _showAddAddressDialog() {
+  void _showAddAddressDialog() => _showAddressDialog();
+
+  void _showAddressDialog({Map<String, dynamic>? address}) {
+    final isEditing = address != null;
     final formKey = GlobalKey<FormState>();
-    final labelCtrl = TextEditingController();
-    final nameCtrl = TextEditingController();
-    final phoneCtrl = TextEditingController();
-    final streetCtrl = TextEditingController();
-    final cityCtrl = TextEditingController();
-    bool isDefault = false;
+    final labelCtrl = TextEditingController(text: address?['label']?.toString() ?? '');
+    final nameCtrl = TextEditingController(text: address?['full_name']?.toString() ?? '');
+    final phoneCtrl = TextEditingController(text: address?['phone']?.toString() ?? '');
+    final streetCtrl = TextEditingController(text: address?['street']?.toString() ?? '');
+    final cityCtrl = TextEditingController(text: address?['city']?.toString() ?? '');
+    final stateCtrl = TextEditingController(text: address?['state']?.toString() ?? '');
+    bool isDefault = address?['is_default'] ?? false;
     final lang = context.locale.languageCode;
 
     showModalBottomSheet(
@@ -80,7 +84,9 @@ class _AddressesScreenState extends State<AddressesScreen> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'add_address'.tr(),
+                    isEditing
+                        ? (lang == 'ar' ? 'تعديل العنوان' : 'Edit Address')
+                        : 'add_address'.tr(),
                     style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
                     textAlign: TextAlign.center,
                   ),
@@ -131,13 +137,21 @@ class _AddressesScreenState extends State<AddressesScreen> {
                     validator: (v) => v == null || v.trim().isEmpty ? (lang == 'ar' ? 'هذا الحقل مطلوب' : 'Required') : null,
                   ),
                   const SizedBox(height: 12),
+                  TextFormField(
+                    controller: stateCtrl,
+                    decoration: InputDecoration(
+                      labelText: lang == 'ar' ? 'المحافظة / المنطقة' : 'State / Region',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   SwitchListTile(
                     title: Text(
                       'set_as_default'.tr(),
                       style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600),
                     ),
                     value: isDefault,
-                    activeColor: AppColors.primary,
+                    activeThumbColor: AppColors.primary,
                     contentPadding: EdgeInsets.zero,
                     onChanged: (val) => setModalState(() => isDefault = val),
                   ),
@@ -149,14 +163,36 @@ class _AddressesScreenState extends State<AddressesScreen> {
                         if (!formKey.currentState!.validate()) return;
                         Navigator.pop(bottomCtx);
                         setState(() => _isLoading = true);
-                        await _addressService.addAddress(
-                          label: labelCtrl.text.trim(),
-                          fullName: nameCtrl.text.trim(),
-                          phone: phoneCtrl.text.trim(),
-                          street: streetCtrl.text.trim(),
-                          city: cityCtrl.text.trim(),
-                          isDefault: isDefault,
-                        );
+
+                        if (isEditing) {
+                          final updated = await _addressService.updateAddress(
+                            address['id'].toString(),
+                            label: labelCtrl.text.trim(),
+                            fullName: nameCtrl.text.trim(),
+                            phone: phoneCtrl.text.trim(),
+                            street: streetCtrl.text.trim(),
+                            city: cityCtrl.text.trim(),
+                            state: stateCtrl.text.trim().isNotEmpty ? stateCtrl.text.trim() : null,
+                            isDefault: isDefault,
+                          );
+                          if (!mounted) return;
+                          if (updated != null) {
+                            AppSnackbar.success(
+                              null,
+                              lang == 'ar' ? 'تم تحديث العنوان بنجاح' : 'Address updated successfully',
+                            );
+                          }
+                        } else {
+                          await _addressService.addAddress(
+                            label: labelCtrl.text.trim(),
+                            fullName: nameCtrl.text.trim(),
+                            phone: phoneCtrl.text.trim(),
+                            street: streetCtrl.text.trim(),
+                            city: cityCtrl.text.trim(),
+                            state: stateCtrl.text.trim().isNotEmpty ? stateCtrl.text.trim() : null,
+                            isDefault: isDefault,
+                          );
+                        }
                         _loadAddresses();
                       },
                       style: ElevatedButton.styleFrom(
@@ -164,7 +200,9 @@ class _AddressesScreenState extends State<AddressesScreen> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       child: Text(
-                        'add_address'.tr(),
+                        isEditing
+                            ? (lang == 'ar' ? 'حفظ التعديلات' : 'Save Changes')
+                            : 'add_address'.tr(),
                         style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white),
                       ),
                     ),
@@ -242,13 +280,24 @@ class _AddressesScreenState extends State<AddressesScreen> {
                             children: [
                               Text(addr['full_name'] ?? '', style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
                               Text(addr['phone'] ?? '', style: const TextStyle(color: AppColors.textSecondary)),
-                              Text('${addr['street']}, ${addr['city']}', style: const TextStyle(color: AppColors.textSecondary)),
+                              Text('${addr['street']}, ${addr['city']}${addr['state'] != null && addr['state'].toString().isNotEmpty ? ', ${addr['state']}' : ''}', style: const TextStyle(color: AppColors.textSecondary)),
                             ],
                           ),
                         ),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete_outline, color: AppColors.error),
-                          onPressed: () => _deleteAddress(addr['id']),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.edit_outlined, color: AppColors.primary),
+                              tooltip: context.locale.languageCode == 'ar' ? 'تعديل' : 'Edit',
+                              onPressed: () => _showAddressDialog(address: addr),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline, color: AppColors.error),
+                              tooltip: context.locale.languageCode == 'ar' ? 'حذف' : 'Delete',
+                              onPressed: () => _deleteAddress(addr['id'].toString()),
+                            ),
+                          ],
                         ),
                       ),
                     );

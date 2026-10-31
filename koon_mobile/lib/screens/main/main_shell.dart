@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get/get.dart' hide Trans;
@@ -12,6 +13,8 @@ import '../orders/orders_screen.dart';
 import '../profile/profile_screen.dart';
 import '../auth/email_verification_screen.dart';
 import '../../controllers/store_browser_controller.dart';
+import '../../app/utils/url_helper.dart';
+import '../webview/webview_screen.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -22,6 +25,7 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _currentIndex = 0;
+  static const _deepLinkChannel = MethodChannel('com.mvpcommerce.mobile/deep_link');
 
   final List<Widget> _screens = [
     const HomeScreen(),
@@ -30,6 +34,53 @@ class _MainShellState extends State<MainShell> {
     const OrdersScreen(),
     const ProfileScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _initDeepLinks();
+  }
+
+  void _initDeepLinks() {
+    _deepLinkChannel.setMethodCallHandler((call) async {
+      if (call.method == 'onDeepLink' && call.arguments is String) {
+        _handleDeepLink(call.arguments as String);
+      }
+    });
+
+    _deepLinkChannel.invokeMethod<String>('getInitialUrl').then((url) {
+      if (url != null && url.isNotEmpty) {
+        _handleDeepLink(url);
+      }
+    }).catchError((_) {});
+  }
+
+  void _handleDeepLink(String url) {
+    if (url.isEmpty) return;
+    String? storeName;
+    final lower = url.toLowerCase();
+    if (lower.contains('shein.com')) {
+      storeName = 'SHEIN';
+    } else if (lower.contains('amazon.')) {
+      storeName = 'Amazon';
+    } else if (lower.contains('iherb.com')) {
+      storeName = 'iHerb';
+    } else if (lower.contains('aliexpress.com')) {
+      storeName = 'AliExpress';
+    } else if (lower.contains('alibaba.com')) {
+      storeName = 'Alibaba';
+    }
+
+    if (storeName != null) {
+      final arabicUrl = UrlHelper.convertToArabicUrl(url);
+      WebViewScreen.setupCurrencyCookies(arabicUrl);
+      StoreBrowserController.to.openStore(
+        name: storeName,
+        url: arabicUrl,
+        clickTime: DateTime.now(),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
