@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Search, Plus, Pencil, Trash2, RefreshCw, Eye, EyeOff } from "lucide-react";
 import { adminApi, Product, Category, API_BASE } from "@/lib/api";
 import { useLang } from "@/lib/lang-context";
+import { useAuth } from "@/lib/auth-context";
 
 const EMPTY_FORM = {
   title_en: "", title_ar: "", description_en: "", description_ar: "",
@@ -12,6 +13,12 @@ const EMPTY_FORM = {
 
 export default function ProductsPage() {
   const { t, lang } = useLang();
+  const { hasPermission } = useAuth();
+  const canCreate = hasPermission("can_create_products") || hasPermission("can_manage_products");
+  const canEdit = hasPermission("can_edit_products") || hasPermission("can_manage_products");
+  const canDelete = hasPermission("can_delete_products") || hasPermission("can_manage_products");
+  const canToggle = hasPermission("can_toggle_product_status") || hasPermission("can_manage_products");
+
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [total, setTotal] = useState(0);
@@ -158,9 +165,11 @@ export default function ProductsPage() {
           <RefreshCw size={16} />
         </button>
 
-        <button id="add-product" className="btn btn-primary" onClick={openCreate}>
-          <Plus size={16} /> {t("addProduct")}
-        </button>
+        {canCreate && (
+          <button id="add-product" className="btn btn-primary" onClick={openCreate}>
+            <Plus size={16} /> {t("addProduct")}
+          </button>
+        )}
       </div>
 
       {/* Table */}
@@ -234,30 +243,36 @@ export default function ProductsPage() {
                   </td>
                   <td>
                     <div style={{ display: "flex", gap: 6 }}>
-                      <button
-                        id={`edit-product-${p.id}`}
-                        className="btn btn-ghost btn-icon btn-sm"
-                        onClick={() => openEdit(p)}
-                        title={t("edit")}
-                      >
-                        <Pencil size={14} />
-                      </button>
-                      <button
-                        id={`toggle-product-${p.id}`}
-                        className="btn btn-ghost btn-icon btn-sm"
-                        onClick={() => handleToggle(p)}
-                        title={p.is_active ? t("deactivate") : t("activate")}
-                      >
-                        {p.is_active ? <EyeOff size={14} /> : <Eye size={14} />}
-                      </button>
-                      <button
-                        id={`delete-product-${p.id}`}
-                        className="btn btn-danger btn-icon btn-sm"
-                        onClick={() => handleDelete(p.id)}
-                        title={t("delete")}
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      {canEdit && (
+                        <button
+                          id={`edit-product-${p.id}`}
+                          className="btn btn-ghost btn-icon btn-sm"
+                          onClick={() => openEdit(p)}
+                          title={t("edit")}
+                        >
+                          <Pencil size={14} />
+                        </button>
+                      )}
+                      {canToggle && (
+                        <button
+                          id={`toggle-product-${p.id}`}
+                          className="btn btn-ghost btn-icon btn-sm"
+                          onClick={() => handleToggle(p)}
+                          title={p.is_active ? t("deactivate") : t("activate")}
+                        >
+                          {p.is_active ? <EyeOff size={14} /> : <Eye size={14} />}
+                        </button>
+                      )}
+                      {canDelete && (
+                        <button
+                          id={`delete-product-${p.id}`}
+                          className="btn btn-danger btn-icon btn-sm"
+                          onClick={() => handleDelete(p.id)}
+                          title={t("delete")}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

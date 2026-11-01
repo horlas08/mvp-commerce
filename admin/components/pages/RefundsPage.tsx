@@ -4,9 +4,13 @@ import { useEffect, useState } from "react";
 import { RefreshCw, Check, X, Undo } from "lucide-react";
 import { adminApi, RefundRequest } from "@/lib/api";
 import { useLang } from "@/lib/lang-context";
+import { useAuth } from "@/lib/auth-context";
 
 export default function RefundsPage() {
   const { t, lang } = useLang();
+  const { hasPermission } = useAuth();
+  const canApprove = hasPermission("can_approve_refunds");
+  const canReject = hasPermission("can_reject_refunds");
   const [refunds, setRefunds] = useState<RefundRequest[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -188,21 +192,25 @@ export default function RefundsPage() {
                     {status === "pending" && (
                       <td>
                         <div style={{ display: "flex", gap: 6 }}>
-                          <button
-                            className="btn btn-primary btn-sm"
-                            style={{ background: "var(--success)" }}
-                            onClick={() => handleApprove(refund.id)}
-                          >
-                            <Check size={13} />
-                            <span>{lang === "ar" ? "قبول" : "Approve"}</span>
-                          </button>
-                          <button
-                            className="btn btn-danger btn-sm"
-                            onClick={() => openRejectModal(refund)}
-                          >
-                            <X size={13} />
-                            <span>{lang === "ar" ? "رفض" : "Reject"}</span>
-                          </button>
+                          {canApprove && (
+                            <button
+                              className="btn btn-primary btn-sm"
+                              style={{ background: "var(--success)" }}
+                              onClick={() => handleApprove(refund.id)}
+                            >
+                              <Check size={13} />
+                              <span>{lang === "ar" ? "قبول" : "Approve"}</span>
+                            </button>
+                          )}
+                          {canReject && (
+                            <button
+                              className="btn btn-danger btn-sm"
+                              onClick={() => openRejectModal(refund)}
+                            >
+                              <X size={13} />
+                              <span>{lang === "ar" ? "رفض" : "Reject"}</span>
+                            </button>
+                          )}
                         </div>
                       </td>
                     )}

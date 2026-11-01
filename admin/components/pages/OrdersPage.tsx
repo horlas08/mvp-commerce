@@ -69,6 +69,8 @@ export default function OrdersPage() {
   const { t, lang } = useLang();
   const { hasPermission } = useAuth();
   const canUpdateStatus = hasPermission("can_update_order_status");
+  const canContactUser = hasPermission("can_contact_order_user");
+  const canExportOrders = hasPermission("can_export_orders");
   const [orders, setOrders] = useState<Order[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -278,20 +280,22 @@ export default function OrdersPage() {
             </select>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button
-              className="btn btn-secondary btn-sm"
-              style={{ display: "flex", alignItems: "center", gap: 6 }}
-              onClick={() => {
-                setExportCartType(cartTypeFilter);
-                setExportStatus(statusFilter);
-                setShowExport(v => !v);
-                setExportError("");
-              }}
-              title="Export to Excel"
-            >
-              <Download size={14} />
-              {lang === "ar" ? "تصدير Excel" : "Export Excel"}
-            </button>
+            {canExportOrders && (
+              <button
+                className="btn btn-secondary btn-sm"
+                style={{ display: "flex", alignItems: "center", gap: 6 }}
+                onClick={() => {
+                  setExportCartType(cartTypeFilter);
+                  setExportStatus(statusFilter);
+                  setShowExport(v => !v);
+                  setExportError("");
+                }}
+                title="Export to Excel"
+              >
+                <Download size={14} />
+                {lang === "ar" ? "تصدير Excel" : "Export Excel"}
+              </button>
+            )}
             <button className="btn btn-ghost btn-icon" onClick={load} title={t("refresh")}>
               <RefreshCw size={16} />
             </button>
@@ -559,16 +563,18 @@ export default function OrdersPage() {
                       </select>
                     </td>
                     <td>
-                      <button
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => {
-                          setContactOrder(order);
-                          setContactMessage("");
-                        }}
-                      >
-                        <Mail size={13} />
-                        <span>{t("contactUser")}</span>
-                      </button>
+                      {canContactUser && (
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => {
+                            setContactOrder(order);
+                            setContactMessage("");
+                          }}
+                        >
+                          <Mail size={13} />
+                          <span>{t("contactUser")}</span>
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );

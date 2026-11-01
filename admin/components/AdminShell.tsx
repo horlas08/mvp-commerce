@@ -61,13 +61,48 @@ export default function AdminShell() {
   const navSections = isSubAdmin
     ? [
         {
+          sectionKey: "overview" as const,
+          items: [
+            ...(hasPermission("can_view_dashboard")
+              ? [{ id: "dashboard" as Page, labelKey: "dashboard" as const, icon: LayoutDashboard }]
+              : []),
+          ],
+        },
+        {
           sectionKey: "management" as const,
           items: [
             ...(hasPermission("can_view_orders")
               ? [{ id: "orders" as Page, labelKey: "orders" as const, icon: ShoppingBag }]
               : []),
-            ...(hasPermission("can_manage_products")
+            ...(hasPermission("can_view_payments")
+              ? [{ id: "payments" as Page, labelKey: "payments" as const, icon: Coins }]
+              : []),
+            ...(hasPermission("can_view_refunds")
+              ? [{ id: "refunds" as Page, labelKey: "refunds" as const, icon: RotateCcw }]
+              : []),
+            ...(hasPermission("can_view_coupons")
+              ? [{ id: "coupons" as Page, labelKey: "coupons" as const, icon: Ticket }]
+              : []),
+            ...(hasPermission("can_view_products") || hasPermission("can_manage_products")
               ? [{ id: "products" as Page, labelKey: "products" as const, icon: Package }]
+              : []),
+            ...(hasPermission("can_view_categories")
+              ? [{ id: "categories" as Page, labelKey: "categories" as const, icon: Tag }]
+              : []),
+            ...(hasPermission("can_view_locations")
+              ? [{ id: "statesAndCities" as Page, labelKey: "statesAndCities" as const, icon: MapPin }]
+              : []),
+            ...(hasPermission("can_view_payment_methods")
+              ? [{ id: "paymentMethods" as Page, labelKey: "paymentMethods" as const, icon: CreditCard }]
+              : []),
+            ...(hasPermission("can_view_support_tickets")
+              ? [{ id: "support" as Page, labelKey: "support" as const, icon: MessageSquare }]
+              : []),
+            ...(hasPermission("can_view_users")
+              ? [{ id: "users" as Page, labelKey: "users" as const, icon: Users }]
+              : []),
+            ...(hasPermission("can_view_settings")
+              ? [{ id: "settings" as Page, labelKey: "settings" as const, icon: Settings }]
               : []),
           ],
         },
@@ -98,20 +133,15 @@ export default function AdminShell() {
         },
       ];
 
-  // If sub_admin visits an unauthorized page, default to orders or products
+  // Auto-switch to first available page for sub_admin if current page is disallowed
   useEffect(() => {
     if (isSubAdmin) {
-      const allowedPages: Page[] = [];
-      if (hasPermission("can_view_orders")) allowedPages.push("orders");
-      if (hasPermission("can_manage_products")) allowedPages.push("products");
-
-      if (!allowedPages.includes(currentPage)) {
-        if (allowedPages.length > 0) {
-          setCurrentPage(allowedPages[0]);
-        }
+      const allowedPages = navSections.flatMap(s => s.items.map(i => i.id));
+      if (allowedPages.length > 0 && !allowedPages.includes(currentPage)) {
+        setCurrentPage(allowedPages[0]);
       }
     }
-  }, [isSubAdmin, hasPermission, currentPage]);
+  }, [isSubAdmin, navSections, currentPage]);
 
   const initials = user?.name
     ?.split(" ")
@@ -120,16 +150,28 @@ export default function AdminShell() {
     .toUpperCase()
     .slice(0, 2) || "A";
 
+  const isPagePermitted = (page: Page): boolean => {
+    if (!isSubAdmin) return true;
+    switch (page) {
+      case "dashboard": return hasPermission("can_view_dashboard");
+      case "orders": return hasPermission("can_view_orders");
+      case "payments": return hasPermission("can_view_payments");
+      case "refunds": return hasPermission("can_view_refunds");
+      case "coupons": return hasPermission("can_view_coupons");
+      case "products": return hasPermission("can_view_products") || hasPermission("can_manage_products");
+      case "categories": return hasPermission("can_view_categories");
+      case "statesAndCities": return hasPermission("can_view_locations");
+      case "paymentMethods": return hasPermission("can_view_payment_methods");
+      case "support": return hasPermission("can_view_support_tickets");
+      case "users": return hasPermission("can_view_users");
+      case "settings": return hasPermission("can_view_settings");
+      case "subAdmins": return false; // sub-admins cannot manage other sub-admins
+      default: return false;
+    }
+  };
+
   const renderPage = () => {
-    if (isSubAdmin) {
-      if (currentPage === "orders" && hasPermission("can_view_orders")) {
-        return <OrdersPage />;
-      }
-      if (currentPage === "products" && hasPermission("can_manage_products")) {
-        return <ProductsPage />;
-      }
-      if (hasPermission("can_view_orders")) return <OrdersPage />;
-      if (hasPermission("can_manage_products")) return <ProductsPage />;
+    if (isSubAdmin && !isPagePermitted(currentPage)) {
       return (
         <div style={{ textAlign: "center", padding: 60, color: "var(--text-muted)" }}>
           {lang === "ar" ? "ليس لديك صلاحية للوصول إلى هذا القسم." : "You do not have permission to access this section."}

@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Plus, Pencil, Trash2, RefreshCw, MapPin, Building, ArrowUp, ArrowDown, Save } from "lucide-react";
 import { adminApi, State, City } from "@/lib/api";
 import { useLang } from "@/lib/lang-context";
+import { useAuth } from "@/lib/auth-context";
 
 const EMPTY_STATE_FORM = {
   name_en: "",
@@ -25,6 +26,11 @@ const EMPTY_CITY_FORM = {
 
 export default function StatesCitiesPage() {
   const { t, lang } = useLang();
+  const { hasPermission } = useAuth();
+  const canReorder = hasPermission("can_reorder_states");
+  const canCreateLoc = hasPermission("can_create_locations");
+  const canEditLoc = hasPermission("can_edit_locations");
+  const canDeleteLoc = hasPermission("can_delete_locations");
   
   // States list and state form
   const [states, setStates] = useState<State[]>([]);
@@ -300,9 +306,11 @@ export default function StatesCitiesPage() {
               <button className="btn btn-ghost btn-icon btn-sm" onClick={handleRefreshAll} title={t("refresh")}>
                 <RefreshCw size={14} />
               </button>
-              <button id="add-state-btn" className="btn btn-primary btn-sm" onClick={openCreateState}>
-                <Plus size={14} /> {t("addState")}
-              </button>
+              {canCreateLoc && (
+                <button id="add-state-btn" className="btn btn-primary btn-sm" onClick={openCreateState}>
+                  <Plus size={14} /> {t("addState")}
+                </button>
+              )}
             </div>
           </div>
 
@@ -395,42 +403,44 @@ export default function StatesCitiesPage() {
                     }}
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                        <button
-                          type="button"
-                          id={`move-up-state-${state.id}`}
-                          className="btn btn-ghost btn-icon btn-sm"
-                          disabled={isFirst}
-                          onClick={(e) => moveStateById(state.id, "up", e)}
-                          title={t("moveUp")}
-                          style={{
-                            padding: 2,
-                            width: 22,
-                            height: 22,
-                            opacity: isFirst ? 0.25 : 0.8,
-                            cursor: isFirst ? "not-allowed" : "pointer",
-                          }}
-                        >
-                          <ArrowUp size={12} />
-                        </button>
-                        <button
-                          type="button"
-                          id={`move-down-state-${state.id}`}
-                          className="btn btn-ghost btn-icon btn-sm"
-                          disabled={isLast}
-                          onClick={(e) => moveStateById(state.id, "down", e)}
-                          title={t("moveDown")}
-                          style={{
-                            padding: 2,
-                            width: 22,
-                            height: 22,
-                            opacity: isLast ? 0.25 : 0.8,
-                            cursor: isLast ? "not-allowed" : "pointer",
-                          }}
-                        >
-                          <ArrowDown size={12} />
-                        </button>
-                      </div>
+                      {canReorder && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                          <button
+                            type="button"
+                            id={`move-up-state-${state.id}`}
+                            className="btn btn-ghost btn-icon btn-sm"
+                            disabled={isFirst}
+                            onClick={(e) => moveStateById(state.id, "up", e)}
+                            title={t("moveUp")}
+                            style={{
+                              padding: 2,
+                              width: 22,
+                              height: 22,
+                              opacity: isFirst ? 0.25 : 0.8,
+                              cursor: isFirst ? "not-allowed" : "pointer",
+                            }}
+                          >
+                            <ArrowUp size={12} />
+                          </button>
+                          <button
+                            type="button"
+                            id={`move-down-state-${state.id}`}
+                            className="btn btn-ghost btn-icon btn-sm"
+                            disabled={isLast}
+                            onClick={(e) => moveStateById(state.id, "down", e)}
+                            title={t("moveDown")}
+                            style={{
+                              padding: 2,
+                              width: 22,
+                              height: 22,
+                              opacity: isLast ? 0.25 : 0.8,
+                              cursor: isLast ? "not-allowed" : "pointer",
+                            }}
+                          >
+                            <ArrowDown size={12} />
+                          </button>
+                        </div>
+                      )}
                       <div>
                         <div style={{ fontWeight: 600, fontSize: 14, color: isActive ? "var(--accent)" : "var(--text-primary)" }}>
                           {lang === "ar" ? state.name_ar : state.name_en}
@@ -442,23 +452,27 @@ export default function StatesCitiesPage() {
                     </div>
 
                     <div style={{ display: "flex", gap: 6 }}>
-                      <button
-                        id={`edit-state-${state.id}`}
-                        className="btn btn-ghost btn-icon btn-sm"
-                        onClick={(e) => openEditState(state, e)}
-                        title={t("edit")}
-                      >
-                        <Pencil size={13} />
-                      </button>
-                      <button
-                        id={`delete-state-${state.id}`}
-                        className="btn btn-ghost btn-icon btn-sm"
-                        style={{ color: "var(--danger)" }}
-                        onClick={(e) => handleStateDelete(state.id, e)}
-                        title={t("delete")}
-                      >
-                        <Trash2 size={13} />
-                      </button>
+                      {canEditLoc && (
+                        <button
+                          id={`edit-state-${state.id}`}
+                          className="btn btn-ghost btn-icon btn-sm"
+                          onClick={(e) => openEditState(state, e)}
+                          title={t("edit")}
+                        >
+                          <Pencil size={13} />
+                        </button>
+                      )}
+                      {canDeleteLoc && (
+                        <button
+                          id={`delete-state-${state.id}`}
+                          className="btn btn-ghost btn-icon btn-sm"
+                          style={{ color: "var(--danger)" }}
+                          onClick={(e) => handleStateDelete(state.id, e)}
+                          title={t("delete")}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -485,7 +499,7 @@ export default function StatesCitiesPage() {
                 </span>
               )}
             </h2>
-            {selectedState && (
+            {selectedState && canCreateLoc && (
               <button id="add-city-btn" className="btn btn-primary btn-sm" onClick={openCreateCity}>
                 <Plus size={14} /> {t("addCity")}
               </button>
@@ -549,23 +563,27 @@ export default function StatesCitiesPage() {
                       </div>
 
                       <div style={{ display: "flex", gap: 6 }}>
-                        <button
-                          id={`edit-city-${city.id}`}
-                          className="btn btn-ghost btn-icon btn-sm"
-                          onClick={() => openEditCity(city)}
-                          title={t("edit")}
-                        >
-                          <Pencil size={13} />
-                        </button>
-                        <button
-                          id={`delete-city-${city.id}`}
-                          className="btn btn-ghost btn-icon btn-sm"
-                          style={{ color: "var(--danger)" }}
-                          onClick={() => handleCityDelete(city.id)}
-                          title={t("delete")}
-                        >
-                          <Trash2 size={13} />
-                        </button>
+                        {canEditLoc && (
+                          <button
+                            id={`edit-city-${city.id}`}
+                            className="btn btn-ghost btn-icon btn-sm"
+                            onClick={() => openEditCity(city)}
+                            title={t("edit")}
+                          >
+                            <Pencil size={13} />
+                          </button>
+                        )}
+                        {canDeleteLoc && (
+                          <button
+                            id={`delete-city-${city.id}`}
+                            className="btn btn-ghost btn-icon btn-sm"
+                            style={{ color: "var(--danger)" }}
+                            onClick={() => handleCityDelete(city.id)}
+                            title={t("delete")}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}

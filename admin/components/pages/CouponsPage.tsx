@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Plus, Pencil, Trash2, RefreshCw, Tag, Calendar, ShoppingBag } from "lucide-react";
 import { adminApi, Coupon, CreateCouponPayload } from "@/lib/api";
 import { useLang } from "@/lib/lang-context";
+import { useAuth } from "@/lib/auth-context";
 
 const EMPTY_COUPON_FORM: CreateCouponPayload = {
   code: "",
@@ -21,6 +22,11 @@ const EMPTY_COUPON_FORM: CreateCouponPayload = {
 
 export default function CouponsPage() {
   const { t, lang } = useLang();
+  const { hasPermission } = useAuth();
+  const canCreate = hasPermission("can_create_coupons");
+  const canEdit = hasPermission("can_edit_coupons");
+  const canDelete = hasPermission("can_delete_coupons");
+
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -155,10 +161,12 @@ export default function CouponsPage() {
             <RefreshCw size={14} />
           </button>
         </div>
-        <button id="add-coupon-btn" className="btn btn-primary" onClick={openCreate}>
-          <Plus size={16} />
-          <span>{t("addCoupon")}</span>
-        </button>
+        {canCreate && (
+          <button id="add-coupon-btn" className="btn btn-primary" onClick={openCreate}>
+            <Plus size={16} />
+            <span>{t("addCoupon")}</span>
+          </button>
+        )}
       </div>
 
       {loading ? (
@@ -264,20 +272,24 @@ export default function CouponsPage() {
                     </td>
                     <td>
                       <div style={{ display: "flex", gap: 6 }}>
-                        <button
-                          className="btn btn-ghost btn-icon btn-sm"
-                          onClick={() => openEdit(c)}
-                          title={t("edit")}
-                        >
-                          <Pencil size={13} />
-                        </button>
-                        <button
-                          className="btn btn-danger btn-icon btn-sm"
-                          onClick={() => handleDelete(c.id)}
-                          title={t("delete")}
-                        >
-                          <Trash2 size={13} />
-                        </button>
+                        {canEdit && (
+                          <button
+                            className="btn btn-ghost btn-icon btn-sm"
+                            onClick={() => openEdit(c)}
+                            title={t("edit")}
+                          >
+                            <Pencil size={13} />
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button
+                            className="btn btn-danger btn-icon btn-sm"
+                            onClick={() => handleDelete(c.id)}
+                            title={t("delete")}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

@@ -4,9 +4,16 @@ import { useEffect, useState, useCallback } from "react";
 import { Search, Pencil, Trash2, UserCheck, UserX, RefreshCw, Wallet, History, Download, MapPin, Calendar, CheckSquare, Square } from "lucide-react";
 import { adminApi, AdminUser, WalletTransaction } from "@/lib/api";
 import { useLang } from "@/lib/lang-context";
+import { useAuth } from "@/lib/auth-context";
 
 export default function UsersPage() {
   const { t, lang } = useLang();
+  const { hasPermission } = useAuth();
+  const canEdit = hasPermission("can_edit_users");
+  const canAdjustWallet = hasPermission("can_adjust_user_wallet");
+  const canBlock = hasPermission("can_block_users");
+  const canDelete = hasPermission("can_delete_users");
+
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -446,26 +453,30 @@ export default function UsersPage() {
                     </td>
                     <td>
                       <div style={{ display: "flex", gap: 6 }}>
-                        <button
-                          className="btn btn-ghost btn-icon btn-sm"
-                          onClick={() => { setEditUser(user); setEditRole(user.role); }}
-                          title={t("edit")}
-                        >
-                          <Pencil size={13} />
-                        </button>
-                        <button
-                          className="btn btn-ghost btn-icon btn-sm"
-                          style={{ color: "var(--accent-light)" }}
-                          onClick={() => {
-                            setAdjustingUser(user);
-                            setAdjustAmount("");
-                            setAdjustReason("");
-                            setAdjustType("credit");
-                          }}
-                          title={t("adjustWallet")}
-                        >
-                          <Wallet size={13} />
-                        </button>
+                        {canEdit && (
+                          <button
+                            className="btn btn-ghost btn-icon btn-sm"
+                            onClick={() => { setEditUser(user); setEditRole(user.role); }}
+                            title={t("edit")}
+                          >
+                            <Pencil size={13} />
+                          </button>
+                        )}
+                        {canAdjustWallet && (
+                          <button
+                            className="btn btn-ghost btn-icon btn-sm"
+                            style={{ color: "var(--accent-light)" }}
+                            onClick={() => {
+                              setAdjustingUser(user);
+                              setAdjustAmount("");
+                              setAdjustReason("");
+                              setAdjustType("credit");
+                            }}
+                            title={t("adjustWallet")}
+                          >
+                            <Wallet size={13} />
+                          </button>
+                        )}
                         <button
                           className="btn btn-ghost btn-icon btn-sm"
                           style={{ color: "var(--info)" }}
@@ -478,20 +489,24 @@ export default function UsersPage() {
                         >
                           <History size={13} />
                         </button>
-                        <button
-                          className={`btn btn-icon btn-sm ${user.is_active ? "btn-danger" : "btn-ghost"}`}
-                          onClick={() => handleToggleActive(user)}
-                          title={user.is_active ? t("deactivate") : t("activate")}
-                        >
-                          {user.is_active ? <UserX size={13} /> : <UserCheck size={13} />}
-                        </button>
-                        <button
-                          className="btn btn-danger btn-icon btn-sm"
-                          onClick={() => handleDelete(user.id)}
-                          title={t("delete")}
-                        >
-                          <Trash2 size={13} />
-                        </button>
+                        {canBlock && (
+                          <button
+                            className={`btn btn-icon btn-sm ${user.is_active ? "btn-danger" : "btn-ghost"}`}
+                            onClick={() => handleToggleActive(user)}
+                            title={user.is_active ? t("deactivate") : t("activate")}
+                          >
+                            {user.is_active ? <UserX size={13} /> : <UserCheck size={13} />}
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button
+                            className="btn btn-danger btn-icon btn-sm"
+                            onClick={() => handleDelete(user.id)}
+                            title={t("delete")}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

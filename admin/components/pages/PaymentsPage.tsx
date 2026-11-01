@@ -4,9 +4,13 @@ import { useEffect, useState } from "react";
 import { RefreshCw, Check, X, ShieldAlert, Image as ImageIcon } from "lucide-react";
 import { adminApi, Order, getMediaUrl } from "@/lib/api";
 import { useLang } from "@/lib/lang-context";
+import { useAuth } from "@/lib/auth-context";
 
 export default function PaymentsPage() {
   const { t, lang } = useLang();
+  const { hasPermission } = useAuth();
+  const canApprove = hasPermission("can_approve_payments");
+  const canReject = hasPermission("can_reject_payments");
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -172,21 +176,25 @@ export default function PaymentsPage() {
                     </td>
                     <td>
                       <div style={{ display: "flex", gap: 6 }}>
-                        <button
-                          className="btn btn-primary btn-sm"
-                          style={{ background: "var(--success)" }}
-                          onClick={() => handleApprove(order.id)}
-                        >
-                          <Check size={13} />
-                          <span>{lang === "ar" ? "قبول" : "Approve"}</span>
-                        </button>
-                        <button
-                          className="btn btn-danger btn-sm"
-                          onClick={() => openRejectModal(order)}
-                        >
-                          <X size={13} />
-                          <span>{lang === "ar" ? "رفض" : "Reject"}</span>
-                        </button>
+                        {canApprove && (
+                          <button
+                            className="btn btn-primary btn-sm"
+                            style={{ background: "var(--success)" }}
+                            onClick={() => handleApprove(order.id)}
+                          >
+                            <Check size={13} />
+                            <span>{lang === "ar" ? "قبول" : "Approve"}</span>
+                          </button>
+                        )}
+                        {canReject && (
+                          <button
+                            className="btn btn-danger btn-sm"
+                            onClick={() => openRejectModal(order)}
+                          >
+                            <X size={13} />
+                            <span>{lang === "ar" ? "رفض" : "Reject"}</span>
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

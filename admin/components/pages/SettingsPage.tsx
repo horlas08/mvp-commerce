@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { adminApi, PricingPolicy, SitePricingPolicy, ExchangeRates } from "@/lib/api";
 import { useLang } from "@/lib/lang-context";
+import { useAuth } from "@/lib/auth-context";
 
 interface PolicyState {
   value_en: string;
@@ -54,6 +55,11 @@ const DEFAULT_STORE_DEFINITIONS: Record<string, { name: string; icon: string; ba
 
 export default function SettingsPage() {
   const { t, lang } = useLang();
+  const { hasPermission } = useAuth();
+  const canUpdateRates = hasPermission("can_update_exchange_rates");
+  const canUpdateStoreOrder = hasPermission("can_update_store_order");
+  const canUpdatePricing = hasPermission("can_update_pricing_policy");
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -329,22 +335,24 @@ export default function SettingsPage() {
                 {t("ratesDescription")}
               </p>
             </div>
-            <button
-              id="save-exchange-rates-btn"
-              className="btn btn-primary btn-sm"
-              disabled={savingRates}
-              onClick={handleSaveExchangeRates}
-              style={{ display: "flex", alignItems: "center", gap: 6 }}
-            >
-              {savingRates ? (
-                <div className="spinner" style={{ width: 14, height: 14 }} />
-              ) : (
-                <>
-                  <Save size={14} />
-                  {t("saveExchangeRates")}
-                </>
-              )}
-            </button>
+            {canUpdateRates && (
+              <button
+                id="save-exchange-rates-btn"
+                className="btn btn-primary btn-sm"
+                disabled={savingRates}
+                onClick={handleSaveExchangeRates}
+                style={{ display: "flex", alignItems: "center", gap: 6 }}
+              >
+                {savingRates ? (
+                  <div className="spinner" style={{ width: 14, height: 14 }} />
+                ) : (
+                  <>
+                    <Save size={14} />
+                    {t("saveExchangeRates")}
+                  </>
+                )}
+              </button>
+            )}
           </div>
 
           <div className="table-container" style={{ margin: 0, border: "1px solid var(--border)", borderRadius: 8 }}>
@@ -422,22 +430,24 @@ export default function SettingsPage() {
                 {t("storeOrderDescription")}
               </p>
             </div>
-            <button
-              id="save-store-order-btn"
-              className="btn btn-primary btn-sm"
-              disabled={savingStoreOrder}
-              onClick={handleSaveStoreOrder}
-              style={{ display: "flex", alignItems: "center", gap: 6 }}
-            >
-              {savingStoreOrder ? (
-                <div className="spinner" style={{ width: 14, height: 14 }} />
-              ) : (
-                <>
-                  <Save size={14} />
-                  {t("saveStoreOrder")}
-                </>
-              )}
-            </button>
+            {canUpdateStoreOrder && (
+              <button
+                id="save-store-order-btn"
+                className="btn btn-primary btn-sm"
+                disabled={savingStoreOrder}
+                onClick={handleSaveStoreOrder}
+                style={{ display: "flex", alignItems: "center", gap: 6 }}
+              >
+                {savingStoreOrder ? (
+                  <div className="spinner" style={{ width: 14, height: 14 }} />
+                ) : (
+                  <>
+                    <Save size={14} />
+                    {t("saveStoreOrder")}
+                  </>
+                )}
+              </button>
+            )}
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>

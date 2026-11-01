@@ -4,9 +4,14 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { Send, CheckCircle2, MessageSquare, RefreshCw, ArrowLeft, ArrowRight } from "lucide-react";
 import { adminApi, SupportTicket, SupportMessage } from "@/lib/api";
 import { useLang } from "@/lib/lang-context";
+import { useAuth } from "@/lib/auth-context";
 
 export default function SupportPage() {
   const { t, lang } = useLang();
+  const { hasPermission } = useAuth();
+  const canReply = hasPermission("can_reply_support_tickets");
+  const canClose = hasPermission("can_close_support_tickets");
+
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
   const [messages, setMessages] = useState<SupportMessage[]>([]);
@@ -287,7 +292,7 @@ export default function SupportPage() {
             </div>
           </div>
 
-          {selectedTicket.status !== "closed" && (
+          {selectedTicket.status !== "closed" && canClose && (
             <button
               onClick={handleCloseTicket}
               className="btn btn-danger btn-sm"
@@ -386,6 +391,18 @@ export default function SupportPage() {
               fontWeight: 600
             }}>
               {t("ticketClosedWarning")}
+            </div>
+          ) : !canReply ? (
+            <div style={{
+              background: "rgba(255,255,255,0.04)",
+              color: "var(--text-muted)",
+              border: "1px solid var(--border)",
+              padding: "10px 14px",
+              borderRadius: 8,
+              fontSize: 12,
+              textAlign: "center",
+            }}>
+              {lang === "ar" ? "ليس لديك صلاحية لإرسال ردود على هذه التذكرة" : "You do not have permission to reply to this ticket"}
             </div>
           ) : (
             <form onSubmit={handleSendReply} style={{ display: "flex", gap: 10 }}>
