@@ -43,6 +43,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   List<Map<String, dynamic>> _internalProducts = [];
   bool _internalProductsLoading = false;
   String? _selectedCategoryId;
+  final TextEditingController _expressSearchCtrl = TextEditingController();
+  String _expressSearchQuery = '';
 
   List<Map<String, dynamic>> _externalStores = [
     {'name': 'SHEIN', 'logo': '👗', 'color': Color(0xFF1A1A2E), 'url': 'https://m.shein.com/ar/', 'subtitle': '', 'enabled': true},
@@ -78,6 +80,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   @override
   void dispose() {
     _tabController.dispose();
+    _expressSearchCtrl.dispose();
     super.dispose();
   }
 
@@ -250,32 +253,83 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                  child: GestureDetector(
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SearchScreen())),
-                    child: Container(
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceVariant,
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(color: AppColors.divider, width: 0.5),
-                      ),
-                      child: Row(
-                        children: [
-                          const SizedBox(width: 16),
-                          Text('search_hint'.tr(), style: TextStyle(color: AppColors.textHint, fontSize: 14)),
-                          const Spacer(),
-                          Container(
-                            width: 40, height: 40, margin: const EdgeInsets.all(4),
+                  child: _tabController.index == 0
+                      ? GestureDetector(
+                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SearchScreen())),
+                          child: Container(
+                            height: 48,
                             decoration: BoxDecoration(
-                              color: AppColors.primary,
-                              borderRadius: BorderRadius.circular(20),
+                              color: AppColors.surfaceVariant,
+                              borderRadius: BorderRadius.circular(24),
+                              border: Border.all(color: AppColors.divider, width: 0.5),
                             ),
-                            child: const Icon(Icons.search, color: Colors.white, size: 20),
+                            child: Row(
+                              children: [
+                                const SizedBox(width: 16),
+                                Text('search_hint'.tr(), style: TextStyle(color: AppColors.textHint, fontSize: 14)),
+                                const Spacer(),
+                                Container(
+                                  width: 40, height: 40, margin: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primary,
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: const Icon(Icons.search, color: Colors.white, size: 20),
+                                ),
+                              ],
+                            ),
                           ),
-                        ],
-                      ),
-                    ),
-                  ),
+                        )
+                      : Container(
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceVariant,
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(color: AppColors.divider, width: 0.5),
+                          ),
+                          child: Row(
+                            children: [
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: TextField(
+                                  controller: _expressSearchCtrl,
+                                  onChanged: (val) {
+                                    setState(() => _expressSearchQuery = val.trim());
+                                  },
+                                  style: GoogleFonts.inter(fontSize: 14, color: AppColors.textPrimary),
+                                  decoration: InputDecoration(
+                                    border: InputBorder.none,
+                                    hintText: lang == 'ar' ? 'ابحث في منتجات التوصيل السريع...' : 'Search express products...',
+                                    hintStyle: const TextStyle(color: AppColors.textHint, fontSize: 14),
+                                    isDense: true,
+                                    contentPadding: EdgeInsets.zero,
+                                  ),
+                                ),
+                              ),
+                              if (_expressSearchCtrl.text.isNotEmpty)
+                                GestureDetector(
+                                  onTap: () {
+                                    _expressSearchCtrl.clear();
+                                    setState(() => _expressSearchQuery = '');
+                                  },
+                                  child: const Padding(
+                                    padding: EdgeInsets.symmetric(horizontal: 8),
+                                    child: Icon(Icons.close, size: 18, color: AppColors.textHint),
+                                  ),
+                                ),
+                              Container(
+                                width: 40,
+                                height: 40,
+                                margin: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: const Icon(Icons.search, color: Colors.white, size: 20),
+                              ),
+                            ],
+                          ),
+                        ),
                 ).animate(delay: 100.ms).fadeIn(duration: 400.ms).slideY(begin: 0.05),
               ),
 
@@ -536,41 +590,59 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
                     ),
                   )
-                else if (_internalProducts.isEmpty)
-                  SliverToBoxAdapter(
-                    child: SizedBox(
-                      height: 200,
-                      child: Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.store_mall_directory_outlined, size: 48, color: AppColors.textHint),
-                            const SizedBox(height: 12),
-                            Text(
-                              lang == 'ar' ? 'لا توجد منتجات حالياً' : 'No products available',
-                              style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary),
+                else ...[
+                  Builder(
+                    builder: (context) {
+                      final filtered = _expressSearchQuery.isEmpty
+                          ? _internalProducts
+                          : _internalProducts.where((p) {
+                              final title = (p['title'] ?? '').toString().toLowerCase();
+                              final desc = (p['description'] ?? '').toString().toLowerCase();
+                              final q = _expressSearchQuery.toLowerCase();
+                              return title.contains(q) || desc.contains(q);
+                            }).toList();
+
+                      if (filtered.isEmpty) {
+                        return SliverToBoxAdapter(
+                          child: SizedBox(
+                            height: 200,
+                            child: Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.search_off_outlined, size: 48, color: AppColors.textHint),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    _expressSearchQuery.isNotEmpty
+                                        ? (lang == 'ar' ? 'لا توجد نتائج مطابقة لبحثك' : 'No matching products found')
+                                        : (lang == 'ar' ? 'لا توجد منتجات حالياً' : 'No products available'),
+                                    style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ],
+                          ),
+                        );
+                      }
+
+                      return SliverPadding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        sliver: SliverGrid(
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) => _buildProductCard(filtered[index]),
+                            childCount: filtered.length,
+                          ),
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            childAspectRatio: 0.65,
+                            crossAxisSpacing: 12,
+                            mainAxisSpacing: 12,
+                          ),
                         ),
-                      ),
-                    ),
-                  )
-                else
-                  SliverPadding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    sliver: SliverGrid(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) => _buildProductCard(_internalProducts[index]),
-                        childCount: _internalProducts.length,
-                      ),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        childAspectRatio: 0.65,
-                        crossAxisSpacing: 12,
-                        mainAxisSpacing: 12,
-                      ),
-                    ),
+                      );
+                    },
                   ),
+                ],
                 const SliverToBoxAdapter(child: SizedBox(height: 20)),
               ],
             ],

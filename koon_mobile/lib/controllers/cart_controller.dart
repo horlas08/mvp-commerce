@@ -33,7 +33,7 @@ class CartController extends GetxController {
   Timer? _refreshTimeout;
 
   final List<Map<String, String>> cartTypes = [
-    // {'key': 'internal', 'label_en': 'Internal Cart', 'label_ar': 'السلة الداخلية'},
+    {'key': 'internal', 'label_en': 'Express / Local Products', 'label_ar': 'منتجات التوصيل السريع'},
     {'key': 'amazon', 'label_en': 'Amazon Cart', 'label_ar': 'سلة أمازون'},
     {'key': 'aliexpress', 'label_en': 'AliExpress Cart', 'label_ar': 'سلة علي إكسبريس'},
     {'key': 'shein', 'label_en': 'Shein Cart', 'label_ar': 'سلة شي إن'},
