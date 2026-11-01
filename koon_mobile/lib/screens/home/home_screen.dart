@@ -22,6 +22,7 @@ import '../../controllers/support_controller.dart';
 import '../support/support_list_screen.dart';
 import '../support/notification_screen.dart';
 import '../../controllers/store_browser_controller.dart';
+import '../../services/seller_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -30,12 +31,18 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
   final HomeController _homeController = Get.find<HomeController>();
   final SettingsController _settingsController = Get.find<SettingsController>();
   final SupportController _supportController = Get.find<SupportController>();
+  final SellerService _sellerService = SellerService();
+  late TabController _tabController;
   int _bannerIndex = 0;
   bool _globalStoreViewGrid = false; // false = scroll (default), true = grid
+
+  List<Map<String, dynamic>> _internalProducts = [];
+  bool _internalProductsLoading = false;
+  String? _selectedCategoryId;
 
   List<Map<String, dynamic>> _externalStores = [
     {'name': 'SHEIN', 'logo': '👗', 'color': Color(0xFF1A1A2E), 'url': 'https://m.shein.com/ar/', 'subtitle': '', 'enabled': true},
@@ -48,11 +55,30 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _loadStoreViewPreference();
     _loadStoreOrder();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _fetchIfEmpty();
+      _loadInternalProducts();
     });
+  }
+
+  Future<void> _loadInternalProducts() async {
+    if (!mounted) return;
+    setState(() => _internalProductsLoading = true);
+    try {
+      final lang = context.locale.languageCode;
+      final products = await _sellerService.getInternalProducts(lang: lang, limit: 40);
+      if (mounted) setState(() => _internalProducts = products);
+    } catch (_) {}
+    if (mounted) setState(() => _internalProductsLoading = false);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadStoreOrder() async {
@@ -223,7 +249,38 @@ class _HomeScreenState extends State<HomeScreen> {
                 ).animate(delay: 100.ms).fadeIn(duration: 400.ms).slideY(begin: 0.05),
               ),
 
-              // Banner Carousel
+              // Tab Bar — Global Stores | Express Delivery
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  child: Container(
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceVariant,
+                      borderRadius: BorderRadius.circular(22),
+                    ),
+                    child: TabBar(
+                      controller: _tabController,
+                      onTap: (index) => setState(() {}),
+                      indicator: BoxDecoration(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(22),
+                      ),
+                      indicatorSize: TabBarIndicatorSize.tab,
+                      labelColor: Colors.white,
+                      unselectedLabelColor: AppColors.textSecondary,
+                      dividerColor: Colors.transparent,
+                      tabs: [
+                        Tab(text: lang == 'ar' ? 'المتاجر العالمية' : 'Global Stores'),
+                        Tab(text: lang == 'ar' ? 'توصيل ٢٤ ساعة' : 'Express Delivery'),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              // Banner Carousel (Tab 0 only)
+              if (_tabController.index == 0)
               SliverToBoxAdapter(
                 child: Obx(() {
                   if (_homeController.banners.isEmpty) {
@@ -309,7 +366,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 }).animate(delay: 200.ms).fadeIn(duration: 500.ms),
               ),
 
-              // External Stores Section
+              // External Stores Section (Tab 0 only)
+              if (_tabController.index == 0)
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
@@ -352,6 +410,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ).animate(delay: 300.ms).fadeIn(duration: 400.ms),
               ),
+              if (_tabController.index == 0)
               SliverToBoxAdapter(
                 child: _globalStoreViewGrid
                     ? _buildStoresGrid()
@@ -450,6 +509,70 @@ class _HomeScreenState extends State<HomeScreen> {
               //       )),
               // ),
               const SliverToBoxAdapter(child: SizedBox(height: 20)),
+
+              // ── Express Delivery Tab (Tab 1) ──
+              if (_tabController.index == 1) ...[
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.delivery_dining, color: AppColors.primary, size: 22),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            lang == 'ar' ? 'توصيل خلال ٢٤ ساعة' : 'Express Delivery Within 24 Hours',
+                            style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ).animate().fadeIn(duration: 400.ms),
+                ),
+                if (_internalProductsLoading)
+                  const SliverToBoxAdapter(
+                    child: SizedBox(
+                      height: 200,
+                      child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+                    ),
+                  )
+                else if (_internalProducts.isEmpty)
+                  SliverToBoxAdapter(
+                    child: SizedBox(
+                      height: 200,
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.store_mall_directory_outlined, size: 48, color: AppColors.textHint),
+                            const SizedBox(height: 12),
+                            Text(
+                              lang == 'ar' ? 'لا توجد منتجات حالياً' : 'No products available',
+                              style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    sliver: SliverGrid(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) => _buildProductCard(_internalProducts[index]),
+                        childCount: _internalProducts.length,
+                      ),
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        childAspectRatio: 0.7,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                      ),
+                    ),
+                  ),
+                const SliverToBoxAdapter(child: SizedBox(height: 20)),
+              ],
             ],
           ),
         ),

@@ -30,6 +30,9 @@ async def init_db():
             "ALTER TABLE orders ADD COLUMN tax_amount FLOAT DEFAULT 0.0",
             "ALTER TABLE states ADD COLUMN sort_order INTEGER DEFAULT 0",
             "ALTER TABLE users ADD COLUMN admin_permissions TEXT",
+            "ALTER TABLE products ADD COLUMN variants TEXT",
+            "ALTER TABLE products ADD COLUMN weight_kg REAL",
+            "ALTER TABLE products ADD COLUMN delivery_days INTEGER",
         ]:
             try:
                 await conn.execute(text(migration))

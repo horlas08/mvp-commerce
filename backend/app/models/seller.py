@@ -24,6 +24,13 @@ class Seller(Base):
     products = relationship("Product", back_populates="seller")
 
     def to_dict(self, lang: str = "en"):
+        if self.is_verified:
+            status = "approved"
+        elif not self.is_active:
+            status = "rejected"
+        else:
+            status = "pending"
+
         return {
             "id": self.id,
             "user_id": self.user_id,
@@ -34,5 +41,6 @@ class Seller(Base):
             "description": self.description_en if lang == "en" else self.description_ar,
             "is_verified": self.is_verified,
             "is_active": self.is_active,
+            "status": status,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }

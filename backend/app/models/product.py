@@ -21,6 +21,9 @@ class Product(Base):
     category_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("categories.id"), nullable=True)
     seller_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("sellers.id"), nullable=True)
     stock: Mapped[int] = mapped_column(Integer, default=0)
+    variants: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)  # List of variant dicts
+    weight_kg: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    delivery_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     rating: Mapped[float] = mapped_column(Float, default=0.0)
     rating_count: Mapped[int] = mapped_column(Integer, default=0)
     is_active: Mapped[bool] = mapped_column(default=True)
@@ -44,6 +47,9 @@ class Product(Base):
             "category_id": self.category_id,
             "seller_id": self.seller_id,
             "stock": self.stock,
+            "variants": self.variants or [],
+            "weight_kg": self.weight_kg,
+            "delivery_days": self.delivery_days,
             "rating": self.rating,
             "rating_count": self.rating_count,
             "is_active": self.is_active,

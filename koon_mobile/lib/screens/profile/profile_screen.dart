@@ -42,6 +42,7 @@ class ProfileScreen extends StatelessWidget {
         final user = authController.user.value;
         final isLoggedIn = authController.isLoggedIn.value;
         final isSeller = user?['role'] == 'seller';
+        final lang = context.locale.languageCode;
 
         return CustomScrollView(
           slivers: [
@@ -254,17 +255,32 @@ class ProfileScreen extends StatelessWidget {
 
                   const SizedBox(height: 20),
 
-                  // ── Sellers card (commented out – external-product focus) ──
-                  // _buildSectionHeader('explore'.tr()),
-                  // _buildCardContainer([
-                  //   _buildSettingsTile(
-                  //     icon: Icons.storefront_outlined,
-                  //     iconColor: Colors.deepPurple,
-                  //     title: 'browse_all_sellers'.tr(),
-                  //     onTap: () => _showSellersDialog(context, sellerService),
-                  //   ),
-                  // ]),
-                  // const SizedBox(height: 20),
+                  // Sellers card
+                  _buildSectionHeader('explore'.tr()),
+                  _buildCardContainer([
+                    _buildSettingsTile(
+                      icon: Icons.storefront_outlined,
+                      iconColor: Colors.deepPurple,
+                      title: 'browse_all_sellers'.tr(),
+                      onTap: () => _showSellersDialog(context, sellerService),
+                    ),
+                    if (isSeller) ...[
+                      _buildDivider(),
+                      _buildSettingsTile(
+                        icon: Icons.store_outlined,
+                        iconColor: AppColors.primary,
+                        title: lang == 'ar' ? 'متجري' : 'My Store',
+                        onTap: () {
+                          final sellerId = user?['seller_id']?.toString() ?? user?['id']?.toString() ?? '';
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => SellerShopScreen(sellerId: sellerId)),
+                          );
+                        },
+                      ),
+                    ],
+                  ]),
+                  const SizedBox(height: 20),
 
                   // Policies Card
                   _buildSectionHeader('policies'.tr()),
@@ -317,14 +333,14 @@ class ProfileScreen extends StatelessWidget {
 
                   const SizedBox(height: 24),
 
-                  // ── Become Seller / Seller Dashboard (commented out – external-product focus) ──
-                  // if (isLoggedIn) ...[
-                  //   if (isSeller)
-                  //     _buildSellerDashboardCard(context, user!)
-                  //   else
-                  //     _buildBecomeSellerPromoCard(context),
-                  //   const SizedBox(height: 32),
-                  // ],
+                  // Become Seller / Seller Dashboard
+                  if (isLoggedIn) ...[
+                    if (isSeller)
+                      _buildSellerDashboardCard(context, user!)
+                    else
+                      _buildBecomeSellerPromoCard(context),
+                    const SizedBox(height: 32),
+                  ],
 
                   // Logout button
                   if (isLoggedIn)

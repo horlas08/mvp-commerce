@@ -634,3 +634,4 @@ export const PERMISSION_PRESETS: PermissionPreset[] = [
 export function getAllPermissionKeys(): string[] {
   return PERMISSION_MODULES.flatMap((m) => m.actions.map((a) => a.key));
 }
+

@@ -67,6 +67,8 @@ class ApiConstants {
   // Sellers
   static String get sellers => '$baseUrl/sellers';
   static String get applySeller => '$baseUrl/sellers/apply';
+  static String get sellerMe => '$baseUrl/sellers/me';
+  static String get sellerMeProducts => '$baseUrl/sellers/me/products';
 
   // Refunds
   static String get refunds => '$baseUrl/refunds';
