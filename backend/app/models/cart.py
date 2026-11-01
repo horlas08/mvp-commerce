@@ -45,7 +45,7 @@ class CartItem(Base):
 
     # Relationships
     user = relationship("User", back_populates="cart_items")
-    product = relationship("Product")
+    product = relationship("Product", lazy="joined")
 
     def to_dict(self, lang: str = "en"):
         result = {

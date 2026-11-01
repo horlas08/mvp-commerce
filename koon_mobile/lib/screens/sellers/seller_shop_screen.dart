@@ -141,12 +141,12 @@ class _SellerShopScreenState extends State<SellerShopScreen> {
                         )
                       : GridView.builder(
                           padding: const EdgeInsets.all(16),
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            childAspectRatio: 0.7,
-                            crossAxisSpacing: 12,
-                            mainAxisSpacing: 12,
-                          ),
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        childAspectRatio: 0.65,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                      ),
                           itemCount: _products.length,
                           itemBuilder: (context, index) {
                             final product = _products[index];

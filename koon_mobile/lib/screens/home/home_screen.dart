@@ -216,6 +216,36 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 ).animate().fadeIn(duration: 400.ms),
               ),
 
+              // Tab Bar — Global Stores | Express Delivery (on top of search bar)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  child: Container(
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceVariant,
+                      borderRadius: BorderRadius.circular(22),
+                    ),
+                    child: TabBar(
+                      controller: _tabController,
+                      onTap: (index) => setState(() {}),
+                      indicator: BoxDecoration(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(22),
+                      ),
+                      indicatorSize: TabBarIndicatorSize.tab,
+                      labelColor: Colors.white,
+                      unselectedLabelColor: AppColors.textSecondary,
+                      dividerColor: Colors.transparent,
+                      tabs: [
+                        Tab(text: lang == 'ar' ? 'المتاجر العالمية' : 'Global Stores'),
+                        Tab(text: lang == 'ar' ? 'توصيل ٢٤ ساعة' : 'Express Delivery'),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
               // Search Bar
               SliverToBoxAdapter(
                 child: Padding(
@@ -247,36 +277,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     ),
                   ),
                 ).animate(delay: 100.ms).fadeIn(duration: 400.ms).slideY(begin: 0.05),
-              ),
-
-              // Tab Bar — Global Stores | Express Delivery
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                  child: Container(
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceVariant,
-                      borderRadius: BorderRadius.circular(22),
-                    ),
-                    child: TabBar(
-                      controller: _tabController,
-                      onTap: (index) => setState(() {}),
-                      indicator: BoxDecoration(
-                        color: AppColors.primary,
-                        borderRadius: BorderRadius.circular(22),
-                      ),
-                      indicatorSize: TabBarIndicatorSize.tab,
-                      labelColor: Colors.white,
-                      unselectedLabelColor: AppColors.textSecondary,
-                      dividerColor: Colors.transparent,
-                      tabs: [
-                        Tab(text: lang == 'ar' ? 'المتاجر العالمية' : 'Global Stores'),
-                        Tab(text: lang == 'ar' ? 'توصيل ٢٤ ساعة' : 'Express Delivery'),
-                      ],
-                    ),
-                  ),
-                ),
               ),
 
               // Banner Carousel (Tab 0 only)
@@ -565,7 +565,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       ),
                       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: 2,
-                        childAspectRatio: 0.7,
+                        childAspectRatio: 0.65,
                         crossAxisSpacing: 12,
                         mainAxisSpacing: 12,
                       ),
@@ -1061,9 +1061,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   ),
                 ),
                 Expanded(
-                  flex: 2,
+                  flex: 3,
                   child: Padding(
-                    padding: const EdgeInsets.all(10),
+                    padding: const EdgeInsets.all(8),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -1074,24 +1074,25 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           children: [
                             Text(
                               _settingsController.formatPrice(hasDiscount ? discount : price, currency),
-                              style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.primary),
+                              style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.primary),
                             ),
                           ],
                         ),
                         if (hasDiscount)
                           Text(
                             _settingsController.formatPrice(price, currency),
-                            style: GoogleFonts.inter(fontSize: 11, color: AppColors.textHint, decoration: TextDecoration.lineThrough),
+                            style: GoogleFonts.inter(fontSize: 10, color: AppColors.textHint, decoration: TextDecoration.lineThrough),
                           ),
-                        const SizedBox(height: 4),
-                        if (product['rating'] != null && product['rating'] > 0)
+                        if (product['rating'] != null && product['rating'] > 0) ...[
+                          const SizedBox(height: 2),
                           Row(
                             children: [
-                              const Icon(Icons.star, size: 14, color: AppColors.warning),
+                              const Icon(Icons.star, size: 12, color: AppColors.warning),
                               const SizedBox(width: 2),
-                              Text('${product['rating']}', style: GoogleFonts.inter(fontSize: 11, color: AppColors.textSecondary)),
+                              Text('${product['rating']}', style: GoogleFonts.inter(fontSize: 10, color: AppColors.textSecondary)),
                             ],
                           ),
+                        ],
                       ],
                     ),
                   ),

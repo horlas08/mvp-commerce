@@ -130,7 +130,7 @@ async def add_to_cart(
 
     if req.product_id:
         req_sel = normalize_selections_dict(req.selections_json)
-        existing_query = select(CartItem).where(
+        existing_query = select(CartItem).options(selectinload(CartItem.product)).where(
             CartItem.user_id == user.id,
             CartItem.cart_type == ct,
             CartItem.product_id == req.product_id,
@@ -195,7 +195,10 @@ async def add_to_cart(
     )
     db.add(item)
     await db.commit()
-    await db.refresh(item)
+    res = await db.execute(
+        select(CartItem).options(selectinload(CartItem.product)).where(CartItem.id == item.id)
+    )
+    item = res.scalar_one()
     return item.to_dict(lang)
 
 
@@ -209,7 +212,7 @@ async def update_cart_item(
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(CartItem).where(CartItem.id == item_id, CartItem.user_id == user.id)
+        select(CartItem).options(selectinload(CartItem.product)).where(CartItem.id == item_id, CartItem.user_id == user.id)
     )
     item = result.scalar_one_or_none()
     if not item:
@@ -228,7 +231,10 @@ async def update_cart_item(
         item.updated_at = datetime.now(timezone.utc)
 
     await db.commit()
-    await db.refresh(item)
+    res = await db.execute(
+        select(CartItem).options(selectinload(CartItem.product)).where(CartItem.id == item.id)
+    )
+    item = res.scalar_one()
     return item.to_dict(lang)
 
 
