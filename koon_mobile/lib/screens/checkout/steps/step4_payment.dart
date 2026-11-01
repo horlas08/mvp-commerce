@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get/get.dart' hide Trans;
@@ -636,265 +635,76 @@ class _BankAccountOptionCard extends StatelessWidget {
           ),
         ],
       ),
-      child: Column(
-        children: [
-          InkWell(
-            onTap: () {
-              ctrl.selectedPaymentMethod.value = bankMethod;
-              ctrl.paymentFormData['selected_account_id'] = acc['id']?.toString() ?? '';
-              ctrl.paymentFormData['selected_bank_name'] = bankName;
-              ctrl.paymentFormData['selected_account_number'] = accountNum;
-            },
-            borderRadius: BorderRadius.circular(16),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              child: Row(
-                children: [
-                  // Radio Indicator matching Image 1
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    width: 22,
-                    height: 22,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white,
-                      border: Border.all(
-                        color: isSelected ? const Color(0xFF1E40AF) : const Color(0xFFCBD5E1),
-                        width: isSelected ? 2.5 : 1.5,
+      child: InkWell(
+        onTap: () {
+          ctrl.selectedPaymentMethod.value = bankMethod;
+          ctrl.paymentFormData['selected_account_id'] = acc['id']?.toString() ?? '';
+          ctrl.paymentFormData['selected_bank_name'] = bankName;
+          ctrl.paymentFormData['selected_account_number'] = accountNum;
+        },
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              // Radio Indicator matching Image 1
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white,
+                  border: Border.all(
+                    color: isSelected ? const Color(0xFF1E40AF) : const Color(0xFFCBD5E1),
+                    width: isSelected ? 2.5 : 1.5,
+                  ),
+                ),
+                child: isSelected
+                    ? Center(
+                        child: Container(
+                          width: 10,
+                          height: 10,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Color(0xFF1E40AF),
+                          ),
+                        ),
+                      )
+                    : null,
+              ),
+              const SizedBox(width: 14),
+              // Bank / Wallet Logo
+              _buildBankLogoWidget(acc),
+              const SizedBox(width: 14),
+              // Title & Account Number
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      bankName,
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
                       ),
                     ),
-                    child: isSelected
-                        ? Center(
-                            child: Container(
-                              width: 10,
-                              height: 10,
-                              decoration: const BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Color(0xFF1E40AF),
-                              ),
-                            ),
-                          )
-                        : null,
-                  ),
-                  const SizedBox(width: 14),
-                  // Bank / Wallet Logo
-                  _buildBankLogoWidget(acc),
-                  const SizedBox(width: 14),
-                  // Title & Account Number
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          bankName,
-                          style: GoogleFonts.inter(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '$accountTypeLabel: $accountNum',
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            color: AppColors.textSecondary,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
+                    const SizedBox(height: 2),
+                    Text(
+                      '$accountTypeLabel: $accountNum',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
+            ],
           ),
-
-          if (isSelected) ...[
-            const Divider(height: 1, color: Color(0xFFDBEAFE)),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Account / Point number box + Copy button
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFBFDBFE)),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              accountTypeLabel,
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                color: AppColors.textSecondary,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              accountNum,
-                              style: GoogleFonts.inter(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w800,
-                                color: const Color(0xFF1E40AF),
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                          ],
-                        ),
-                        ElevatedButton.icon(
-                          onPressed: () {
-                            Clipboard.setData(ClipboardData(text: accountNum));
-                            Get.rawSnackbar(
-                              messageText: Row(
-                                children: [
-                                  const Icon(Icons.check_circle, color: Colors.white, size: 16),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    'account_number_copied'.tr(),
-                                    style: GoogleFonts.inter(
-                                      color: Colors.white,
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              backgroundColor: const Color(0xFF1E40AF),
-                              snackPosition: SnackPosition.BOTTOM,
-                              duration: const Duration(seconds: 2),
-                              margin: const EdgeInsets.all(12),
-                              borderRadius: 12,
-                            );
-                          },
-                          icon: const Icon(Icons.copy_rounded, size: 14),
-                          label: Text('copy'.tr(), style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF1E40AF),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Upload Receipt
-                  Text(
-                    'upload_receipt_optional'.tr(),
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'receipt_quick_confirm_tip'.tr(),
-                    style: GoogleFonts.inter(
-                      fontSize: 11,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Obx(() {
-                    final hasProof = ctrl.paymentProofImage.value != null;
-                    final proofPath = ctrl.paymentProofImage.value?.path;
-                    return _UploadDropzone(
-                      hasFile: hasProof,
-                      fileName: proofPath?.split('/').last,
-                      imagePath: proofPath,
-                      onTap: () async {
-                        final img = await showSourcePicker(context);
-                        if (img != null) {
-                          ctrl.paymentProofImage.value = img;
-                          ctrl.paymentFormData['receipt_proof'] = img.path;
-                        }
-                      },
-                      onClear: () {
-                        ctrl.paymentProofImage.value = null;
-                        ctrl.paymentFormData.remove('receipt_proof');
-                      },
-                    );
-                  }),
-                  const SizedBox(height: 14),
-
-                  // Depositor Name
-                  TextFormField(
-                    initialValue: ctrl.paymentFormData['depositor_name'],
-                    onChanged: (v) => ctrl.paymentFormData['depositor_name'] = v,
-                    style: GoogleFonts.inter(fontSize: 13, color: AppColors.textPrimary),
-                    decoration: InputDecoration(
-                      labelText: 'depositor_name'.tr(),
-                      hintText: 'enter_depositor_name'.tr(),
-                      labelStyle: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary),
-                      hintStyle: GoogleFonts.inter(fontSize: 12, color: AppColors.textHint),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.border),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.border),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: Color(0xFF1E40AF), width: 1.5),
-                      ),
-                      filled: true,
-                      fillColor: Colors.white,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-
-                  // Transfer / Reference Number
-                  TextFormField(
-                    initialValue: ctrl.paymentFormData['ref_number'],
-                    onChanged: (v) => ctrl.paymentFormData['ref_number'] = v,
-                    style: GoogleFonts.inter(fontSize: 13, color: AppColors.textPrimary),
-                    decoration: InputDecoration(
-                      labelText: 'transfer_or_ref_number'.tr(),
-                      hintText: 'enter_transfer_or_ref_number'.tr(),
-                      labelStyle: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary),
-                      hintStyle: GoogleFonts.inter(fontSize: 12, color: AppColors.textHint),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.border),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.border),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: Color(0xFF1E40AF), width: 1.5),
-                      ),
-                      filled: true,
-                      fillColor: Colors.white,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
+        ),
       ),
     );
   }

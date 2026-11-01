@@ -401,5 +401,6 @@
   "global_site_request_desc": "Send any product link or image from any site and we will provide it",
   "point_number": "Point Number",
   "account_number": "Account Number",
-  "select_bank_wallet": "Select Bank or E-Wallet"
+  "select_bank_wallet": "Select Bank or E-Wallet",
+  "other_global_stores": "Other Global Stores"
 }

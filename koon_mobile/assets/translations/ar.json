@@ -400,5 +400,6 @@
   "global_site_request_desc": "أرسل رابط أو صورة أي منتج من أي موقع وسنوفره لك فوراً",
   "point_number": "رقم النقطة",
   "account_number": "رقم الحساب",
-  "select_bank_wallet": "اختر البنك أو المحفظة الإلكترونية"
+  "select_bank_wallet": "اختر البنك أو المحفظة الإلكترونية",
+  "other_global_stores": "باقي المواقع العالمية"
 }
