@@ -72,6 +72,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     try {
       final lang = context.locale.languageCode;
       final products = await _sellerService.getInternalProducts(lang: lang, limit: 40);
+      products.sort((a, b) {
+        final aHasVar = (a['variants'] is List && (a['variants'] as List).isNotEmpty) ? 1 : 0;
+        final bHasVar = (b['variants'] is List && (b['variants'] as List).isNotEmpty) ? 1 : 0;
+        return bHasVar.compareTo(aHasVar);
+      });
       if (mounted) setState(() => _internalProducts = products);
     } catch (_) {}
     if (mounted) setState(() => _internalProductsLoading = false);
@@ -169,6 +174,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               await _homeController.loadHomeData(lang: lang);
             }
             await _supportController.refreshCounts();
+            await _loadInternalProducts();
           },
           child: CustomScrollView(
             slivers: [
@@ -1135,7 +1141,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 Expanded(
                   flex: 3,
                   child: Padding(
-                    padding: const EdgeInsets.all(8),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [

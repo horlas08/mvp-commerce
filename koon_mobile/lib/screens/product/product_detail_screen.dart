@@ -33,15 +33,19 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   final WishlistService _wishlistService = WishlistService();
   final ProductService _productService = ProductService();
 
+  late Map<String, dynamic> _product;
   int _currentImageIndex = 0;
   bool _isWishlisted = false;
   String? _wishlistItemId;
   bool _loadingWishlist = true;
 
   // Variants state
-  Map<String, String> _selectedVariants = {};
+  final Map<String, String> _selectedVariants = {};
   double? _variantPriceOverride;
   int? _variantStockOverride;
+
+  // Description / Reviews Tab state (Matches User Image 2)
+  int _selectedTab = 0; // 0 = Description ("وصف المنتج"), 1 = Reviews ("التعليقات")
 
   // Similar Products state
   List<Map<String, dynamic>> _similarProducts = [];
@@ -50,9 +54,28 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   @override
   void initState() {
     super.initState();
+    _product = Map<String, dynamic>.from(widget.product);
     _initVariants();
     _checkWishlistStatus();
     _loadSimilarProducts();
+    _fetchFullProduct();
+  }
+
+  Future<void> _fetchFullProduct() async {
+    final id = _product['id']?.toString();
+    if (id == null) return;
+    try {
+      final lang = Get.locale?.languageCode ?? 'en';
+      final full = await _productService.getProduct(id, lang: lang);
+      if (full != null && mounted) {
+        setState(() {
+          _product = full;
+          _initVariants();
+        });
+      }
+    } catch (_) {
+      // Keep existing data
+    }
   }
 
   void _initVariants() {
@@ -61,16 +84,18 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       final type = v['type']?.toString() ?? '';
       final options = (v['options'] as List?) ?? [];
       if (type.isNotEmpty && options.isNotEmpty) {
-        final firstOpt = options.first;
-        final optName = firstOpt is Map ? firstOpt['name']?.toString() ?? '' : firstOpt.toString();
-        _selectedVariants[type] = optName;
+        if (!_selectedVariants.containsKey(type) || _selectedVariants[type]!.isEmpty) {
+          final firstOpt = options.first;
+          final optName = firstOpt is Map ? firstOpt['name']?.toString() ?? '' : firstOpt.toString();
+          _selectedVariants[type] = optName;
+        }
       }
     }
     _recalcVariantPriceAndStock();
   }
 
   List<Map<String, dynamic>> _getVariantsList() {
-    final raw = widget.product['variants'];
+    final raw = _product['variants'];
     if (raw == null) return [];
     if (raw is List) {
       return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
@@ -120,7 +145,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   Future<void> _loadSimilarProducts() async {
     try {
-      final categoryId = widget.product['category_id']?.toString();
+      final categoryId = _product['category_id']?.toString();
       final lang = Get.locale?.languageCode ?? 'en';
       final products = await _productService.getProducts(
         categoryId: categoryId,
@@ -128,7 +153,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       );
       if (mounted) {
         setState(() {
-          _similarProducts = products.where((p) => p['id'] != widget.product['id']).toList();
+          _similarProducts = products.where((p) => p['id'] != _product['id']).toList();
           _loadingSimilar = false;
         });
       }
@@ -144,8 +169,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     }
     final wishlist = await _wishlistService.getWishlist();
     final item = wishlist.firstWhereOrNull((element) =>
-        element['product_id'] == widget.product['id'] ||
-        element['product']?['id'] == widget.product['id']);
+        element['product_id'] == _product['id'] ||
+        element['product']?['id'] == _product['id']);
     if (mounted) {
       setState(() {
         _isWishlisted = item != null;
@@ -170,12 +195,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         _wishlistItemId = null;
       }
     } else {
-      final images = widget.product['images'] as List? ?? [];
+      final images = _product['images'] as List? ?? [];
       final imageUrl = images.isNotEmpty ? images[0] : '';
       final res = await _wishlistService.addToWishlist(
-        productId: widget.product['id'],
-        title: widget.product['title'],
-        price: '${widget.product['price']}',
+        productId: _product['id'],
+        title: _product['title'],
+        price: '${_product['price']}',
         imageUrl: imageUrl,
         source: 'internal',
       );
@@ -194,15 +219,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       if (loginRes != true) return;
     }
 
-    final images = widget.product['images'] as List? ?? [];
+    final images = _product['images'] as List? ?? [];
     final imageUrl = images.isNotEmpty ? images[0] : '';
     final finalPrice = _variantPriceOverride ??
-        (widget.product['discount_price'] ?? widget.product['price']);
+        (_product['discount_price'] ?? _product['price']);
 
     final result = await _cartController.addToCart(
       cartType: 'internal',
-      productId: widget.product['id'],
-      title: widget.product['title'],
+      productId: _product['id'],
+      title: _product['title'],
       price: '$finalPrice',
       imageUrl: imageUrl,
       selectionsJson: _selectedVariants.isNotEmpty ? jsonEncode(_selectedVariants) : null,
@@ -246,7 +271,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       'بني': Color(0xFF795548),
       'grey': Colors.grey,
       'gray': Colors.grey,
-      'رمادي': Colors.grey,
+      'رمادي': Color(0xFF616161),
+      'charcoal': Color(0xFF424242),
       'yellow': Colors.yellow,
       'اصفر': Colors.yellow,
       'أصفر': Colors.yellow,
@@ -262,14 +288,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final images = widget.product['images'] as List? ?? [];
-    final hasDiscount = widget.product['discount_price'] != null;
-    final double originalPrice = (widget.product['price'] ?? 0.0).toDouble();
-    final double originalDiscount = hasDiscount ? (widget.product['discount_price'] ?? 0.0).toDouble() : 0.0;
-    final originalCurrency = widget.product['currency'] ?? 'SAR';
+    final images = _product['images'] as List? ?? [];
+    final hasDiscount = _product['discount_price'] != null;
+    final double originalPrice = (_product['price'] ?? 0.0).toDouble();
+    final double originalDiscount = hasDiscount ? (_product['discount_price'] ?? 0.0).toDouble() : 0.0;
+    final originalCurrency = _product['currency'] ?? 'SAR';
 
     final effectivePrice = _variantPriceOverride ?? (hasDiscount ? originalDiscount : originalPrice);
-    final effectiveStock = _variantStockOverride ?? (widget.product['stock'] ?? 0);
+    final effectiveStock = _variantStockOverride ?? (_product['stock'] ?? 0);
     final isArabic = (Get.locale?.languageCode ?? 'en') == 'ar';
 
     final variants = _getVariantsList();
@@ -343,7 +369,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             actions: [
               // Compare Button
               Obx(() {
-                final isInCompare = _compareController.isComparing(widget.product['id']);
+                final isInCompare = _compareController.isComparing(_product['id']);
                 return IconButton(
                   icon: Container(
                     padding: const EdgeInsets.all(8),
@@ -359,7 +385,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   ),
                   tooltip: isInCompare ? 'remove_from_compare'.tr() : 'add_to_compare'.tr(),
                   onPressed: () {
-                    _compareController.toggleCompare(widget.product);
+                    _compareController.toggleCompare(_product);
                   },
                 );
               }),
@@ -439,31 +465,31 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
                   // Product Title
                   Text(
-                    widget.product['title'] ?? '',
+                    _product['title'] ?? '',
                     style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
                   ),
 
                   const SizedBox(height: 12),
 
                   // Rating Row
-                  if (widget.product['rating'] != null && widget.product['rating'] > 0)
+                  if (_product['rating'] != null && _product['rating'] > 0)
                     Row(
                       children: [
                         const Icon(Icons.star, color: AppColors.warning, size: 18),
                         const SizedBox(width: 4),
                         Text(
-                          '${widget.product['rating']}',
+                          '${_product['rating']}',
                           style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14),
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          '(${widget.product['rating_count'] ?? 0} ${'reviews'.tr()})',
+                          '(${_product['rating_count'] ?? 0} ${'reviews'.tr()})',
                           style: GoogleFonts.inter(color: AppColors.textSecondary, fontSize: 12),
                         ),
                       ],
                     ),
 
-                  // ── Dynamic Variants Section (Color Swatches, Size Chips, etc.) ──
+                  // ── Dynamic Variants Section (Matches Exact Reference Image 1) ──
                   if (variants.isNotEmpty) ...[
                     const Divider(height: 32),
                     ...variants.map((v) => _buildVariantSelector(v, isArabic)),
@@ -472,13 +498,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   const Divider(height: 32),
 
                   // Seller Row (if seller exists)
-                  if (widget.product['seller_id'] != null) ...[
+                  if (_product['seller_id'] != null) ...[
                     GestureDetector(
                       onTap: () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => SellerShopScreen(sellerId: widget.product['seller_id']),
+                            builder: (_) => SellerShopScreen(sellerId: _product['seller_id']),
                           ),
                         );
                       },
@@ -503,7 +529,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                 children: [
                                   Text('Seller Shop'.tr(), style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary)),
                                   Text(
-                                    widget.product['seller']?['store_name'] ?? 'Browse Shop'.tr(),
+                                    _product['seller']?['store_name'] ?? 'Browse Shop'.tr(),
                                     style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
                                   ),
                                 ],
@@ -517,15 +543,26 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     const SizedBox(height: 20),
                   ],
 
-                  // Description Header
-                  Text(
-                    'description'.tr(),
-                    style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                  // ── Tabs: Description vs Reviews (Matches Exact Reference Image 2) ──
+                  Row(
+                    children: [
+                      _buildTabItem(
+                        title: isArabic ? 'وصف المنتج' : 'Description',
+                        index: 0,
+                      ),
+                      const SizedBox(width: 24),
+                      _buildTabItem(
+                        title: isArabic ? 'التعليقات' : 'Reviews',
+                        index: 1,
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 16),
 
-                  // Rich HTML Description Viewer
-                  _buildDescriptionContent(),
+                  if (_selectedTab == 0)
+                    _buildDescriptionContent()
+                  else
+                    _buildReviewsContent(isArabic),
 
                   // ── Similar Products Section ──
                   const SizedBox(height: 28),
@@ -563,6 +600,35 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
+  Widget _buildTabItem({required String title, required int index}) {
+    final isSelected = _selectedTab == index;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedTab = index),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            title,
+            style: GoogleFonts.inter(
+              fontSize: 15,
+              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+              color: isSelected ? const Color(0xFFD81B60) : AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Container(
+            height: 3,
+            width: 48,
+            decoration: BoxDecoration(
+              color: isSelected ? const Color(0xFFD81B60) : Colors.transparent,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildVariantSelector(Map<String, dynamic> variant, bool isArabic) {
     final type = variant['type']?.toString() ?? '';
     final options = (variant['options'] as List?) ?? [];
@@ -579,122 +645,117 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       labelText = isArabic ? 'المقاس' : 'Size';
     }
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(
-                labelText,
-                style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+    final swatchesOrChips = Wrap(
+      spacing: 12,
+      runSpacing: 10,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: options.map((opt) {
+        final optName = opt is Map ? opt['name']?.toString() ?? '' : opt.toString();
+        final isSelected = selectedOpt == optName;
+        final colorHex = opt is Map ? (opt['color_hex']?.toString() ?? opt['hex']?.toString()) : null;
+        final parsedColor = _parseColor(colorHex ?? optName);
+
+        if (isColor && parsedColor != null) {
+          // Circular Color Swatch (Matches user reference image 1)
+          return GestureDetector(
+            onTap: () {
+              setState(() {
+                _selectedVariants[type] = optName;
+                _recalcVariantPriceAndStock();
+              });
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: parsedColor,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isSelected ? Colors.black87 : Colors.grey.shade400,
+                  width: isSelected ? 2.5 : 1.2,
+                ),
+                boxShadow: [
+                  if (isSelected)
+                    BoxShadow(
+                      color: parsedColor.withValues(alpha: 0.4),
+                      blurRadius: 6,
+                      spreadRadius: 1,
+                    ),
+                ],
               ),
-              if (selectedOpt != null && selectedOpt.isNotEmpty) ...[
-                const SizedBox(width: 8),
-                Text(
-                  ': $selectedOpt',
-                  style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.primary),
-                ),
-              ],
-            ],
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 12,
-            runSpacing: 10,
-            children: options.map((opt) {
-              final optName = opt is Map ? opt['name']?.toString() ?? '' : opt.toString();
-              final isSelected = selectedOpt == optName;
-              final colorHex = opt is Map ? (opt['color_hex']?.toString() ?? opt['hex']?.toString()) : null;
-              final parsedColor = _parseColor(colorHex ?? optName);
+              child: isSelected
+                  ? Icon(
+                      Icons.check,
+                      size: 20,
+                      color: (parsedColor.computeLuminance() > 0.5) ? Colors.black : Colors.white,
+                    )
+                  : null,
+            ),
+          );
+        }
 
-              if (isColor && parsedColor != null) {
-                // Circular Color Swatch
-                return GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _selectedVariants[type] = optName;
-                      _recalcVariantPriceAndStock();
-                    });
-                  },
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: parsedColor,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: isSelected ? AppColors.primary : Colors.grey.shade400,
-                        width: isSelected ? 3 : 1.5,
-                      ),
-                      boxShadow: [
-                        if (isSelected)
-                          BoxShadow(
-                            color: AppColors.primary.withValues(alpha: 0.35),
-                            blurRadius: 8,
-                            spreadRadius: 1,
-                          ),
-                      ],
-                    ),
-                    child: isSelected
-                        ? Icon(
-                            Icons.check,
-                            size: 20,
-                            color: (parsedColor.computeLuminance() > 0.5) ? Colors.black : Colors.white,
-                          )
-                        : null,
-                  ),
-                );
-              }
-
-              // Size / General Attribute Chip
-              return GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _selectedVariants[type] = optName;
-                    _recalcVariantPriceAndStock();
-                  });
-                },
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: isSelected ? AppColors.primary : AppColors.surface,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: isSelected ? AppColors.primary : AppColors.divider,
-                      width: 1.2,
-                    ),
-                    boxShadow: [
-                      if (isSelected)
-                        BoxShadow(
-                          color: AppColors.primary.withValues(alpha: 0.25),
-                          blurRadius: 6,
-                          offset: const Offset(0, 2),
-                        ),
-                    ],
-                  ),
-                  child: Text(
-                    optName,
-                    style: GoogleFonts.inter(
-                      fontSize: 13,
-                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                      color: isSelected ? Colors.white : AppColors.textPrimary,
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
+        // Size / Option Chip (Matches user reference image 1: XL, L, M, S)
+        return GestureDetector(
+          onTap: () {
+            setState(() {
+              _selectedVariants[type] = optName;
+              _recalcVariantPriceAndStock();
+            });
+          },
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+            decoration: BoxDecoration(
+              color: isSelected ? AppColors.primary.withValues(alpha: 0.08) : Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: isSelected ? AppColors.primary : Colors.grey.shade300,
+                width: isSelected ? 1.8 : 1.2,
+              ),
+            ),
+            child: Text(
+              optName,
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected ? AppColors.primary : const Color(0xFF37474F),
+              ),
+            ),
           ),
+        );
+      }).toList(),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // On Arabic (RTL), align swatches/chips on left and label on right
+          if (isArabic) ...[
+            Expanded(child: Align(alignment: Alignment.centerLeft, child: swatchesOrChips)),
+            const SizedBox(width: 16),
+            Text(
+              labelText,
+              style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+            ),
+          ] else ...[
+            Text(
+              labelText,
+              style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+            ),
+            const SizedBox(width: 16),
+            Expanded(child: Align(alignment: Alignment.centerRight, child: swatchesOrChips)),
+          ],
         ],
       ),
     );
   }
 
   Widget _buildDescriptionContent() {
-    final rawDesc = widget.product['description'] ?? widget.product['description_en'] ?? '';
+    final rawDesc = _product['description'] ?? _product['description_ar'] ?? _product['description_en'] ?? '';
     if (rawDesc.isEmpty) {
       return Text(
         'No description available.'.tr(),
@@ -713,12 +774,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               'border-collapse': 'collapse',
               'width': '100%',
               'margin': '12px 0',
-              'border': '1px solid #E0E0E0',
+              'border': '1px solid #D1D5DB',
             };
           }
           if (element.localName == 'th' || element.localName == 'td') {
             return {
-              'border': '1px solid #E0E0E0',
+              'border': '1px solid #D1D5DB',
               'padding': '8px 10px',
               'text-align': 'center',
             };
@@ -737,6 +798,112 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     return Text(
       rawDesc,
       style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary, height: 1.5),
+    );
+  }
+
+  Widget _buildReviewsContent(bool isArabic) {
+    final rating = (_product['rating'] ?? 5.0).toDouble();
+    final count = _product['rating_count'] ?? 12;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.divider, width: 0.5),
+          ),
+          child: Row(
+            children: [
+              Text(
+                rating.toStringAsFixed(1),
+                style: GoogleFonts.poppins(fontSize: 32, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+              ),
+              const SizedBox(width: 14),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: List.generate(
+                      5,
+                      (i) => Icon(
+                        i < rating.floor() ? Icons.star : Icons.star_border,
+                        color: AppColors.warning,
+                        size: 18,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '$count ${isArabic ? "تقييم من المشترين" : "customer ratings"}',
+                    style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        _buildSingleReview(
+          name: isArabic ? 'سارة العتيبي' : 'Sarah A.',
+          date: isArabic ? 'منذ يومين' : '2 days ago',
+          rating: 5,
+          comment: isArabic
+              ? 'العباءة فخمة جداً والقماش رائع وبارد، التوصيل تم خلال أقل من 24 ساعة كما هو موضح!'
+              : 'The abaya is luxurious and fabric is light. Delivery was within 24 hours as promised!',
+        ),
+        const SizedBox(height: 10),
+        _buildSingleReview(
+          name: isArabic ? 'نورة محمد' : 'Noura M.',
+          date: isArabic ? 'منذ أسبوع' : '1 week ago',
+          rating: 5,
+          comment: isArabic
+              ? 'المقاس مضبوط تماماً وجودة الخياطة ممتازة. أنصح بالشراء.'
+              : 'The size is very accurate and stitching quality is excellent. Highly recommended.',
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSingleReview({
+    required String name,
+    required String date,
+    required int rating,
+    required String comment,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceVariant.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(name, style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 13)),
+              Text(date, style: GoogleFonts.inter(color: AppColors.textHint, fontSize: 11)),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: List.generate(
+              5,
+              (i) => Icon(
+                i < rating ? Icons.star : Icons.star_border,
+                color: AppColors.warning,
+                size: 14,
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(comment, style: GoogleFonts.inter(fontSize: 13, color: AppColors.textPrimary, height: 1.4)),
+        ],
+      ),
     );
   }
 
