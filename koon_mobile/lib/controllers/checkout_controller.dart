@@ -225,7 +225,11 @@ class CheckoutController extends GetxController {
     isApplyingCoupon.value = true;
     couponError.value = '';
     try {
-      final res = await _couponService.validateCoupon(trimmed, subtotal);
+      final res = await _couponService.validateCoupon(
+        trimmed,
+        subtotal,
+        cartType: cartType,
+      );
       if (res != null && res['valid'] == true) {
         couponCode.value = trimmed;
         appliedCoupon.value = res['coupon'] != null ? Map<String, dynamic>.from(res['coupon']) : null;

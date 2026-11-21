@@ -458,6 +458,9 @@ class CreateProductRequest(BaseModel):
     category_id: Optional[str] = None
     stock: int = 0
     images: Optional[list] = None
+    variants: Optional[list] = None
+    weight_kg: Optional[float] = None
+    delivery_days: Optional[int] = None
 
 
 @router.post("/products")
@@ -484,6 +487,9 @@ class UpdateProductRequest(BaseModel):
     stock: Optional[int] = None
     is_active: Optional[bool] = None
     images: Optional[list] = None
+    variants: Optional[list] = None
+    weight_kg: Optional[float] = None
+    delivery_days: Optional[int] = None
 
 
 @router.patch("/products/{product_id}")

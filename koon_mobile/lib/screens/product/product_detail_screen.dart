@@ -3,6 +3,8 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:get/get.dart' hide Trans;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
+import 'dart:convert';
 import '../../app/theme/app_colors.dart';
 import '../../app/utils/app_snackbar.dart';
 import '../../controllers/cart_controller.dart';
@@ -10,6 +12,7 @@ import '../../controllers/compare_controller.dart';
 import '../../controllers/settings_controller.dart';
 import '../../controllers/auth_controller.dart';
 import '../../services/wishlist_service.dart';
+import '../../services/product_service.dart';
 import '../auth/login_screen.dart';
 import '../sellers/seller_shop_screen.dart';
 
@@ -28,16 +31,110 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   final SettingsController _settingsController = Get.find<SettingsController>();
   final AuthController _authController = Get.find<AuthController>();
   final WishlistService _wishlistService = WishlistService();
+  final ProductService _productService = ProductService();
 
   int _currentImageIndex = 0;
   bool _isWishlisted = false;
   String? _wishlistItemId;
   bool _loadingWishlist = true;
 
+  // Variants state
+  Map<String, String> _selectedVariants = {};
+  double? _variantPriceOverride;
+  int? _variantStockOverride;
+
+  // Similar Products state
+  List<Map<String, dynamic>> _similarProducts = [];
+  bool _loadingSimilar = true;
+
   @override
   void initState() {
     super.initState();
+    _initVariants();
     _checkWishlistStatus();
+    _loadSimilarProducts();
+  }
+
+  void _initVariants() {
+    final variants = _getVariantsList();
+    for (var v in variants) {
+      final type = v['type']?.toString() ?? '';
+      final options = (v['options'] as List?) ?? [];
+      if (type.isNotEmpty && options.isNotEmpty) {
+        final firstOpt = options.first;
+        final optName = firstOpt is Map ? firstOpt['name']?.toString() ?? '' : firstOpt.toString();
+        _selectedVariants[type] = optName;
+      }
+    }
+    _recalcVariantPriceAndStock();
+  }
+
+  List<Map<String, dynamic>> _getVariantsList() {
+    final raw = widget.product['variants'];
+    if (raw == null) return [];
+    if (raw is List) {
+      return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    }
+    if (raw is String && raw.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is List) {
+          return decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        }
+      } catch (_) {}
+    }
+    return [];
+  }
+
+  void _recalcVariantPriceAndStock() {
+    final variants = _getVariantsList();
+    double? priceOverride;
+    int? stockOverride;
+
+    for (var v in variants) {
+      final type = v['type']?.toString() ?? '';
+      final selectedOptName = _selectedVariants[type];
+      final options = (v['options'] as List?) ?? [];
+      for (var opt in options) {
+        if (opt is Map) {
+          final name = opt['name']?.toString();
+          if (name == selectedOptName) {
+            if (opt['price_override'] != null) {
+              final p = double.tryParse(opt['price_override'].toString());
+              if (p != null && p > 0) priceOverride = p;
+            }
+            if (opt['stock'] != null) {
+              final s = int.tryParse(opt['stock'].toString());
+              if (s != null) stockOverride = s;
+            }
+          }
+        }
+      }
+    }
+
+    setState(() {
+      _variantPriceOverride = priceOverride;
+      _variantStockOverride = stockOverride;
+    });
+  }
+
+  Future<void> _loadSimilarProducts() async {
+    try {
+      final categoryId = widget.product['category_id']?.toString();
+      final lang = Get.locale?.languageCode ?? 'en';
+      final products = await _productService.getProducts(
+        categoryId: categoryId,
+        lang: lang,
+      );
+      if (mounted) {
+        setState(() {
+          _similarProducts = products.where((p) => p['id'] != widget.product['id']).toList();
+          _loadingSimilar = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingSimilar = false);
+    }
   }
 
   Future<void> _checkWishlistStatus() async {
@@ -99,26 +196,68 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
     final images = widget.product['images'] as List? ?? [];
     final imageUrl = images.isNotEmpty ? images[0] : '';
+    final finalPrice = _variantPriceOverride ??
+        (widget.product['discount_price'] ?? widget.product['price']);
+
     final result = await _cartController.addToCart(
       cartType: 'internal',
       productId: widget.product['id'],
       title: widget.product['title'],
-      price: '${widget.product['price']}',
+      price: '$finalPrice',
       imageUrl: imageUrl,
+      selectionsJson: _selectedVariants.isNotEmpty ? jsonEncode(_selectedVariants) : null,
     );
 
     if (result == AddToCartStatus.success) {
       AppSnackbar.success(context, 'added_to_cart'.tr());
-    } else if (result == AddToCartStatus.unauthorized) {
-      if (mounted) {
-        final loginRes = await Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
-        if (loginRes == true) {
-          _addToCart();
-        }
-      }
     } else {
-      AppSnackbar.error(context, 'error_occurred'.tr());
+      AppSnackbar.error(context, 'failed_to_add_cart'.tr());
     }
+  }
+
+  Color? _parseColor(String? colorStr) {
+    if (colorStr == null || colorStr.trim().isEmpty) return null;
+    final clean = colorStr.replaceAll('#', '').trim();
+    if (clean.length == 6) {
+      final hex = int.tryParse('FF$clean', radix: 16);
+      if (hex != null) return Color(hex);
+    } else if (clean.length == 8) {
+      final hex = int.tryParse(clean, radix: 16);
+      if (hex != null) return Color(hex);
+    }
+    final lower = colorStr.toLowerCase().trim();
+    const map = {
+      'red': Colors.red,
+      'احمر': Colors.red,
+      'أحمر': Colors.red,
+      'black': Colors.black,
+      'اسود': Colors.black,
+      'أسود': Colors.black,
+      'white': Colors.white,
+      'ابيض': Colors.white,
+      'أبيض': Colors.white,
+      'blue': Colors.blue,
+      'ازرق': Colors.blue,
+      'أزرق': Colors.blue,
+      'green': Colors.green,
+      'اخضر': Colors.green,
+      'أخضر': Colors.green,
+      'brown': Color(0xFF795548),
+      'بني': Color(0xFF795548),
+      'grey': Colors.grey,
+      'gray': Colors.grey,
+      'رمادي': Colors.grey,
+      'yellow': Colors.yellow,
+      'اصفر': Colors.yellow,
+      'أصفر': Colors.yellow,
+      'pink': Colors.pink,
+      'وردي': Colors.pink,
+      'beige': Color(0xFFF5F5DC),
+      'بيج': Color(0xFFF5F5DC),
+      'navy': Color(0xFF000080),
+      'كحلي': Color(0xFF000080),
+    };
+    return map[lower];
   }
 
   @override
@@ -129,94 +268,111 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final double originalDiscount = hasDiscount ? (widget.product['discount_price'] ?? 0.0).toDouble() : 0.0;
     final originalCurrency = widget.product['currency'] ?? 'SAR';
 
+    final effectivePrice = _variantPriceOverride ?? (hasDiscount ? originalDiscount : originalPrice);
+    final effectiveStock = _variantStockOverride ?? (widget.product['stock'] ?? 0);
+    final isArabic = (Get.locale?.languageCode ?? 'en') == 'ar';
+
+    final variants = _getVariantsList();
+
     return Scaffold(
       body: CustomScrollView(
         slivers: [
-          // Elegant Header with Back Button and Wishlist Action
+          // Custom App Bar with Product Image Carousel
           SliverAppBar(
-            expandedHeight: 320,
+            expandedHeight: 340,
             pinned: true,
-            flexibleSpace: FlexibleSpaceBar(
-              background: Stack(
-                fit: StackFit.expand,
-                children: [
-                  if (images.isNotEmpty)
-                    PageView.builder(
-                      itemCount: images.length,
-                      onPageChanged: (index) => setState(() => _currentImageIndex = index),
-                      itemBuilder: (context, index) {
-                        return CachedNetworkImage(
-                          imageUrl: images[index],
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          placeholder: (_, __) => Container(color: AppColors.surfaceVariant),
-                          errorWidget: (_, __, ___) => Container(color: AppColors.surfaceVariant, child: const Icon(Icons.image, size: 60)),
-                        );
-                      },
-                    )
-                  else
-                    Container(color: AppColors.surfaceVariant, child: const Icon(Icons.image, size: 80)),
-
-                  // Gradient overlay on image
-                  Positioned(
-                    bottom: 0, left: 0, right: 0,
-                    child: Container(
-                      height: 80,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.bottomCenter,
-                          end: Alignment.topCenter,
-                          colors: [Colors.black.withOpacity(0.4), Colors.transparent],
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  // Carousel Indicators
-                  if (images.length > 1)
-                    Positioned(
-                      bottom: 16,
-                      left: 0, right: 0,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: List.generate(images.length, (index) {
-                          return AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            width: _currentImageIndex == index ? 18 : 6,
-                            height: 6,
-                            margin: const EdgeInsets.symmetric(horizontal: 3),
-                            decoration: BoxDecoration(
-                              color: _currentImageIndex == index ? AppColors.primary : Colors.white.withOpacity(0.7),
-                              borderRadius: BorderRadius.circular(3),
-                            ),
-                          );
-                        }),
-                      ),
-                    ),
-                ],
+            leading: IconButton(
+              icon: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0.8),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.arrow_back, size: 20),
               ),
+              onPressed: () => Navigator.pop(context),
+            ),
+            flexibleSpace: FlexibleSpaceBar(
+              background: images.isNotEmpty
+                  ? Stack(
+                      children: [
+                        PageView.builder(
+                          itemCount: images.length,
+                          onPageChanged: (index) {
+                            setState(() => _currentImageIndex = index);
+                          },
+                          itemBuilder: (context, index) {
+                            return CachedNetworkImage(
+                              imageUrl: images[index],
+                              fit: BoxFit.cover,
+                              width: double.infinity,
+                              placeholder: (_, __) => Container(color: AppColors.surfaceVariant),
+                              errorWidget: (_, __, ___) => const Center(child: Icon(Icons.broken_image, size: 40)),
+                            );
+                          },
+                        ),
+                        // Dots Indicator
+                        if (images.length > 1)
+                          Positioned(
+                            bottom: 16,
+                            left: 0,
+                            right: 0,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: List.generate(
+                                images.length,
+                                (index) => Container(
+                                  width: _currentImageIndex == index ? 24 : 8,
+                                  height: 8,
+                                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                                  decoration: BoxDecoration(
+                                    color: _currentImageIndex == index ? AppColors.primary : Colors.white70,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    )
+                  : Container(
+                      color: AppColors.surfaceVariant,
+                      child: const Center(child: Icon(Icons.image, size: 60, color: AppColors.textHint)),
+                    ),
             ),
             actions: [
-              // Compare Toggle Button
+              // Compare Button
               Obx(() {
-                final isComparing = _compareController.isComparing(widget.product['id']);
-                return Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                  decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                  child: IconButton(
-                    icon: Icon(Icons.compare_arrows, color: isComparing ? AppColors.primary : AppColors.textSecondary),
-                    onPressed: () => _compareController.toggleCompare(widget.product),
+                final isInCompare = _compareController.isComparing(widget.product['id']);
+                return IconButton(
+                  icon: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0.8),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.compare_arrows_rounded,
+                      size: 20,
+                      color: isInCompare ? AppColors.primary : AppColors.textSecondary,
+                    ),
                   ),
+                  tooltip: isInCompare ? 'remove_from_compare'.tr() : 'add_to_compare'.tr(),
+                  onPressed: () {
+                    _compareController.toggleCompare(widget.product);
+                  },
                 );
               }),
-
-              // Wishlist Toggle Button
+              // Wishlist Button
               Container(
-                margin: const EdgeInsets.only(right: 16, left: 4),
-                decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                margin: const EdgeInsets.only(right: 16),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0.8),
+                  shape: BoxShape.circle,
+                ),
                 child: _loadingWishlist
                     ? const Padding(
-                        padding: EdgeInsets.all(12.0),
+                        padding: EdgeInsets.all(10.0),
                         child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)),
                       )
                     : IconButton(
@@ -245,12 +401,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                _settingsController.formatPrice(
-                                    hasDiscount ? originalDiscount : originalPrice,
-                                    originalCurrency),
+                                _settingsController.formatPrice(effectivePrice, originalCurrency),
                                 style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.primary),
                               ),
-                              if (hasDiscount)
+                              if (hasDiscount && _variantPriceOverride == null)
                                 Text(
                                   _settingsController.formatPrice(originalPrice, originalCurrency),
                                   style: GoogleFonts.poppins(
@@ -264,15 +418,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          color: (widget.product['stock'] ?? 0) > 0
-                              ? AppColors.success.withOpacity(0.1)
-                              : AppColors.error.withOpacity(0.1),
+                          color: effectiveStock > 0
+                              ? AppColors.success.withValues(alpha: 0.1)
+                              : AppColors.error.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(
-                          (widget.product['stock'] ?? 0) > 0 ? 'in_stock'.tr() : 'out_of_stock'.tr(),
+                          effectiveStock > 0 ? 'in_stock'.tr() : 'out_of_stock'.tr(),
                           style: TextStyle(
-                            color: (widget.product['stock'] ?? 0) > 0 ? AppColors.success : AppColors.error,
+                            color: effectiveStock > 0 ? AppColors.success : AppColors.error,
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
                           ),
@@ -308,6 +462,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         ),
                       ],
                     ),
+
+                  // ── Dynamic Variants Section (Color Swatches, Size Chips, etc.) ──
+                  if (variants.isNotEmpty) ...[
+                    const Divider(height: 32),
+                    ...variants.map((v) => _buildVariantSelector(v, isArabic)),
+                  ],
 
                   const Divider(height: 32),
 
@@ -357,16 +517,19 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     const SizedBox(height: 20),
                   ],
 
-                  // Description
+                  // Description Header
                   Text(
                     'description'.tr(),
                     style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    widget.product['description'] ?? widget.product['description_en'] ?? 'No description available.'.tr(),
-                    style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary, height: 1.5),
-                  ),
+
+                  // Rich HTML Description Viewer
+                  _buildDescriptionContent(),
+
+                  // ── Similar Products Section ──
+                  const SizedBox(height: 28),
+                  _buildSimilarProductsSection(),
 
                   const SizedBox(height: 120), // Spacing for bottom button
                 ],
@@ -385,7 +548,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           width: double.infinity,
           height: 52,
           child: ElevatedButton(
-            onPressed: (widget.product['stock'] ?? 0) > 0 ? _addToCart : null,
+            onPressed: effectiveStock > 0 ? _addToCart : null,
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -397,6 +560,288 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildVariantSelector(Map<String, dynamic> variant, bool isArabic) {
+    final type = variant['type']?.toString() ?? '';
+    final options = (variant['options'] as List?) ?? [];
+    if (options.isEmpty) return const SizedBox.shrink();
+
+    final isColor = type.toLowerCase().contains('color') || type.contains('اللون') || type.contains('لون');
+    final isSize = type.toLowerCase().contains('size') || type.contains('المقاس') || type.contains('مقاس') || type.contains('حجم');
+    final selectedOpt = _selectedVariants[type];
+
+    String labelText = type;
+    if (isColor) {
+      labelText = isArabic ? 'اللون' : 'Color';
+    } else if (isSize) {
+      labelText = isArabic ? 'المقاس' : 'Size';
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                labelText,
+                style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+              ),
+              if (selectedOpt != null && selectedOpt.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                Text(
+                  ': $selectedOpt',
+                  style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.primary),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 12,
+            runSpacing: 10,
+            children: options.map((opt) {
+              final optName = opt is Map ? opt['name']?.toString() ?? '' : opt.toString();
+              final isSelected = selectedOpt == optName;
+              final colorHex = opt is Map ? (opt['color_hex']?.toString() ?? opt['hex']?.toString()) : null;
+              final parsedColor = _parseColor(colorHex ?? optName);
+
+              if (isColor && parsedColor != null) {
+                // Circular Color Swatch
+                return GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _selectedVariants[type] = optName;
+                      _recalcVariantPriceAndStock();
+                    });
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: parsedColor,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: isSelected ? AppColors.primary : Colors.grey.shade400,
+                        width: isSelected ? 3 : 1.5,
+                      ),
+                      boxShadow: [
+                        if (isSelected)
+                          BoxShadow(
+                            color: AppColors.primary.withValues(alpha: 0.35),
+                            blurRadius: 8,
+                            spreadRadius: 1,
+                          ),
+                      ],
+                    ),
+                    child: isSelected
+                        ? Icon(
+                            Icons.check,
+                            size: 20,
+                            color: (parsedColor.computeLuminance() > 0.5) ? Colors.black : Colors.white,
+                          )
+                        : null,
+                  ),
+                );
+              }
+
+              // Size / General Attribute Chip
+              return GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _selectedVariants[type] = optName;
+                    _recalcVariantPriceAndStock();
+                  });
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isSelected ? AppColors.primary : AppColors.surface,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: isSelected ? AppColors.primary : AppColors.divider,
+                      width: 1.2,
+                    ),
+                    boxShadow: [
+                      if (isSelected)
+                        BoxShadow(
+                          color: AppColors.primary.withValues(alpha: 0.25),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                    ],
+                  ),
+                  child: Text(
+                    optName,
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                      color: isSelected ? Colors.white : AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDescriptionContent() {
+    final rawDesc = widget.product['description'] ?? widget.product['description_en'] ?? '';
+    if (rawDesc.isEmpty) {
+      return Text(
+        'No description available.'.tr(),
+        style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary, height: 1.5),
+      );
+    }
+
+    final hasHtmlTags = rawDesc.contains('<') && rawDesc.contains('>');
+    if (hasHtmlTags) {
+      return HtmlWidget(
+        rawDesc,
+        textStyle: GoogleFonts.inter(fontSize: 14, color: AppColors.textPrimary, height: 1.6),
+        customStylesBuilder: (element) {
+          if (element.localName == 'table') {
+            return {
+              'border-collapse': 'collapse',
+              'width': '100%',
+              'margin': '12px 0',
+              'border': '1px solid #E0E0E0',
+            };
+          }
+          if (element.localName == 'th' || element.localName == 'td') {
+            return {
+              'border': '1px solid #E0E0E0',
+              'padding': '8px 10px',
+              'text-align': 'center',
+            };
+          }
+          if (element.localName == 'th') {
+            return {
+              'background-color': '#F8F9FA',
+              'font-weight': 'bold',
+            };
+          }
+          return null;
+        },
+      );
+    }
+
+    return Text(
+      rawDesc,
+      style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary, height: 1.5),
+    );
+  }
+
+  Widget _buildSimilarProductsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.auto_awesome, size: 20, color: AppColors.primary),
+            const SizedBox(width: 8),
+            Text(
+              (Get.locale?.languageCode ?? 'en') == 'ar' ? 'منتجات مشابهة' : 'Similar Products',
+              style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        if (_loadingSimilar)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(24.0),
+              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+            ),
+          )
+        else if (_similarProducts.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 20),
+            alignment: Alignment.center,
+            child: Text(
+              (Get.locale?.languageCode ?? 'en') == 'ar' ? 'لا توجد منتجات مشابهة' : 'No similar products found',
+              style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary),
+            ),
+          )
+        else
+          SizedBox(
+            height: 230,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: _similarProducts.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              itemBuilder: (context, index) {
+                final p = _similarProducts[index];
+                final pImages = p['images'] as List? ?? [];
+                final pImg = pImages.isNotEmpty ? pImages[0] : null;
+                final pPrice = (p['price'] ?? 0.0).toDouble();
+                final pCurr = p['currency'] ?? 'SAR';
+
+                return GestureDetector(
+                  onTap: () {
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(builder: (_) => ProductDetailScreen(product: p)),
+                    );
+                  },
+                  child: Container(
+                    width: 140,
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.divider, width: 0.6),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: ClipRRect(
+                            borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+                            child: pImg != null
+                                ? CachedNetworkImage(imageUrl: pImg, fit: BoxFit.cover, width: double.infinity)
+                                : Container(color: AppColors.surfaceVariant),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 2,
+                          child: Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  p['title'] ?? '',
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                                ),
+                                const Spacer(),
+                                Text(
+                                  _settingsController.formatPrice(pPrice, pCurr),
+                                  style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+      ],
     );
   }
 }

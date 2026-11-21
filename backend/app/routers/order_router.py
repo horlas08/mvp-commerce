@@ -14,6 +14,7 @@ from app.models.order import Order, OrderItem, OrderStatus, PaymentStatus
 from app.models.cart import CartItem
 from app.models.user import User
 from app.models.coupon import Coupon
+from app.models.app_setting import AppSetting
 from app.auth.dependencies import get_current_user
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
@@ -452,7 +453,6 @@ async def place_order(
     # ── Calculate dynamic shipping and commission fees ───────────────────
     from app.models.address import Address
     from app.models.location import State, City
-    from app.models.app_setting import AppSetting
 
     result_addr = await db.execute(select(Address).where(Address.id == address_id, Address.user_id == user.id))
     addr = result_addr.scalar_one_or_none()

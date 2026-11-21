@@ -1,3 +1,4 @@
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -5,6 +6,7 @@ from sqlalchemy import select
 from datetime import datetime, timezone
 
 from app.database import get_db
+from app.models.cart import CartItem, CartType
 from app.models.coupon import Coupon
 from app.models.user import User
 from app.auth.dependencies import get_current_user
@@ -28,6 +30,7 @@ async def list_coupons(lang: str = Query("en"), db: AsyncSession = Depends(get_d
 class ValidateCouponRequest(BaseModel):
     code: str
     order_total: float = 0.0
+    cart_type: Optional[str] = None
 
 
 @router.post("/validate")
@@ -53,17 +56,25 @@ async def validate_coupon(
             detail="This coupon is a wallet funding voucher. Please redeem it in 'My Credit' (رصيدي) to add balance."
         )
 
-    # ── Fetch user active cart items to compute eligible subtotal ─────────
-    from app.models.cart import CartItem
+    # ── Fetch the active cart items for the cart type being checked out ──
+    # This must match the order placement calculation, which only uses the
+    # selected items of the requested cart type. Including other cart types
+    # here makes the previewed discount larger than the applied discount.
     from sqlalchemy.orm import selectinload
 
+    cart_query = select(CartItem).where(
+        CartItem.user_id == user.id,
+        CartItem.is_selected == True,
+    )
+    if req.cart_type:
+        try:
+            cart_type = CartType(req.cart_type)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid cart type: {req.cart_type}")
+        cart_query = cart_query.where(CartItem.cart_type == cart_type)
+
     result_cart = await db.execute(
-        select(CartItem)
-        .where(
-            CartItem.user_id == user.id,
-            CartItem.is_selected == True
-        )
-        .options(selectinload(CartItem.product))
+        cart_query.options(selectinload(CartItem.product))
     )
     cart_items = result_cart.scalars().all()
 

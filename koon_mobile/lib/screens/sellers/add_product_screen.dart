@@ -155,6 +155,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
       (opt['nameCtrl'] as TextEditingController).dispose();
       (opt['stockCtrl'] as TextEditingController).dispose();
       (opt['priceCtrl'] as TextEditingController).dispose();
+      (opt['colorHexCtrl'] as TextEditingController?)?.dispose();
     }
     setState(() => _variantTypes.removeAt(index));
   }
@@ -163,6 +164,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
     setState(() {
       (_variantTypes[variantIndex]['options'] as List).add({
         'nameCtrl': TextEditingController(),
+        'colorHexCtrl': TextEditingController(),
         'stockCtrl': TextEditingController(),
         'priceCtrl': TextEditingController(),
       });
@@ -173,6 +175,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
     final opts = _variantTypes[variantIndex]['options'] as List;
     final opt = opts[optionIndex];
     (opt['nameCtrl'] as TextEditingController).dispose();
+    (opt['colorHexCtrl'] as TextEditingController?)?.dispose();
     (opt['stockCtrl'] as TextEditingController).dispose();
     (opt['priceCtrl'] as TextEditingController).dispose();
     setState(() => opts.removeAt(optionIndex));
@@ -186,16 +189,21 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
     final variants = _variantTypes.map((vt) {
       final opts = (vt['options'] as List).map((o) {
+        final optName = (o['nameCtrl'] as TextEditingController).text.trim();
+        final colorHex = (o['colorHexCtrl'] as TextEditingController?)?.text.trim();
         return {
-          'name': (o['nameCtrl'] as TextEditingController).text.trim(),
+          'name': optName,
+          if (colorHex != null && colorHex.isNotEmpty) 'color_hex': colorHex,
           if ((o['stockCtrl'] as TextEditingController).text.trim().isNotEmpty)
             'stock': int.tryParse((o['stockCtrl'] as TextEditingController).text.trim()),
           if ((o['priceCtrl'] as TextEditingController).text.trim().isNotEmpty)
-            'price': double.tryParse((o['priceCtrl'] as TextEditingController).text.trim()),
+            'price_override': double.tryParse((o['priceCtrl'] as TextEditingController).text.trim()),
         };
       }).toList();
+      final typeName = (vt['nameCtrl'] as TextEditingController).text.trim();
       return {
-        'name': (vt['nameCtrl'] as TextEditingController).text.trim(),
+        'type': typeName,
+        'name': typeName,
         'options': opts,
       };
     }).toList();
@@ -747,6 +755,10 @@ class _AddProductScreenState extends State<AddProductScreen> {
           ...options.asMap().entries.map((oe) {
             final oi = oe.key;
             final opt = oe.value;
+            final isColorVariant = (vt['nameCtrl'] as TextEditingController).text.toLowerCase().contains('color') ||
+                (vt['nameCtrl'] as TextEditingController).text.contains('اللون') ||
+                (vt['nameCtrl'] as TextEditingController).text.contains('لون');
+
             return Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Row(
@@ -756,9 +768,20 @@ class _AddProductScreenState extends State<AddProductScreen> {
                     child: TextFormField(
                       controller: opt['nameCtrl'] as TextEditingController,
                       style: GoogleFonts.inter(fontSize: 13),
-                      decoration: _inputDecoration('option_name'.tr(), hint: 'e.g. M, Red'),
+                      decoration: _inputDecoration('option_name'.tr(), hint: isColorVariant ? 'e.g. Red, Black' : 'e.g. M, L'),
                     ),
                   ),
+                  if (isColorVariant) ...[
+                    const SizedBox(width: 6),
+                    Expanded(
+                      flex: 2,
+                      child: TextFormField(
+                        controller: opt['colorHexCtrl'] as TextEditingController,
+                        style: GoogleFonts.inter(fontSize: 12),
+                        decoration: _inputDecoration('Hex', hint: '#FF0000'),
+                      ),
+                    ),
+                  ],
                   const SizedBox(width: 6),
                   Expanded(
                     flex: 2,

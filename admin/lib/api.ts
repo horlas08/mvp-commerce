@@ -433,6 +433,9 @@ export interface Product {
   rating: number;
   rating_count: number;
   is_active: boolean;
+  variants?: any[];
+  weight_kg?: number;
+  delivery_days?: number;
   created_at: string;
 }
 
@@ -446,6 +449,9 @@ export interface CreateProductPayload {
   category_id?: string;
   stock: number;
   images?: string[];
+  variants?: any[];
+  weight_kg?: number;
+  delivery_days?: number;
 }
 
 export interface Order {

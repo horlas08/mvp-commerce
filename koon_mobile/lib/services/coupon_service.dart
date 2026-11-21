@@ -15,11 +15,19 @@ class CouponService {
     return [];
   }
 
-  Future<Map<String, dynamic>?> validateCoupon(String code, double orderTotal) async {
+  Future<Map<String, dynamic>?> validateCoupon(
+    String code,
+    double orderTotal, {
+    String? cartType,
+  }) async {
     try {
       final response = await _dio.post(
         ApiConstants.validateCoupon,
-        data: {'code': code, 'order_total': orderTotal},
+        data: {
+          'code': code,
+          'order_total': orderTotal,
+          if (cartType != null && cartType.isNotEmpty) 'cart_type': cartType,
+        },
       );
       if (response.statusCode == 200 && response.data is Map) {
         return Map<String, dynamic>.from(response.data);

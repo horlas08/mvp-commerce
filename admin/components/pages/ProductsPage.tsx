@@ -5,6 +5,7 @@ import { Search, Plus, Pencil, Trash2, RefreshCw, Eye, EyeOff } from "lucide-rea
 import { adminApi, Product, Category, API_BASE } from "@/lib/api";
 import { useLang } from "@/lib/lang-context";
 import { useAuth } from "@/lib/auth-context";
+import RichTextToolbar from "@/components/ui/RichTextToolbar";
 
 const EMPTY_FORM = {
   title_en: "", title_ar: "", description_en: "", description_ar: "",
@@ -312,12 +313,39 @@ export default function ProductsPage() {
 
               <div className="grid-2">
                 <div className="form-group">
-                  <label className="form-label">{t("descEn")}</label>
-                  <textarea id="form-desc-en" className="input" rows={3} value={form.description_en} onChange={e => setForm(f => ({ ...f, description_en: e.target.value }))} style={{ resize: "vertical" }} />
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                    <label className="form-label" style={{ marginBottom: 0 }}>{t("descEn")}</label>
+                  </div>
+                  <RichTextToolbar
+                    textareaId="form-desc-en"
+                    onInsert={(text) => setForm(f => ({ ...f, description_en: f.description_en ? `${f.description_en}\n${text}` : text }))}
+                  />
+                  <textarea
+                    id="form-desc-en"
+                    className="input"
+                    rows={4}
+                    value={form.description_en}
+                    onChange={e => setForm(f => ({ ...f, description_en: e.target.value }))}
+                    style={{ resize: "vertical" }}
+                  />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">{t("descAr")}</label>
-                  <textarea id="form-desc-ar" className="input" rows={3} value={form.description_ar} onChange={e => setForm(f => ({ ...f, description_ar: e.target.value }))} dir="rtl" style={{ resize: "vertical" }} />
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                    <label className="form-label" style={{ marginBottom: 0 }}>{t("descAr")}</label>
+                  </div>
+                  <RichTextToolbar
+                    textareaId="form-desc-ar"
+                    onInsert={(text) => setForm(f => ({ ...f, description_ar: f.description_ar ? `${f.description_ar}\n${text}` : text }))}
+                  />
+                  <textarea
+                    id="form-desc-ar"
+                    className="input"
+                    rows={4}
+                    value={form.description_ar}
+                    onChange={e => setForm(f => ({ ...f, description_ar: e.target.value }))}
+                    dir="rtl"
+                    style={{ resize: "vertical" }}
+                  />
                 </div>
               </div>
 
