@@ -39,6 +39,7 @@ async def init_db():
             "ALTER TABLE coupons ADD COLUMN store VARCHAR(50)",
             "ALTER TABLE orders ADD COLUMN confirmed_at DATETIME",
             "ALTER TABLE orders ADD COLUMN confirmed_by VARCHAR(255)",
+            "ALTER TABLE wishlist_items ADD COLUMN selections_json TEXT",
         ]:
             try:
                 await conn.execute(text(migration))
