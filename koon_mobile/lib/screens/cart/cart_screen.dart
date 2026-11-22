@@ -229,14 +229,14 @@ class CartScreen extends StatelessWidget {
               });
               final hasOutOfStock = selectedItems.any((i) {
                 final id = i['id']?.toString() ?? '';
-                final rawPrice = (i['product']?['price'] ?? i['price'])?.toString() ?? '';
+                final rawPrice = CartController.effectiveUnitPriceRaw(i)?.toString() ?? '';
                 final status = cartController.itemStatuses[id];
                 return status == 'out_of_stock' ||
                     rawPrice.toLowerCase().contains('out of stock') ||
                     rawPrice.contains('غير متوفر');
               });
               final hasUnknownPrice = selectedItems.any((i) {
-                final rawPrice = (i['product']?['price'] ?? i['price'])?.toString() ?? '';
+                final rawPrice = CartController.effectiveUnitPriceRaw(i)?.toString() ?? '';
                 return rawPrice.isEmpty ||
                     rawPrice.toLowerCase().contains('unknown') ||
                     KoonCurrencyService.parsePriceToDouble(rawPrice) <= 0;
@@ -383,7 +383,7 @@ class CartScreen extends StatelessWidget {
 
   Widget _buildCartItem(BuildContext context, Map<String, dynamic> item, CartController controller, int index) {
     final title = item['title'] ?? item['product']?['title'] ?? 'Product';
-    final double priceVal = KoonCurrencyService.parsePriceToDouble(item['product']?['price'] ?? item['price']);
+    final double priceVal = CartController.effectiveUnitPrice(item);
     final originalCurrency = item['product']?['currency'] ?? 'SAR';
     final imageUrl = item['image_url'] ?? (item['product']?['images'] as List?)?.firstOrNull?.toString();
     final int quantity = (item['quantity'] is int)
@@ -554,7 +554,7 @@ class CartScreen extends StatelessWidget {
                             final isUpdating = status == 'updating';
                             final isFailed = status == 'error';
                             final isSuccess = status == 'success';
-                            final rawPriceStr = (item['product']?['price'] ?? item['price'])?.toString() ?? '';
+                            final rawPriceStr = CartController.effectiveUnitPriceRaw(item)?.toString() ?? '';
                             final isOutOfStock = status == 'out_of_stock'
                                 || rawPriceStr.toLowerCase().contains('out of stock')
                                 || rawPriceStr.contains('غير متوفر');

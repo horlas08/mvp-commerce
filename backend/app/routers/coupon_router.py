@@ -56,6 +56,15 @@ async def validate_coupon(
             detail="This coupon is a wallet funding voucher. Please redeem it in 'My Credit' (رصيدي) to add balance."
         )
 
+    # ── Store-level coupon restriction check ──
+    if coupon.store and coupon.store.lower().strip() not in ["all", ""]:
+        target_store = coupon.store.lower().strip()
+        if req.cart_type and req.cart_type.lower().strip() != target_store:
+            raise HTTPException(
+                status_code=400,
+                detail=f"This coupon is only valid for {target_store.upper()} orders"
+            )
+
     # ── Fetch the active cart items for the cart type being checked out ──
     # This must match the order placement calculation, which only uses the
     # selected items of the requested cart type. Including other cart types
@@ -99,11 +108,23 @@ async def validate_coupon(
             total_cart_amount += item_total
 
             # Applicability filters
+            is_eligible = False
             if coupon.applicability == "all":
-                eligible_total += item_total
+                is_eligible = True
             elif coupon.applicability == "internal" and is_internal:
-                eligible_total += item_total
+                is_eligible = True
             elif coupon.applicability == "external" and not is_internal:
+                is_eligible = True
+
+            # Store-level restriction
+            if is_eligible and coupon.store and coupon.store.lower().strip() not in ["all", ""]:
+                target_store = coupon.store.lower().strip()
+                item_ct = (ci.cart_type.value if hasattr(ci.cart_type, 'value') else str(ci.cart_type)).lower()
+                item_site = (ci.site_name or "").lower()
+                if item_ct != target_store and target_store not in item_site:
+                    is_eligible = False
+
+            if is_eligible:
                 eligible_total += item_total
     else:
         # Fallback to order_total if cart is empty or loaded from another flow
@@ -115,6 +136,11 @@ async def validate_coupon(
         raise HTTPException(status_code=400, detail=f"Minimum order amount is {coupon.min_order_amount}")
 
     if eligible_total <= 0:
+        if coupon.store and coupon.store.lower().strip() not in ["all", ""]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"This coupon is only valid for {coupon.store.upper()} items"
+            )
         msg = "Coupon is not applicable to the items in your cart"
         if coupon.applicability == "internal":
             msg = "Coupon is only applicable to internal store products"

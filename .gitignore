@@ -39,4 +39,6 @@ build/
 *.swp
 .DS_Store
 Thumbs.db
+feature_debugger/*
+feature_debugger/
 koon_mobile/android/gradle/wrapper/gradle-wrapper.properties

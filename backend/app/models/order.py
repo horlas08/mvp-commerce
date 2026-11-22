@@ -52,6 +52,9 @@ class Order(Base):
     payment_proof_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     payment_fields: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
+    confirmed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)
+    confirmed_by: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, default=None)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
@@ -79,6 +82,8 @@ class Order(Base):
             "payment_status": self.payment_status.value,
             "payment_proof_url": self.payment_proof_url,
             "payment_fields": self.payment_fields,
+            "confirmed_at": self.confirmed_at.isoformat() if self.confirmed_at else None,
+            "confirmed_by": self.confirmed_by,
             "items": [item.to_dict() for item in self.items] if self.items else [],
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,

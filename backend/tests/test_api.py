@@ -406,6 +406,53 @@ def test_validate_coupon():
     assert response.json()["discount"] > 0
 
 
+def test_validate_coupon_scoped_to_cart_type():
+    """Coupon validation must only use the cart type being checked out.
+
+    The mobile checkout sends the current cart type. If validation includes
+    selected items from other cart types, the displayed discount is larger
+    than the discount actually applied when the order is placed.
+    """
+    headers = _get_auth_header()
+
+    # Current checkout cart: 200 SAR -> 10% = 20 SAR
+    client.post("/api/v1/cart", headers=headers, json={
+        "cart_type": "amazon",
+        "title": "Coupon Scope Amazon",
+        "price": "SAR 200",
+        "image_url": "https://example.com/amazon.jpg",
+        "external_url": "https://amazon.sa/dp/SCOPE00001",
+        "site_name": "Amazon SA",
+    })
+
+    # Another selected cart: 1000 SAR. It must not inflate the Amazon discount.
+    client.post("/api/v1/cart", headers=headers, json={
+        "cart_type": "aliexpress",
+        "title": "Coupon Scope AliExpress",
+        "price": "SAR 1000",
+        "image_url": "https://example.com/aliexpress.jpg",
+        "external_url": "https://aliexpress.com/item/1000000001.html",
+        "site_name": "AliExpress",
+    })
+
+    response = client.post("/api/v1/coupons/validate", headers=headers, json={
+        "code": "WELCOME10",
+        "order_total": 200.0,
+        "cart_type": "amazon",
+    })
+    assert response.status_code == 200
+    assert response.json()["discount"] == 20.0
+
+    # The other cart still gets its own 10% (capped at the coupon maximum).
+    response = client.post("/api/v1/coupons/validate", headers=headers, json={
+        "code": "WELCOME10",
+        "order_total": 1000.0,
+        "cart_type": "aliexpress",
+    })
+    assert response.status_code == 200
+    assert response.json()["discount"] == 100.0
+
+
 def test_validate_invalid_coupon():
     headers = _get_auth_header()
     response = client.post("/api/v1/coupons/validate", headers=headers, json={

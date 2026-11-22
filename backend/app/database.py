@@ -1,6 +1,9 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
+from dotenv import load_dotenv
 import os
+
+load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./koon.db")
 
@@ -33,6 +36,9 @@ async def init_db():
             "ALTER TABLE products ADD COLUMN variants TEXT",
             "ALTER TABLE products ADD COLUMN weight_kg REAL",
             "ALTER TABLE products ADD COLUMN delivery_days INTEGER",
+            "ALTER TABLE coupons ADD COLUMN store VARCHAR(50)",
+            "ALTER TABLE orders ADD COLUMN confirmed_at DATETIME",
+            "ALTER TABLE orders ADD COLUMN confirmed_by VARCHAR(255)",
         ]:
             try:
                 await conn.execute(text(migration))

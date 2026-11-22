@@ -1100,6 +1100,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
+  String _formatImageUrl(String? url) {
+    if (url == null || url.trim().isEmpty) return '';
+    final clean = url.trim();
+    if (clean.startsWith('http://') || clean.startsWith('https://')) return clean;
+    if (clean.startsWith('/')) return '${ApiConstants.baseHost}$clean';
+    return '${ApiConstants.baseHost}/$clean';
+  }
+
   Widget _buildProductCard(Map<String, dynamic> product) {
     final images = product['images'] as List? ?? [];
     final imageUrl = images.isNotEmpty ? images[0] : null;
@@ -1131,7 +1139,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   child: ClipRRect(
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                     child: imageUrl != null
-                        ? CachedNetworkImage(imageUrl: imageUrl, fit: BoxFit.cover, width: double.infinity)
+                        ? CachedNetworkImage(imageUrl: _formatImageUrl(imageUrl), fit: BoxFit.cover, width: double.infinity)
                         : Container(
                             color: AppColors.surfaceVariant,
                             child: const Center(child: Icon(Icons.image, size: 40, color: AppColors.textHint)),

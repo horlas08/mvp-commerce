@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:easy_localization/easy_localization.dart';
+import 'package:easy_localization/easy_localization.dart' hide TextDirection;
 import 'package:get/get.dart' hide Trans;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
 import 'dart:convert';
+import '../../app/constants/api_constants.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/utils/app_snackbar.dart';
 import '../../controllers/cart_controller.dart';
@@ -286,6 +287,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     return map[lower];
   }
 
+  String _formatImageUrl(String? url) {
+    if (url == null || url.trim().isEmpty) return '';
+    final clean = url.trim();
+    if (clean.startsWith('http://') || clean.startsWith('https://')) return clean;
+    if (clean.startsWith('/')) return '${ApiConstants.baseHost}$clean';
+    return '${ApiConstants.baseHost}/$clean';
+  }
+
   @override
   Widget build(BuildContext context) {
     final images = _product['images'] as List? ?? [];
@@ -329,7 +338,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           },
                           itemBuilder: (context, index) {
                             return CachedNetworkImage(
-                              imageUrl: images[index],
+                              imageUrl: _formatImageUrl(images[index]),
                               fit: BoxFit.cover,
                               width: double.infinity,
                               placeholder: (_, __) => Container(color: AppColors.surfaceVariant),
@@ -646,8 +655,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     }
 
     final swatchesOrChips = Wrap(
-      spacing: 12,
-      runSpacing: 10,
+      spacing: 10,
+      runSpacing: 8,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: options.map((opt) {
         final optName = opt is Map ? opt['name']?.toString() ?? '' : opt.toString();
@@ -666,19 +675,19 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             },
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
-              width: 36,
-              height: 36,
+              width: 38,
+              height: 38,
               decoration: BoxDecoration(
                 color: parsedColor,
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: isSelected ? Colors.black87 : Colors.grey.shade400,
+                  color: isSelected ? const Color(0xFF2E2E2E) : Colors.grey.shade400,
                   width: isSelected ? 2.5 : 1.2,
                 ),
                 boxShadow: [
                   if (isSelected)
                     BoxShadow(
-                      color: parsedColor.withValues(alpha: 0.4),
+                      color: parsedColor.withValues(alpha: 0.35),
                       blurRadius: 6,
                       spreadRadius: 1,
                     ),
@@ -688,7 +697,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   ? Icon(
                       Icons.check,
                       size: 20,
-                      color: (parsedColor.computeLuminance() > 0.5) ? Colors.black : Colors.white,
+                      color: (parsedColor.computeLuminance() > 0.5) ? Colors.black87 : Colors.white,
                     )
                   : null,
             ),
@@ -705,12 +714,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           },
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
               color: isSelected ? AppColors.primary.withValues(alpha: 0.08) : Colors.transparent,
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: isSelected ? AppColors.primary : Colors.grey.shade300,
+                color: isSelected ? AppColors.primary : const Color(0xFFCFD8DC),
                 width: isSelected ? 1.8 : 1.2,
               ),
             ),
@@ -727,29 +736,24 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       }).toList(),
     );
 
+    // Directionality forced to RTL ensures:
+    // Label ("اللون", "المقاس") is pinned to the RIGHT side of the screen
+    // Swatches / Size chips are pinned to the LEFT side of the screen (Matches Image 1 exactly)
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // On Arabic (RTL), align swatches/chips on left and label on right
-          if (isArabic) ...[
-            Expanded(child: Align(alignment: Alignment.centerLeft, child: swatchesOrChips)),
-            const SizedBox(width: 16),
+      child: Directionality(
+        textDirection: TextDirection.rtl,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
             Text(
               labelText,
-              style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+              style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
             ),
-          ] else ...[
-            Text(
-              labelText,
-              style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
-            ),
-            const SizedBox(width: 16),
-            Expanded(child: Align(alignment: Alignment.centerRight, child: swatchesOrChips)),
+            swatchesOrChips,
           ],
-        ],
+        ),
       ),
     );
   }
@@ -975,7 +979,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           child: ClipRRect(
                             borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
                             child: pImg != null
-                                ? CachedNetworkImage(imageUrl: pImg, fit: BoxFit.cover, width: double.infinity)
+                                ? CachedNetworkImage(imageUrl: _formatImageUrl(pImg), fit: BoxFit.cover, width: double.infinity)
                                 : Container(color: AppColors.surfaceVariant),
                           ),
                         ),

@@ -1,5 +1,5 @@
 import asyncio
-from sqlalchemy import select, delete
+from sqlalchemy import select
 from app.database import async_session
 from app.models.product import Product
 
@@ -41,22 +41,22 @@ SAMPLE_ABAYA_HTML_AR = """
   </thead>
   <tbody>
     <tr>
-      <td style="border:1px solid #ddd; padding:8px; font-weight:600;">38-40 (S)</td>
+      <td style="border:1px solid #ddd; padding:8px; font-weight:600;">38-40</td>
       <td style="border:1px solid #ddd; padding:8px;">100</td>
       <td style="border:1px solid #ddd; padding:8px;">138</td>
     </tr>
     <tr>
-      <td style="border:1px solid #ddd; padding:8px; font-weight:600;">42-44 (M)</td>
+      <td style="border:1px solid #ddd; padding:8px; font-weight:600;">42-44</td>
       <td style="border:1px solid #ddd; padding:8px;">108</td>
       <td style="border:1px solid #ddd; padding:8px;">138</td>
     </tr>
     <tr>
-      <td style="border:1px solid #ddd; padding:8px; font-weight:600;">46-48 (L)</td>
+      <td style="border:1px solid #ddd; padding:8px; font-weight:600;">46-48</td>
       <td style="border:1px solid #ddd; padding:8px;">120</td>
       <td style="border:1px solid #ddd; padding:8px;">138</td>
     </tr>
     <tr>
-      <td style="border:1px solid #ddd; padding:8px; font-weight:600;">50-52 (XL)</td>
+      <td style="border:1px solid #ddd; padding:8px; font-weight:600;">50-52</td>
       <td style="border:1px solid #ddd; padding:8px;">128</td>
       <td style="border:1px solid #ddd; padding:8px;">138</td>
     </tr>
@@ -69,7 +69,7 @@ SAMPLE_ABAYA_HTML_EN = """
 
 <p style="margin-bottom:8px; line-height:1.6;">
   <span style="color:#d81b60; font-weight:bold; font-size:14px;">Fabric Quality : </span>
-  <span>Crafted from first-grade premium crepe fabric. Breathable, fluid, and suitable for all four seasons.</span>
+  <span>Crafted from first-grade premium fabric. Breathable and suitable for all four seasons.</span>
 </p>
 
 <p style="margin-bottom:8px; line-height:1.6;">
@@ -102,50 +102,50 @@ SAMPLE_ABAYA_HTML_EN = """
   </thead>
   <tbody>
     <tr>
-      <td style="border:1px solid #ddd; padding:8px; font-weight:600;">38-40 (S)</td>
-      <td style="border:1px solid #ddd; padding:8px;">100 cm</td>
-      <td style="border:1px solid #ddd; padding:8px;">138 cm</td>
+      <td style="border:1px solid #ddd; padding:8px; font-weight:600;">38-40</td>
+      <td style="border:1px solid #ddd; padding:8px;">100</td>
+      <td style="border:1px solid #ddd; padding:8px;">138</td>
     </tr>
     <tr>
-      <td style="border:1px solid #ddd; padding:8px; font-weight:600;">42-44 (M)</td>
-      <td style="border:1px solid #ddd; padding:8px;">108 cm</td>
-      <td style="border:1px solid #ddd; padding:8px;">138 cm</td>
+      <td style="border:1px solid #ddd; padding:8px; font-weight:600;">42-44</td>
+      <td style="border:1px solid #ddd; padding:8px;">108</td>
+      <td style="border:1px solid #ddd; padding:8px;">138</td>
     </tr>
     <tr>
-      <td style="border:1px solid #ddd; padding:8px; font-weight:600;">46-48 (L)</td>
-      <td style="border:1px solid #ddd; padding:8px;">120 cm</td>
-      <td style="border:1px solid #ddd; padding:8px;">138 cm</td>
+      <td style="border:1px solid #ddd; padding:8px; font-weight:600;">46-48</td>
+      <td style="border:1px solid #ddd; padding:8px;">120</td>
+      <td style="border:1px solid #ddd; padding:8px;">138</td>
     </tr>
     <tr>
-      <td style="border:1px solid #ddd; padding:8px; font-weight:600;">50-52 (XL)</td>
-      <td style="border:1px solid #ddd; padding:8px;">128 cm</td>
-      <td style="border:1px solid #ddd; padding:8px;">138 cm</td>
+      <td style="border:1px solid #ddd; padding:8px; font-weight:600;">50-52</td>
+      <td style="border:1px solid #ddd; padding:8px;">128</td>
+      <td style="border:1px solid #ddd; padding:8px;">138</td>
     </tr>
   </tbody>
 </table>
 """
 
 SAMPLE_DRESS_HTML_AR = """
-<h3 style="color:#111; font-size:18px; margin-bottom:12px;">فستان حريري مطرز</h3>
+<h3 style="color:#111; font-size:18px; margin-bottom:12px; font-weight:bold; text-align:right;">فستان سهرة راقي</h3>
 
-<p style="margin-bottom:8px;">
-  <span style="color:#ff6b00; font-weight:bold; font-size:14px;">خامة ممتازة :</span>
-  حرير كريب طبيعي فائق النعومة، خفيف ومريح على البشرة.
+<p style="margin-bottom:8px; text-align:right;">
+  <span style="color:#d81b60; font-weight:bold; font-size:14px;">خامة ممتازة : </span>
+  <span>حرير كريب طبيعي فائق النعومة، خفيف ومريح على البشرة.</span>
 </p>
 
-<p style="margin-bottom:8px;">
-  <span style="color:#ff6b00; font-weight:bold; font-size:14px;">المناسبة :</span>
-  مثالي للحفلات، الأعياد، والزيارات الرسمية مع لمسات تطريز يدوية أنيقة.
+<p style="margin-bottom:8px; text-align:right;">
+  <span style="color:#d81b60; font-weight:bold; font-size:14px;">المناسبة : </span>
+  <span>مثالي للحفلات، الأعياد، والزيارات الرسمية مع لمسات تطريز يدوية أنيقة.</span>
 </p>
 
-<h4 style="margin-top:16px; margin-bottom:8px; font-weight:bold; color:#333;">جدول مقاسات الفستان (سم)</h4>
+<h4 style="margin-top:16px; margin-bottom:8px; font-weight:bold; color:#333; text-align:right;">جدول مقاسات الفستان (سم)</h4>
 <table style="width:100%; border-collapse:collapse; margin:10px 0; font-size:13px; text-align:center;">
   <thead>
     <tr style="background:#f8f9fa;">
-      <th style="border:1px solid #ddd; padding:8px;">المقاس</th>
-      <th style="border:1px solid #ddd; padding:8px;">الصدر</th>
-      <th style="border:1px solid #ddd; padding:8px;">الخصر</th>
-      <th style="border:1px solid #ddd; padding:8px;">الطول</th>
+      <th style="border:1px solid #ddd; padding:8px; font-weight:bold;">المقاس</th>
+      <th style="border:1px solid #ddd; padding:8px; font-weight:bold;">الصدر</th>
+      <th style="border:1px solid #ddd; padding:8px; font-weight:bold;">الخصر</th>
+      <th style="border:1px solid #ddd; padding:8px; font-weight:bold;">الطول</th>
     </tr>
   </thead>
   <tbody>
@@ -178,26 +178,26 @@ SAMPLE_DRESS_HTML_AR = """
 """
 
 SAMPLE_DRESS_HTML_EN = """
-<h3 style="color:#111; font-size:18px; margin-bottom:12px;">Embroidered Silk Dress</h3>
+<h3 style="color:#111; font-size:18px; margin-bottom:12px; font-weight:bold;">Elegant Evening Dress</h3>
 
 <p style="margin-bottom:8px;">
-  <span style="color:#ff6b00; font-weight:bold; font-size:14px;">Premium Fabric :</span>
-  Natural soft silk crepe, lightweight and gentle on skin.
+  <span style="color:#d81b60; font-weight:bold; font-size:14px;">Material : </span>
+  <span>Ultra-soft natural silk crepe, lightweight and breathable.</span>
 </p>
 
 <p style="margin-bottom:8px;">
-  <span style="color:#ff6b00; font-weight:bold; font-size:14px;">Occasion :</span>
-  Ideal for evenings, celebrations, and formal visits with handcrafted embroidery details.
+  <span style="color:#d81b60; font-weight:bold; font-size:14px;">Occasion : </span>
+  <span>Ideal for gatherings, holidays, and evening events with delicate handcrafted embroidery.</span>
 </p>
 
-<h4 style="margin-top:16px; margin-bottom:8px; font-weight:bold; color:#333;">Dress Size Chart (cm)</h4>
+<h4 style="margin-top:16px; margin-bottom:8px; font-weight:bold; color:#333;">Size Guide (cm)</h4>
 <table style="width:100%; border-collapse:collapse; margin:10px 0; font-size:13px; text-align:center;">
   <thead>
     <tr style="background:#f8f9fa;">
-      <th style="border:1px solid #ddd; padding:8px;">Size</th>
-      <th style="border:1px solid #ddd; padding:8px;">Bust</th>
-      <th style="border:1px solid #ddd; padding:8px;">Waist</th>
-      <th style="border:1px solid #ddd; padding:8px;">Length</th>
+      <th style="border:1px solid #ddd; padding:8px; font-weight:bold;">Size</th>
+      <th style="border:1px solid #ddd; padding:8px; font-weight:bold;">Bust</th>
+      <th style="border:1px solid #ddd; padding:8px; font-weight:bold;">Waist</th>
+      <th style="border:1px solid #ddd; padding:8px; font-weight:bold;">Length</th>
     </tr>
   </thead>
   <tbody>
@@ -235,13 +235,12 @@ async def run_seed():
         products = res.scalars().all()
 
         for p in products:
-            p_id = p.id
             t_en = (p.title_en or '').lower()
             t_ar = (p.title_ar or '')
 
-            # 1. First Showcase Product: Abaya (Matches exact user image)
+            # 1. Showcase Abaya (EXACT match to user Image 1 & Image 2)
             if 'abaya' in t_en or 'عباءة' in t_ar:
-                p.title_ar = "عباءة أسود فاخرة"
+                p.title_ar = "عباءة أسود"
                 p.title_en = "Black Abaya"
                 p.description_ar = SAMPLE_ABAYA_HTML_AR
                 p.description_en = SAMPLE_ABAYA_HTML_EN
@@ -258,7 +257,6 @@ async def run_seed():
                         "options": [
                             {"name": "بني", "color_hex": "#795548", "stock": 15, "price_override": 240.0},
                             {"name": "رمادي", "color_hex": "#616161", "stock": 20, "price_override": 240.0},
-                            {"name": "أسود", "color_hex": "#212121", "stock": 10, "price_override": 260.0},
                         ]
                     },
                     {
@@ -272,11 +270,11 @@ async def run_seed():
                         ]
                     }
                 ]
-            
-            # 2. Dress / فستان سهرة
+
+            # 2. Evening / Silk Dresses
             elif 'dress' in t_en or 'فستان' in t_ar or '5770edf311' in t_en.lower():
-                p.title_ar = "فستان سهرة حريري مطرز"
-                p.title_en = "Embroidered Evening Silk Dress"
+                p.title_ar = "فستان سهرة راقي"
+                p.title_en = "Elegant Evening Dress"
                 p.description_ar = SAMPLE_DRESS_HTML_AR
                 p.description_en = SAMPLE_DRESS_HTML_EN
                 p.category_id = "cat-fashion"
@@ -307,7 +305,7 @@ async def run_seed():
                     }
                 ]
 
-            # 3. Kids Suit
+            # 3. Kids Formal Suit
             elif 'kids' in t_en or 'ولادي' in t_ar or 'suit' in t_en:
                 p.category_id = "cat-fashion"
                 p.variants = [
@@ -315,19 +313,19 @@ async def run_seed():
                         "type": "اللون",
                         "name": "اللون",
                         "options": [
-                            {"name": "كحلي", "color_hex": "#1A237E", "stock": 10, "price_override": 180.0},
-                            {"name": "رمادي", "color_hex": "#757575", "stock": 12, "price_override": 180.0},
-                            {"name": "أسود", "color_hex": "#212121", "stock": 8, "price_override": 195.0},
+                            {"name": "كحلي", "color_hex": "#1A237E", "stock": 10, "price_override": 315.0},
+                            {"name": "رمادي", "color_hex": "#757575", "stock": 12, "price_override": 315.0},
+                            {"name": "أسود", "color_hex": "#212121", "stock": 8, "price_override": 330.0},
                         ]
                     },
                     {
                         "type": "المقاس",
                         "name": "المقاس",
                         "options": [
-                            {"name": "4-5 سنوات", "stock": 5, "price_override": 180.0},
-                            {"name": "6-7 سنوات", "stock": 10, "price_override": 180.0},
-                            {"name": "8-9 سنوات", "stock": 8, "price_override": 190.0},
-                            {"name": "10-12 سنة", "stock": 7, "price_override": 195.0},
+                            {"name": "4-5 سنوات", "stock": 5, "price_override": 315.0},
+                            {"name": "6-7 سنوات", "stock": 10, "price_override": 315.0},
+                            {"name": "8-9 سنوات", "stock": 8, "price_override": 325.0},
+                            {"name": "10-12 سنة", "stock": 7, "price_override": 330.0},
                         ]
                     }
                 ]
@@ -385,22 +383,35 @@ async def run_seed():
                     }
                 ]
 
-            # 7. Other products (e.g. Yoga mat, vacuum)
+            # 7. Yoga Mat
             elif 'yoga' in t_en or 'سجادة' in t_ar:
                 p.variants = [
                     {
                         "type": "اللون",
                         "name": "اللون",
                         "options": [
-                            {"name": "أرجواني", "color_hex": "#9C27B0", "stock": 12, "price_override": 85.0},
-                            {"name": "وردي", "color_hex": "#E91E63", "stock": 10, "price_override": 85.0},
-                            {"name": "أزرق", "color_hex": "#2196F3", "stock": 8, "price_override": 85.0},
+                            {"name": "أرجواني", "color_hex": "#9C27B0", "stock": 12, "price_override": 89.0},
+                            {"name": "وردي", "color_hex": "#E91E63", "stock": 10, "price_override": 89.0},
+                            {"name": "أزرق", "color_hex": "#2196F3", "stock": 8, "price_override": 89.0},
+                        ]
+                    }
+                ]
+
+            # 8. Vacuum Cleaner or fallback
+            else:
+                p.variants = [
+                    {
+                        "type": "اللون",
+                        "name": "اللون",
+                        "options": [
+                            {"name": "أبيض ناصع", "color_hex": "#FFFFFF", "stock": 10, "price_override": p.price},
+                            {"name": "أسود ملكي", "color_hex": "#212121", "stock": 10, "price_override": p.price},
                         ]
                     }
                 ]
 
         await db.commit()
-        print("✅ All products seeded with rich variants, colors, sizes, and descriptions successfully!")
+        print("✅ Successfully seeded all products with rich variants, colors, sizes, and descriptions!")
 
 if __name__ == "__main__":
     asyncio.run(run_seed())

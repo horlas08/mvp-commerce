@@ -56,6 +56,7 @@ async def calculate_coupon_discount(
     code: Optional[str],
     cart_items: list,
     subtotal: float,
+    cart_type: Optional[str] = None,
 ) -> tuple[Optional[str], float, Optional[Coupon]]:
     """
     Validates a coupon code and calculates the discount amount.
@@ -81,6 +82,12 @@ async def calculate_coupon_discount(
     if subtotal < coupon.min_order_amount:
         return None, 0.0, None
 
+    # Store restriction check against current cart_type
+    if coupon.store and coupon.store.lower().strip() not in ["all", ""]:
+        target_store = coupon.store.lower().strip()
+        if cart_type and cart_type.lower().strip() != target_store:
+            return None, 0.0, None
+
     eligible_total = 0.0
     for ci in cart_items:
         is_internal = ci.product is not None
@@ -92,11 +99,24 @@ async def calculate_coupon_discount(
             except ValueError:
                 p = 0.0
         item_total = p * ci.quantity
+
+        is_eligible = False
         if coupon.applicability == "all":
-            eligible_total += item_total
+            is_eligible = True
         elif coupon.applicability == "internal" and is_internal:
-            eligible_total += item_total
+            is_eligible = True
         elif coupon.applicability == "external" and not is_internal:
+            is_eligible = True
+
+        # Store-level restriction check
+        if is_eligible and coupon.store and coupon.store.lower().strip() not in ["all", ""]:
+            target_store = coupon.store.lower().strip()
+            item_ct = (ci.cart_type.value if hasattr(ci.cart_type, 'value') else str(ci.cart_type)).lower()
+            item_site = (ci.site_name or "").lower()
+            if item_ct != target_store and target_store not in item_site:
+                is_eligible = False
+
+        if is_eligible:
             eligible_total += item_total
 
     if eligible_total <= 0:
@@ -194,7 +214,9 @@ async def create_order(
             policy = {}
 
     effective_policy = get_effective_pricing_policy(policy, req.cart_type or "internal")
-    valid_code, discount_amount, coupon_obj = await calculate_coupon_discount(db, req.coupon_code, cart_items, total)
+    valid_code, discount_amount, coupon_obj = await calculate_coupon_discount(
+        db, req.coupon_code, cart_items, total, cart_type=req.cart_type or "internal"
+    )
     if coupon_obj:
         coupon_obj.used_count += 1
 
@@ -537,7 +559,9 @@ async def place_order(
             team_review_fee = 5.0
 
     # Calculate Coupon Discount
-    valid_code, discount_amount, coupon_obj = await calculate_coupon_discount(db, coupon_code, cart_items, total)
+    valid_code, discount_amount, coupon_obj = await calculate_coupon_discount(
+        db, coupon_code, cart_items, total, cart_type=cart_type
+    )
     if coupon_obj:
         coupon_obj.used_count += 1
 
@@ -552,6 +576,9 @@ async def place_order(
     # ── Determine payment status based on method ──────────────────────────
     is_wallet = payment_method_id == "wallet"
 
+    confirmed_at = None
+    confirmed_by = None
+
     if is_wallet:
         if user.credit_balance < final_total:
             raise HTTPException(status_code=400, detail="Insufficient wallet balance")
@@ -559,6 +586,8 @@ async def place_order(
         user.credit_balance = round(user.credit_balance - final_total, 2)
         p_status = PaymentStatus.NOT_REQUIRED  # Wallet is auto-approved
         order_status = OrderStatus.CONFIRMED
+        confirmed_at = datetime.now(timezone.utc)
+        confirmed_by = "System (Wallet)"
     else:
         p_status = PaymentStatus.PENDING_APPROVAL
         order_status = OrderStatus.PENDING
@@ -583,6 +612,8 @@ async def place_order(
         payment_status=p_status,
         payment_proof_url=proof_url,
         payment_fields=payment_fields_data if payment_fields_data else None,
+        confirmed_at=confirmed_at,
+        confirmed_by=confirmed_by,
         items=order_items,
     )
 

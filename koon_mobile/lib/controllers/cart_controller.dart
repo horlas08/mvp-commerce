@@ -24,6 +24,31 @@ class CartController extends GetxController {
     return cartCountsByType[cartType.toLowerCase()] ?? 0;
   }
 
+  /// Returns the raw unit price the backend actually charges for a cart item.
+  ///
+  /// Internal products use their sale/discount price when it is set; external
+  /// items keep the scraped price string.
+  static dynamic effectiveUnitPriceRaw(Map<String, dynamic> item) {
+    final product = item['product'];
+    if (product is Map) {
+      final discountPrice = product['discount_price'];
+      if (discountPrice != null &&
+          KoonCurrencyService.parsePriceToDouble(discountPrice) > 0) {
+        return discountPrice;
+      }
+      final price = product['price'];
+      if (price != null) return price;
+    }
+    return item['price'];
+  }
+
+  /// Parsed version of [effectiveUnitPriceRaw].
+  static double effectiveUnitPrice(Map<String, dynamic> item) {
+    return KoonCurrencyService.parsePriceToDouble(
+      effectiveUnitPriceRaw(item),
+    );
+  }
+
   // ── Cart Auto-Update Refresh States & Queue ─────────────────────────────
   final RxList<Map<String, dynamic>> refreshQueue = <Map<String, dynamic>>[].obs;
   final RxMap<String, String> itemStatuses = <String, String>{}.obs;
@@ -111,7 +136,7 @@ class CartController extends GetxController {
       return true;
     }
 
-    final rawPrice = item['price'] ?? item['product']?['price'];
+    final rawPrice = effectiveUnitPriceRaw(item);
     final parsedPrice = KoonCurrencyService.parsePriceToDouble(rawPrice);
     // If price is missing or 0 or unknown, it is NOT fresh -> needs refresh
     if (parsedPrice <= 0 || rawPrice == null || rawPrice.toString().toLowerCase().contains('unknown')) {
@@ -444,8 +469,7 @@ class CartController extends GetxController {
     double total = 0;
     for (var item in cartItems) {
       if (isItemSelected(item)) {
-        final rawPrice = item['price'] ?? item['product']?['price'];
-        final price = KoonCurrencyService.parsePriceToDouble(rawPrice);
+        final price = effectiveUnitPrice(item);
         final qty = item['quantity'] ?? 1;
         total += price * qty;
       }

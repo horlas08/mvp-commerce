@@ -34,6 +34,28 @@ class Product(Base):
     seller = relationship("Seller", back_populates="products")
 
     def to_dict(self, lang: str = "en"):
+        import json
+        raw_images = self.images or []
+        if isinstance(raw_images, str):
+            try:
+                raw_images = json.loads(raw_images)
+            except Exception:
+                raw_images = [raw_images]
+        formatted_images = []
+        for img in raw_images:
+            if isinstance(img, str) and img.strip():
+                clean_img = img.strip()
+                if clean_img.startswith("/"):
+                    clean_img = f"https://api.widdistore.com{clean_img}"
+                formatted_images.append(clean_img)
+
+        raw_variants = self.variants or []
+        if isinstance(raw_variants, str):
+            try:
+                raw_variants = json.loads(raw_variants)
+            except Exception:
+                raw_variants = []
+
         return {
             "id": self.id,
             "title": self.title_en if lang == "en" else self.title_ar,
@@ -43,11 +65,11 @@ class Product(Base):
             "price": self.price,
             "discount_price": self.discount_price,
             "currency": self.currency,
-            "images": self.images or [],
+            "images": formatted_images,
             "category_id": self.category_id,
             "seller_id": self.seller_id,
             "stock": self.stock,
-            "variants": self.variants or [],
+            "variants": raw_variants,
             "weight_kg": self.weight_kg,
             "delivery_days": self.delivery_days,
             "rating": self.rating,

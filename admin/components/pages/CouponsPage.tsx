@@ -18,6 +18,7 @@ const EMPTY_COUPON_FORM: CreateCouponPayload = {
   is_active: true,
   expires_at: "",
   applicability: "all",
+  store: "",
 };
 
 export default function CouponsPage() {
@@ -91,6 +92,7 @@ export default function CouponsPage() {
       is_active: coupon.is_active,
       expires_at: formattedDate,
       applicability: coupon.applicability,
+      store: coupon.store || "",
     });
     setError(null);
     setShowModal(true);
@@ -120,6 +122,7 @@ export default function CouponsPage() {
         max_discount: form.max_discount ? Number(form.max_discount) : undefined,
         usage_limit: form.usage_limit ? Number(form.usage_limit) : undefined,
         expires_at: expiryIso,
+        store: form.store && form.store.trim() !== "all" && form.store.trim() !== "" ? form.store.trim().toLowerCase() : undefined,
       };
 
       if (editCoupon) {
@@ -239,15 +242,36 @@ export default function CouponsPage() {
                       {c.discount_type === "percentage" ? `${c.discount_value}%` : `﷼ ${c.discount_value.toFixed(2)}`}
                     </td>
                     <td>
-                      <span className="badge" style={{
-                        background: isWalletFunding ? "rgba(16, 185, 129, 0.12)" : "var(--bg-secondary)",
-                        color: isWalletFunding ? "#10b981" : "inherit",
-                        border: isWalletFunding ? "1px solid rgba(16, 185, 129, 0.3)" : "1px solid var(--border)",
-                        fontSize: 11,
-                        fontWeight: isWalletFunding ? 600 : 500
-                      }}>
-                        {appLabel}
-                      </span>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        <span className="badge" style={{
+                          background: isWalletFunding ? "rgba(16, 185, 129, 0.12)" : "var(--bg-secondary)",
+                          color: isWalletFunding ? "#10b981" : "inherit",
+                          border: isWalletFunding ? "1px solid rgba(16, 185, 129, 0.3)" : "1px solid var(--border)",
+                          fontSize: 11,
+                          fontWeight: isWalletFunding ? 600 : 500
+                        }}>
+                          {appLabel}
+                        </span>
+                        {c.store && (
+                          <span className="badge" style={{
+                            background: c.store === "shein" ? "rgba(233, 30, 99, 0.12)" :
+                                        c.store === "amazon" ? "rgba(255, 152, 0, 0.12)" :
+                                        c.store === "iherb" ? "rgba(76, 175, 80, 0.12)" :
+                                        c.store === "aliexpress" ? "rgba(244, 67, 54, 0.12)" :
+                                        "rgba(124, 90, 240, 0.12)",
+                            color: c.store === "shein" ? "#e91e63" :
+                                   c.store === "amazon" ? "#f57c00" :
+                                   c.store === "iherb" ? "#2e7d32" :
+                                   c.store === "aliexpress" ? "#d32f2f" :
+                                   "var(--accent)",
+                            border: "1px solid currentColor",
+                            fontWeight: 700,
+                            fontSize: 10,
+                          }}>
+                            {c.store.toUpperCase()} ONLY
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td style={{ fontSize: 13, color: "var(--text-secondary)" }}>
                       ﷼ {c.min_order_amount.toFixed(2)}
@@ -354,6 +378,35 @@ export default function CouponsPage() {
                   </select>
                 </div>
               </div>
+
+              {/* Store Restriction Dropdown (e.g. SHEIN, Amazon, iHerb, etc.) */}
+              {(form.applicability !== "wallet" && form.applicability !== "funding") && (
+                <div className="form-group" style={{ marginBottom: 16 }}>
+                  <label className="form-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <ShoppingBag size={14} style={{ color: "var(--text-muted)" }} />
+                    <span>{t("storeRestriction")}</span>
+                  </label>
+                  <select
+                    className="input"
+                    value={form.store || ""}
+                    onChange={e => setForm(f => ({ ...f, store: e.target.value }))}
+                    disabled={saving}
+                  >
+                    <option value="">{t("allStores")}</option>
+                    <option value="shein">👗 SHEIN (شين - يطبق فقط على سلة شين)</option>
+                    <option value="amazon">📦 Amazon (أمازون - يطبق فقط على سلة أمازون)</option>
+                    <option value="iherb">🌿 iHerb (آي هيرب - يطبق فقط على سلة آي هيرب)</option>
+                    <option value="aliexpress">🛒 AliExpress (علي إكسبريس - يطبق فقط على سلة علي إكسبريس)</option>
+                    <option value="alibaba">🏭 Alibaba (علي بابا - يطبق فقط على سلة علي بابا)</option>
+                    <option value="internal">⚡ Express Delivery (المتجر الداخلي / توصيل سريع)</option>
+                  </select>
+                  <span style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+                    {lang === "ar"
+                      ? "عند اختيار متجر معين، لن يتمكن العميل من تطبيق هذا الكوبون إلا على طلبات هذا المتجر فقط."
+                      : "When restricted to a specific store, customers cannot apply this coupon to orders from other stores."}
+                  </span>
+                </div>
+              )}
 
               {/* Helper notice for Wallet Credit Funding */}
               {(form.applicability === "wallet" || form.applicability === "funding") && (

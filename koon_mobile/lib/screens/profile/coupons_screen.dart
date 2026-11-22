@@ -75,9 +75,28 @@ class _CouponsScreenState extends State<CouponsScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    code,
-                                    style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.primary),
+                                  Row(
+                                    children: [
+                                      Text(
+                                        code,
+                                        style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.primary),
+                                      ),
+                                      if (coupon['store'] != null && coupon['store'].toString().trim().isNotEmpty && coupon['store'] != 'all') ...[
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.primary.withValues(alpha: 0.1),
+                                            borderRadius: BorderRadius.circular(6),
+                                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.3), width: 0.8),
+                                          ),
+                                          child: Text(
+                                            coupon['store'].toString().toUpperCase(),
+                                            style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.primary),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
                                   ),
                                   const SizedBox(height: 6),
                                   Text(

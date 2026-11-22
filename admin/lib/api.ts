@@ -121,7 +121,18 @@ export const adminApi = {
   deleteProduct: (id: string) => apiFetch(`/admin/products/${id}`, { method: "DELETE" }),
 
   // Orders
-  listOrders: (params?: { page?: number; limit?: number; status?: string; payment_status?: string; cart_type?: string; search?: string }) => {
+  listOrders: (params?: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    payment_status?: string;
+    cart_type?: string;
+    search?: string;
+    confirmation_date?: string;
+    confirmation_date_from?: string;
+    confirmation_date_to?: string;
+    confirmed_by?: string;
+  }) => {
     const q = new URLSearchParams();
     if (params?.page) q.set("page", String(params.page));
     if (params?.limit) q.set("limit", String(params.limit));
@@ -129,6 +140,10 @@ export const adminApi = {
     if (params?.payment_status) q.set("payment_status", params.payment_status);
     if (params?.cart_type) q.set("cart_type", params.cart_type);
     if (params?.search) q.set("search", params.search);
+    if (params?.confirmation_date) q.set("confirmation_date", params.confirmation_date);
+    if (params?.confirmation_date_from) q.set("confirmation_date_from", params.confirmation_date_from);
+    if (params?.confirmation_date_to) q.set("confirmation_date_to", params.confirmation_date_to);
+    if (params?.confirmed_by) q.set("confirmed_by", params.confirmed_by);
     return apiFetch<PaginatedOrders>(`/admin/orders?${q}`);
   },
   updateOrderStatus: (id: string, status: string) =>
@@ -275,12 +290,23 @@ export const adminApi = {
     }),
 
   // Export Orders to Excel
-  exportOrdersExcel: async (params?: { date_from?: string; date_to?: string; status?: string; cart_type?: string }) => {
+  exportOrdersExcel: async (params?: {
+    date_from?: string;
+    date_to?: string;
+    status?: string;
+    cart_type?: string;
+    confirmation_date_from?: string;
+    confirmation_date_to?: string;
+    confirmed_by?: string;
+  }) => {
     const q = new URLSearchParams();
     if (params?.date_from) q.set("date_from", params.date_from);
     if (params?.date_to) q.set("date_to", params.date_to);
     if (params?.status) q.set("status", params.status);
     if (params?.cart_type) q.set("cart_type", params.cart_type);
+    if (params?.confirmation_date_from) q.set("confirmation_date_from", params.confirmation_date_from);
+    if (params?.confirmation_date_to) q.set("confirmation_date_to", params.confirmation_date_to);
+    if (params?.confirmed_by) q.set("confirmed_by", params.confirmed_by);
     const token = typeof window !== "undefined" ? localStorage.getItem("admin_token") : null;
     const headers: Record<string, string> = {};
     if (token) headers["Authorization"] = `Bearer ${token}`;
@@ -478,6 +504,8 @@ export interface Order {
   payment_proof_url?: string;
   payment_fields?: any;
   notes?: string;
+  confirmed_at?: string;
+  confirmed_by?: string;
 }
 
 export interface OrderItem {
@@ -593,6 +621,7 @@ export interface Coupon {
   is_active: boolean;
   expires_at?: string;
   applicability: "all" | "internal" | "external" | "wallet" | "funding";
+  store?: string;
 }
 
 export interface CreateCouponPayload {
@@ -607,4 +636,5 @@ export interface CreateCouponPayload {
   is_active?: boolean;
   expires_at?: string;
   applicability: string;
+  store?: string;
 }

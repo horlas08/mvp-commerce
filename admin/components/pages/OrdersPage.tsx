@@ -79,6 +79,9 @@ export default function OrdersPage() {
   const [regionFilter, setRegionFilter] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [confirmationDateFilter, setConfirmationDateFilter] = useState("");
+  const [confirmedByFilter, setConfirmedByFilter] = useState("");
+  const [debouncedConfirmedBy, setDebouncedConfirmedBy] = useState("");
   const [loading, setLoading] = useState(true);
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
@@ -99,6 +102,9 @@ export default function OrdersPage() {
   const [exportDateTo, setExportDateTo] = useState("");
   const [exportCartType, setExportCartType] = useState("");
   const [exportStatus, setExportStatus] = useState("");
+  const [exportConfirmationDateFrom, setExportConfirmationDateFrom] = useState("");
+  const [exportConfirmationDateTo, setExportConfirmationDateTo] = useState("");
+  const [exportConfirmedBy, setExportConfirmedBy] = useState("");
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
 
@@ -113,6 +119,15 @@ export default function OrdersPage() {
     return () => clearTimeout(handler);
   }, [searchTerm]);
 
+  // Confirmed by debounce
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedConfirmedBy(confirmedByFilter);
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(handler);
+  }, [confirmedByFilter]);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -122,6 +137,8 @@ export default function OrdersPage() {
         status: statusFilter || undefined,
         cart_type: cartTypeFilter || undefined,
         search: debouncedSearch.trim() || undefined,
+        confirmation_date: confirmationDateFilter || undefined,
+        confirmed_by: debouncedConfirmedBy.trim() || undefined,
       });
       setOrders(res.orders);
       setTotal(res.total);
@@ -130,7 +147,7 @@ export default function OrdersPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, statusFilter, cartTypeFilter, debouncedSearch, t]);
+  }, [page, statusFilter, cartTypeFilter, debouncedSearch, confirmationDateFilter, debouncedConfirmedBy, t]);
 
   const handleExport = async () => {
     setExporting(true);
@@ -141,6 +158,9 @@ export default function OrdersPage() {
         date_to: exportDateTo || undefined,
         cart_type: exportCartType || undefined,
         status: exportStatus || undefined,
+        confirmation_date_from: exportConfirmationDateFrom || undefined,
+        confirmation_date_to: exportConfirmationDateTo || undefined,
+        confirmed_by: exportConfirmedBy.trim() || undefined,
       });
       setShowExport(false);
     } catch (e: unknown) {
@@ -245,20 +265,20 @@ export default function OrdersPage() {
           ))}
         </div>
 
-        {/* Search, Cart Type, and Region Filter */}
+        {/* Search, Cart Type, Region, and Confirmation Filters */}
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", gap: 8, flex: 1, minWidth: 280, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 8, flex: 1, minWidth: 280, flexWrap: "wrap", alignItems: "center" }}>
             <input
               type="text"
               className="input"
-              style={{ flex: 1, minWidth: 180 }}
+              style={{ flex: 1, minWidth: 160 }}
               placeholder={lang === "ar" ? "ابحث برقم الطلب أو البريد الإلكتروني..." : "Search by Order ID or email..."}
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
             />
             <select
               className="input"
-              style={{ width: "auto", minWidth: 140 }}
+              style={{ width: "auto", minWidth: 130 }}
               value={cartTypeFilter}
               onChange={e => { setCartTypeFilter(e.target.value); setPage(1); }}
             >
@@ -269,7 +289,7 @@ export default function OrdersPage() {
             </select>
             <select
               className="input"
-              style={{ width: "auto", minWidth: 150 }}
+              style={{ width: "auto", minWidth: 140 }}
               value={regionFilter}
               onChange={e => setRegionFilter(e.target.value)}
             >
@@ -278,6 +298,61 @@ export default function OrdersPage() {
                 <option key={reg} value={reg}>{reg}</option>
               ))}
             </select>
+
+            {/* Confirmation Date Filter */}
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              background: "var(--bg-input, var(--bg-secondary))",
+              border: "1px solid var(--border)",
+              borderRadius: 8,
+              padding: "0 8px",
+            }}>
+              <span style={{ fontSize: 11, color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+                📅 {lang === "ar" ? "تاريخ التأكيد:" : "Conf Date:"}
+              </span>
+              <input
+                type="date"
+                className="input"
+                style={{ border: "none", background: "transparent", padding: "6px 2px", fontSize: 12, width: 125 }}
+                value={confirmationDateFilter}
+                onChange={e => { setConfirmationDateFilter(e.target.value); setPage(1); }}
+                title={lang === "ar" ? "تصفية حسب تاريخ التأكيد" : "Filter by Confirmation Date"}
+              />
+              {confirmationDateFilter && (
+                <button
+                  type="button"
+                  style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: "var(--text-muted)" }}
+                  onClick={() => { setConfirmationDateFilter(""); setPage(1); }}
+                  title="Clear"
+                >
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+
+            {/* Confirmed by User Filter */}
+            <div style={{ display: "flex", alignItems: "center", gap: 4, position: "relative", minWidth: 150, flex: "0 1 180px" }}>
+              <input
+                type="text"
+                className="input"
+                style={{ width: "100%", fontSize: 12 }}
+                placeholder={lang === "ar" ? "تم التأكيد بواسطة..." : "Confirmed by user..."}
+                value={confirmedByFilter}
+                onChange={e => setConfirmedByFilter(e.target.value)}
+                title={lang === "ar" ? "تصفية حسب اسم من قام بالتأكيد أو اسم العميل" : "Filter by confirming user or customer"}
+              />
+              {confirmedByFilter && (
+                <button
+                  type="button"
+                  style={{ position: "absolute", right: lang === "ar" ? "auto" : 8, left: lang === "ar" ? 8 : "auto", background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)" }}
+                  onClick={() => { setConfirmedByFilter(""); setPage(1); }}
+                >
+                  <X size={13} />
+                </button>
+              )}
+            </div>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             {canExportOrders && (
@@ -390,6 +465,43 @@ export default function OrdersPage() {
                   ))}
                 </select>
               </div>
+
+              <div>
+                <label className="form-label" style={{ fontSize: 12, fontWeight: 600 }}>
+                  {lang === "ar" ? "4. تأكيد من تاريخ" : "4. Confirmed From"}
+                </label>
+                <input
+                  type="date"
+                  className="input"
+                  value={exportConfirmationDateFrom}
+                  onChange={e => setExportConfirmationDateFrom(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="form-label" style={{ fontSize: 12, fontWeight: 600 }}>
+                  {lang === "ar" ? "تأكيد إلى تاريخ" : "Confirmed To"}
+                </label>
+                <input
+                  type="date"
+                  className="input"
+                  value={exportConfirmationDateTo}
+                  onChange={e => setExportConfirmationDateTo(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="form-label" style={{ fontSize: 12, fontWeight: 600 }}>
+                  {lang === "ar" ? "5. تم التأكيد بواسطة" : "5. Confirmed by User"}
+                </label>
+                <input
+                  type="text"
+                  className="input"
+                  placeholder="admin@koon.com..."
+                  value={exportConfirmedBy}
+                  onChange={e => setExportConfirmedBy(e.target.value)}
+                />
+              </div>
             </div>
 
             <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10 }}>
@@ -476,6 +588,7 @@ export default function OrdersPage() {
                     )}
                   </div>
                 </th>
+                <th>{t("confirmationDate")}</th>
                 <th>{t("updateStatus")}</th>
                 <th>{t("actions")}</th>
               </tr>
@@ -483,7 +596,7 @@ export default function OrdersPage() {
             <tbody>
               {displayedOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={11} style={{ textAlign: "center", padding: 40, color: "var(--text-muted)" }}>
+                  <td colSpan={12} style={{ textAlign: "center", padding: 40, color: "var(--text-muted)" }}>
                     {lang === "ar" ? "لا توجد طلبات مطابقة" : "No orders found."}
                   </td>
                 </tr>
@@ -547,6 +660,21 @@ export default function OrdersPage() {
                     <td style={{ fontSize: 13, color: "var(--text-secondary)" }}>
                       <div>{new Date(order.created_at).toLocaleDateString(lang === "ar" ? "ar-EG" : "en-US")}</div>
                       <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{new Date(order.created_at).toLocaleTimeString(lang === "ar" ? "ar-EG" : "en-US")}</div>
+                    </td>
+                    <td style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+                      {order.confirmed_at ? (
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: "#10b981", display: "flex", alignItems: "center", gap: 4 }}>
+                            <span>✓</span>
+                            <span>{new Date(order.confirmed_at).toLocaleDateString(lang === "ar" ? "ar-EG" : "en-US")}</span>
+                          </div>
+                          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
+                            {order.confirmed_by ? (order.confirmed_by.includes("@") ? order.confirmed_by : `By: ${order.confirmed_by}`) : "—"}
+                          </div>
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>—</span>
+                      )}
                     </td>
                     <td>
                       <select
@@ -699,6 +827,24 @@ export default function OrdersPage() {
                           <ImageIcon size={14} />
                           <span>{lang === "ar" ? "عرض إثبات الدفع" : "View Proof Image"}</span>
                         </a>
+                      </div>
+                    )}
+                    {order.confirmed_at && (
+                      <div style={{ background: "rgba(16, 185, 129, 0.08)", border: "1px solid rgba(16, 185, 129, 0.25)", borderRadius: 8, padding: "10px 14px" }}>
+                        <div style={{ color: "#10b981", fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
+                          <span>✓</span>
+                          <span>{lang === "ar" ? "تفاصيل تأكيد الطلب" : "Order Confirmation Details"}</span>
+                        </div>
+                        <div style={{ fontSize: 12, marginTop: 4 }}>
+                          <strong style={{ color: "var(--text-primary)" }}>{lang === "ar" ? "تاريخ ووقت التأكيد:" : "Confirmed At:"}</strong>{" "}
+                          <span>{new Date(order.confirmed_at).toLocaleString(lang === "ar" ? "ar-EG" : "en-US")}</span>
+                        </div>
+                        {order.confirmed_by && (
+                          <div style={{ fontSize: 12, marginTop: 2 }}>
+                            <strong style={{ color: "var(--text-primary)" }}>{lang === "ar" ? "المستخدم الذي أكّد الطلب:" : "Confirmed by User:"}</strong>{" "}
+                            <span style={{ fontWeight: 600 }}>{order.confirmed_by}</span>
+                          </div>
+                        )}
                       </div>
                     )}
                     {order.shipping_address && (

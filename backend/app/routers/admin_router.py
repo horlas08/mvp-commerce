@@ -534,41 +534,93 @@ async def list_orders_admin(
     payment_status: Optional[str] = None,
     cart_type: Optional[str] = None,
     search: Optional[str] = None,
+    confirmation_date: Optional[str] = None,
+    confirmation_date_from: Optional[str] = None,
+    confirmation_date_to: Optional[str] = None,
+    confirmed_by: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("can_view_orders")),
 ):
     query = select(Order).options(selectinload(Order.items), selectinload(Order.user))
+    count_query = select(func.count(Order.id))
+
     if status:
         try:
             os_ = OrderStatus(status)
             query = query.where(Order.status == os_)
+            count_query = count_query.where(Order.status == os_)
         except ValueError:
             raise HTTPException(status_code=400, detail=f"Invalid status: {status}")
+
     if payment_status:
         try:
             ps_ = PaymentStatus(payment_status)
             query = query.where(Order.payment_status == ps_)
+            count_query = count_query.where(Order.payment_status == ps_)
         except ValueError:
             raise HTTPException(status_code=400, detail=f"Invalid payment_status: {payment_status}")
+
     if cart_type:
         query = query.where(Order.cart_type == cart_type)
+        count_query = count_query.where(Order.cart_type == cart_type)
+
     if search:
-        query = query.join(User, Order.user_id == User.id).where(
+        query = query.join(User, Order.user_id == User.id, isouter=True).where(
             User.name.ilike(f"%{search}%") |
             User.email.ilike(f"%{search}%") |
             Order.id.ilike(f"%{search}%")
         )
+        count_query = count_query.join(User, Order.user_id == User.id, isouter=True).where(
+            User.name.ilike(f"%{search}%") |
+            User.email.ilike(f"%{search}%") |
+            Order.id.ilike(f"%{search}%")
+        )
+
+    # Filter by Confirmation Date (single date YYYY-MM-DD or range)
+    if confirmation_date:
+        try:
+            c_day = datetime.strptime(confirmation_date.strip(), "%Y-%m-%d")
+            start_d = datetime(c_day.year, c_day.month, c_day.day, 0, 0, 0)
+            end_d = datetime(c_day.year, c_day.month, c_day.day, 23, 59, 59)
+            query = query.where(Order.confirmed_at >= start_d, Order.confirmed_at <= end_d)
+            count_query = count_query.where(Order.confirmed_at >= start_d, Order.confirmed_at <= end_d)
+        except Exception:
+            pass
+
+    if confirmation_date_from:
+        try:
+            f_day = datetime.strptime(confirmation_date_from.strip(), "%Y-%m-%d")
+            query = query.where(Order.confirmed_at >= f_day)
+            count_query = count_query.where(Order.confirmed_at >= f_day)
+        except Exception:
+            pass
+
+    if confirmation_date_to:
+        try:
+            t_day = datetime.strptime(confirmation_date_to.strip(), "%Y-%m-%d")
+            t_end = datetime(t_day.year, t_day.month, t_day.day, 23, 59, 59)
+            query = query.where(Order.confirmed_at <= t_end)
+            count_query = count_query.where(Order.confirmed_at <= t_end)
+        except Exception:
+            pass
+
+    # Filter by Confirmed by User (staff/admin who confirmed, or customer user)
+    if confirmed_by:
+        cby = confirmed_by.strip()
+        query = query.join(User, Order.user_id == User.id, isouter=True).where(
+            Order.confirmed_by.ilike(f"%{cby}%") |
+            User.name.ilike(f"%{cby}%") |
+            User.email.ilike(f"%{cby}%")
+        )
+        count_query = count_query.join(User, Order.user_id == User.id, isouter=True).where(
+            Order.confirmed_by.ilike(f"%{cby}%") |
+            User.name.ilike(f"%{cby}%") |
+            User.email.ilike(f"%{cby}%")
+        )
+
     query = query.order_by(Order.created_at.desc()).offset((page - 1) * limit).limit(limit)
     result = await db.execute(query)
     orders = result.scalars().all()
-
-    count_query = select(func.count(Order.id))
-    if status:
-        count_query = count_query.where(Order.status == OrderStatus(status))
-    if payment_status:
-        count_query = count_query.where(Order.payment_status == PaymentStatus(payment_status))
-    if cart_type:
-        count_query = count_query.where(Order.cart_type == cart_type)
     total = (await db.execute(count_query)).scalar_one()
 
     # ── Resolve shipping address details from Address table ──────────────────
@@ -635,6 +687,9 @@ async def export_orders_excel(
     date_to: Optional[str] = Query(None, description="End date YYYY-MM-DD"),
     status: Optional[str] = None,
     cart_type: Optional[str] = None,
+    confirmation_date_from: Optional[str] = Query(None, description="Confirmation start date YYYY-MM-DD"),
+    confirmation_date_to: Optional[str] = Query(None, description="Confirmation end date YYYY-MM-DD"),
+    confirmed_by: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_admin_user),
 ):
@@ -670,6 +725,28 @@ async def export_orders_excel(
 
     if cart_type:
         query = query.where(Order.cart_type == cart_type)
+
+    if confirmation_date_from:
+        try:
+            cf = datetime.strptime(confirmation_date_from.strip(), "%Y-%m-%d")
+            query = query.where(Order.confirmed_at >= cf)
+        except ValueError:
+            pass
+
+    if confirmation_date_to:
+        try:
+            ct = datetime.strptime(confirmation_date_to.strip(), "%Y-%m-%d") + timedelta(days=1)
+            query = query.where(Order.confirmed_at < ct)
+        except ValueError:
+            pass
+
+    if confirmed_by:
+        cby = confirmed_by.strip()
+        query = query.join(User, Order.user_id == User.id, isouter=True).where(
+            Order.confirmed_by.ilike(f"%{cby}%") |
+            User.name.ilike(f"%{cby}%") |
+            User.email.ilike(f"%{cby}%")
+        )
 
     query = query.order_by(Order.created_at.desc())
     result = await db.execute(query)
@@ -739,7 +816,7 @@ async def export_orders_excel(
         # Order-level
         "Order #", "Order Date", "Order Time",
         "Customer Name", "Customer Email", "Customer Phone",
-        "Order Status", "Cart Type", "Total (SAR)",
+        "Order Status", "Confirmation Date", "Confirmed by User", "Cart Type", "Total (SAR)",
         # Item-level
         "Item #", "Product Name", "Product Link",
         "Product Details (Color / Size / Variant)", "Thumbnail URL",
@@ -827,6 +904,8 @@ async def export_orders_excel(
                 order.user.email if order.user else "",
                 order.user.phone if order.user else "",
                 order.status.value if order.status else "",
+                order.confirmed_at.strftime("%Y-%m-%d %H:%M") if order.confirmed_at else "—",
+                order.confirmed_by or "—",
                 (order.cart_type or "internal").upper(),
                 round(order.total or 0.0, 2),
                 # Item
@@ -1072,7 +1151,7 @@ async def approve_payment(
     order_id: str,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_admin_user),
+    admin_user: User = Depends(get_admin_user),
 ):
     """Approve a manual payment and confirm the order."""
     result = await db.execute(
@@ -1086,6 +1165,8 @@ async def approve_payment(
 
     order.payment_status = PaymentStatus.APPROVED
     order.status = OrderStatus.CONFIRMED
+    order.confirmed_at = datetime.now(timezone.utc)
+    order.confirmed_by = admin_user.name or admin_user.email or f"Admin #{admin_user.id[:8]}"
 
     notif = Notification(
         user_id=order.user_id,
@@ -1475,7 +1556,7 @@ async def update_order_status(
     req: UpdateOrderStatusRequest,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_permission("can_update_order_status")),
+    admin_user: User = Depends(require_permission("can_update_order_status")),
 ):
     result = await db.execute(
         select(Order).where(Order.id == order_id).options(selectinload(Order.user))
@@ -1484,7 +1565,11 @@ async def update_order_status(
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     try:
-        order.status = OrderStatus(req.status)
+        new_status = OrderStatus(req.status)
+        order.status = new_status
+        if new_status == OrderStatus.CONFIRMED and not order.confirmed_at:
+            order.confirmed_at = datetime.now(timezone.utc)
+            order.confirmed_by = admin_user.name or admin_user.email or f"Admin #{admin_user.id[:8]}"
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Invalid status: {req.status}")
 
@@ -1907,7 +1992,8 @@ class CouponRequest(BaseModel):
     usage_limit: Optional[int] = None
     is_active: bool = True
     expires_at: Optional[str] = None  # ISO format string
-    applicability: str = "all"  # all, internal, external
+    applicability: str = "all"  # all, internal, external, wallet
+    store: Optional[str] = None  # e.g. "shein", "amazon", "iherb", "aliexpress", "alibaba", "internal"
 
 
 @router.get("/coupons")
@@ -1949,6 +2035,7 @@ async def create_coupon_admin(
         except Exception:
             raise HTTPException(status_code=400, detail="Invalid date format for expires_at")
 
+    store_val = req.store.lower().strip() if req.store and req.store.lower().strip() not in ["all", ""] else None
     coupon = Coupon(
         code=req.code.upper().strip(),
         description_en=req.description_en,
@@ -1961,6 +2048,7 @@ async def create_coupon_admin(
         is_active=req.is_active,
         expires_at=expires,
         applicability=req.applicability,
+        store=store_val,
     )
     db.add(coupon)
     await db.commit()
@@ -2004,6 +2092,7 @@ async def update_coupon_admin(
     coupon.is_active = req.is_active
     coupon.expires_at = expires
     coupon.applicability = req.applicability
+    coupon.store = req.store.lower().strip() if req.store and req.store.lower().strip() not in ["all", ""] else None
 
     await db.commit()
     await db.refresh(coupon)
