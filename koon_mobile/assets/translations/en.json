@@ -259,6 +259,7 @@
   "bank_name_label": "Bank Name",
   "account_number_label": "Account Number",
   "account_number_copied": "Account number copied successfully",
+  "copy": "Copy",
   "bank_accounts_available_desc": "10 bank accounts available",
   "order_placed_title": "Order Placed!",
   "order_placed_desc": "Your order has been submitted successfully. We will contact you shortly.",

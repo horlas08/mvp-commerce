@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get/get.dart' hide Trans;
@@ -702,6 +703,76 @@ class _BankAccountOptionCard extends StatelessWidget {
                   ],
                 ),
               ),
+              if (accountNum.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                InkWell(
+                  onTap: () {
+                    ctrl.selectedPaymentMethod.value = bankMethod;
+                    ctrl.paymentFormData['selected_account_id'] = acc['id']?.toString() ?? '';
+                    ctrl.paymentFormData['selected_bank_name'] = bankName;
+                    ctrl.paymentFormData['selected_account_number'] = accountNum;
+
+                    Clipboard.setData(ClipboardData(text: accountNum));
+                    Get.rawSnackbar(
+                      messageText: Row(
+                        children: [
+                          const Icon(Icons.check_circle, color: Colors.white, size: 16),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'account_number_copied'.tr(),
+                              style: GoogleFonts.inter(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      backgroundColor: const Color(0xFF1E40AF),
+                      snackPosition: SnackPosition.BOTTOM,
+                      duration: const Duration(seconds: 2),
+                      margin: const EdgeInsets.all(12),
+                      borderRadius: 12,
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? const Color(0xFF1E40AF).withValues(alpha: 0.1)
+                          : const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: isSelected
+                            ? const Color(0xFF1E40AF).withValues(alpha: 0.3)
+                            : const Color(0xFFCBD5E1),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.copy_rounded,
+                          size: 13,
+                          color: isSelected ? const Color(0xFF1E40AF) : AppColors.textSecondary,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'copy'.tr(),
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: isSelected ? const Color(0xFF1E40AF) : AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
