@@ -320,18 +320,133 @@ class CartScreen extends StatelessWidget {
                             ],
                           ),
                         ),
+                      Obx(() {
+                        final applied = cartController.appliedCoupon.value;
+                        if (applied == null) return const SizedBox.shrink();
+                        final discountVal = cartController.discount;
+                        return Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          margin: const EdgeInsets.only(bottom: 10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF16A34A).withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: const Color(0xFF16A34A).withOpacity(0.3),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.confirmation_number_outlined,
+                                color: Color(0xFF16A34A),
+                                size: 16,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Row(
+                                  children: [
+                                    Text(
+                                      cartController.couponCode.value,
+                                      style: GoogleFonts.inter(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: const Color(0xFF16A34A),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      '(-${Get.find<SettingsController>().formatPrice(discountVal, 'SAR')})',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: const Color(0xFF16A34A),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              GestureDetector(
+                                onTap: () => cartController.removeCoupon(),
+                                child: const Icon(
+                                  Icons.close,
+                                  color: AppColors.textSecondary,
+                                  size: 18,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
                       Row(
                         children: [
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text('total_amount'.tr(), style: GoogleFonts.inter(color: AppColors.textSecondary, fontSize: 12)),
-                              const SizedBox(height: 2),
-                              Obx(() => Text(
-                                    Get.find<SettingsController>().formatPrice(cartController.totalAmount, 'SAR'),
-                                    style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
-                                  )),
+                              Obx(() {
+                                final hasDiscount = cartController.discount > 0;
+                                if (hasDiscount) {
+                                  return Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            'total_amount'.tr(),
+                                            style: GoogleFonts.inter(
+                                              color: AppColors.textSecondary,
+                                              fontSize: 11,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            Get.find<SettingsController>().formatPrice(cartController.totalAmount, 'SAR'),
+                                            style: GoogleFonts.inter(
+                                              color: AppColors.textSecondary,
+                                              fontSize: 11,
+                                              decoration: TextDecoration.lineThrough,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 1),
+                                      Text(
+                                        Get.find<SettingsController>().formatPrice(cartController.finalTotal, 'SAR'),
+                                        style: GoogleFonts.inter(
+                                          fontSize: 19,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.textPrimary,
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                }
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'total_amount'.tr(),
+                                      style: GoogleFonts.inter(
+                                        color: AppColors.textSecondary,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      Get.find<SettingsController>().formatPrice(cartController.totalAmount, 'SAR'),
+                                      style: GoogleFonts.inter(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.textPrimary,
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              }),
                             ],
                           ),
                           const SizedBox(width: 20),

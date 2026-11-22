@@ -236,6 +236,13 @@ class CheckoutController extends GetxController {
         discountAmount.value = (res['discount'] as num?)?.toDouble() ?? 0.0;
         AppSnackbar.success(null, 'coupon_applied'.tr());
         await _updateDynamicFees();
+        // Sync to CartController
+        try {
+          final cartCtrl = Get.find<CartController>();
+          cartCtrl.couponCode.value = couponCode.value;
+          cartCtrl.appliedCoupon.value = appliedCoupon.value;
+          cartCtrl.discountAmount.value = discountAmount.value;
+        } catch (_) {}
         return true;
       } else {
         couponError.value = 'invalid_coupon'.tr();
@@ -258,6 +265,50 @@ class CheckoutController extends GetxController {
     discountAmount.value = 0.0;
     couponError.value = '';
     _updateDynamicFees();
+    try {
+      final cartCtrl = Get.find<CartController>();
+      cartCtrl.removeCoupon();
+    } catch (_) {}
+  }
+
+  Future<void> recalculateCoupon() async {
+    final code = couponCode.value.trim().toUpperCase();
+    if (code.isEmpty || appliedCoupon.value == null) return;
+
+    if (cartItems.isEmpty || subtotal <= 0) {
+      removeCoupon();
+      return;
+    }
+
+    final coupon = appliedCoupon.value;
+    final minOrder = (coupon?['min_order_amount'] as num?)?.toDouble() ?? 0.0;
+    if (subtotal < minOrder) {
+      removeCoupon();
+      return;
+    }
+
+    try {
+      final res = await _couponService.validateCoupon(
+        code,
+        subtotal,
+        cartType: cartType,
+      );
+      if (res != null && res['valid'] == true) {
+        discountAmount.value = (res['discount'] as num?)?.toDouble() ?? 0.0;
+        appliedCoupon.value = res['coupon'] != null ? Map<String, dynamic>.from(res['coupon']) : null;
+        await _updateDynamicFees();
+        try {
+          final cartCtrl = Get.find<CartController>();
+          cartCtrl.couponCode.value = couponCode.value;
+          cartCtrl.appliedCoupon.value = appliedCoupon.value;
+          cartCtrl.discountAmount.value = discountAmount.value;
+        } catch (_) {}
+      } else {
+        removeCoupon();
+      }
+    } catch (_) {
+      removeCoupon();
+    }
   }
 
   final RxDouble dynamicShippingFee = 0.0.obs;

@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:dio/dio.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/cart_service.dart';
 import '../services/currency_service.dart';
+import '../services/coupon_service.dart';
 
 enum AddToCartStatus {
   success,
@@ -13,12 +15,23 @@ enum AddToCartStatus {
 
 class CartController extends GetxController {
   final CartService _cartService = CartService();
+  final CouponService _couponService = CouponService();
 
   final RxString selectedCartType = 'amazon'.obs;
   final RxList<Map<String, dynamic>> cartItems = <Map<String, dynamic>>[].obs;
   final RxBool isLoading = false.obs;
   final RxInt totalCartCount = 0.obs;
   final RxMap<String, int> cartCountsByType = <String, int>{}.obs;
+
+  // ── Coupon / Promo Code State ───────────────────────────────────────────
+  final RxString couponCode = ''.obs;
+  final Rx<Map<String, dynamic>?> appliedCoupon = Rx<Map<String, dynamic>?>(null);
+  final RxDouble discountAmount = 0.0.obs;
+  final RxBool isApplyingCoupon = false.obs;
+  final RxString couponError = ''.obs;
+
+  double get discount => discountAmount.value;
+  double get finalTotal => (totalAmount - discount).clamp(0.0, double.infinity);
 
   int getCountForCartType(String cartType) {
     return cartCountsByType[cartType.toLowerCase()] ?? 0;
@@ -74,6 +87,7 @@ class CartController extends GetxController {
     ever(selectedCartType, (val) {
       _saveSelectedCartType(val);
       loadCart();
+      recalculateCouponDiscount();
     });
   }
 
@@ -115,6 +129,7 @@ class CartController extends GetxController {
     cartItems.value = await _cartService.getCart(cartType: selectedCartType.value, lang: lang);
     isLoading.value = false;
     _refreshTotalCount();
+    recalculateCouponDiscount();
 
     if (autoRefresh && selectedCartType.value != 'internal') {
       startCartRefresh(forceAll: forceRefreshAll);
@@ -391,6 +406,7 @@ class CartController extends GetxController {
       updated['quantity'] = safeQty;
       cartItems[index] = updated;
       cartItems.refresh();
+      recalculateCouponDiscount();
     }
     await _cartService.updateCartItem(itemId, quantity: safeQty);
   }
@@ -409,6 +425,7 @@ class CartController extends GetxController {
       }
       cartItems[index] = updated;
       cartItems.refresh();
+      recalculateCouponDiscount();
     }
     await _cartService.updateCartItem(strId, price: price);
   }
@@ -421,6 +438,7 @@ class CartController extends GetxController {
       updated['is_selected'] = isSelected;
       cartItems[index] = updated;
       cartItems.refresh();
+      recalculateCouponDiscount();
 
       // If user selected an item that needs refresh, trigger refresh for it!
       if (isSelected && (updated['external_url']?.toString() ?? '').isNotEmpty && !isItemFresh(updated)) {
@@ -439,6 +457,8 @@ class CartController extends GetxController {
       removedItem = cartItems[removedIndex];
       cartItems.removeAt(removedIndex);
       cartItems.refresh();
+      // Recalculate coupon discount immediately upon item deletion!
+      recalculateCouponDiscount();
     }
     // Also clear any status tracking for this item
     itemStatuses.remove(strId);
@@ -454,15 +474,144 @@ class CartController extends GetxController {
         cartItems.add(removedItem);
       }
       cartItems.refresh();
+      recalculateCouponDiscount();
     } else if (success) {
       // Refresh total badge count across all carts
       await _refreshTotalCount();
+      recalculateCouponDiscount();
     }
   }
 
   Future<void> clearCurrentCart() async {
+    removeCoupon();
     final success = await _cartService.clearCart(cartType: selectedCartType.value);
     if (success) await loadCart(autoRefresh: false);
+  }
+
+  // ── Coupon Application & Dynamic Recalculation ──────────────────────────
+  Future<bool> applyCoupon(String code) async {
+    final trimmed = code.trim().toUpperCase();
+    if (trimmed.isEmpty) return false;
+    isApplyingCoupon.value = true;
+    couponError.value = '';
+    try {
+      final res = await _couponService.validateCoupon(
+        trimmed,
+        totalAmount,
+        cartType: selectedCartType.value,
+      );
+      if (res != null && res['valid'] == true) {
+        couponCode.value = trimmed;
+        appliedCoupon.value = res['coupon'] != null ? Map<String, dynamic>.from(res['coupon']) : null;
+        discountAmount.value = (res['discount'] as num?)?.toDouble() ?? 0.0;
+        couponError.value = '';
+        return true;
+      } else {
+        couponError.value = 'invalid_coupon';
+        return false;
+      }
+    } catch (e) {
+      final msg = e.toString().replaceFirst('Exception: ', '');
+      couponError.value = msg;
+      return false;
+    } finally {
+      isApplyingCoupon.value = false;
+    }
+  }
+
+  void removeCoupon() {
+    couponCode.value = '';
+    appliedCoupon.value = null;
+    discountAmount.value = 0.0;
+    couponError.value = '';
+  }
+
+  /// Recalculates coupon discount when cart items are deleted, quantity changed, or selection updated.
+  /// Works for both internal express cart and external carts (Amazon, SHEIN, etc.).
+  void recalculateCouponDiscount() {
+    final coupon = appliedCoupon.value;
+    if (coupon == null || couponCode.value.isEmpty) return;
+
+    final selectedItems = cartItems.where((i) => isItemSelected(i)).toList();
+    if (selectedItems.isEmpty || totalAmount <= 0) {
+      removeCoupon();
+      return;
+    }
+
+    // 1. Check minimum order amount requirement
+    final minOrder = (coupon['min_order_amount'] as num?)?.toDouble() ?? 0.0;
+    if (totalAmount < minOrder) {
+      removeCoupon();
+      couponError.value = 'Min order amount of $minOrder SAR no longer met';
+      return;
+    }
+
+    // 2. Check store restriction (e.g. SHEIN coupon on SHEIN cart)
+    final couponStore = (coupon['store']?.toString() ?? '').toLowerCase().trim();
+    if (couponStore.isNotEmpty && couponStore != 'all') {
+      final currentType = selectedCartType.value.toLowerCase().trim();
+      if (currentType != couponStore) {
+        removeCoupon();
+        couponError.value = 'Coupon only valid for ${couponStore.toUpperCase()} orders';
+        return;
+      }
+    }
+
+    // 3. Compute eligible total for selected items
+    final applicability = (coupon['applicability']?.toString() ?? 'all').toLowerCase();
+    double eligibleTotal = 0.0;
+
+    for (final item in selectedItems) {
+      final isInternal = item['product'] != null || selectedCartType.value == 'internal';
+      bool isEligible = false;
+      if (applicability == 'all') {
+        isEligible = true;
+      } else if (applicability == 'internal' && isInternal) {
+        isEligible = true;
+      } else if (applicability == 'external' && !isInternal) {
+        isEligible = true;
+      }
+
+      if (isEligible && couponStore.isNotEmpty && couponStore != 'all') {
+        final itemCt = (item['cart_type'] ?? selectedCartType.value).toString().toLowerCase();
+        final itemSite = (item['site_name'] ?? '').toString().toLowerCase();
+        if (itemCt != couponStore && !itemSite.contains(couponStore)) {
+          isEligible = false;
+        }
+      }
+
+      if (isEligible) {
+        final price = effectiveUnitPrice(item);
+        final qty = (item['quantity'] is int)
+            ? item['quantity'] as int
+            : int.tryParse(item['quantity']?.toString() ?? '1') ?? 1;
+        eligibleTotal += price * qty;
+      }
+    }
+
+    if (eligibleTotal <= 0) {
+      removeCoupon();
+      couponError.value = 'Coupon not applicable to remaining items';
+      return;
+    }
+
+    // 4. Calculate new discount
+    final discountType = (coupon['discount_type'] ?? coupon['type'] ?? 'percentage').toString().toLowerCase();
+    final discountVal = ((coupon['discount_value'] ?? coupon['value']) as num?)?.toDouble() ?? 0.0;
+    final maxDiscount = ((coupon['max_discount'] ?? coupon['max_discount_amount']) as num?)?.toDouble();
+
+    double newDiscount = 0.0;
+    if (discountType == 'percentage') {
+      newDiscount = eligibleTotal * (discountVal / 100.0);
+      if (maxDiscount != null && maxDiscount > 0) {
+        newDiscount = math.min(newDiscount, maxDiscount);
+      }
+    } else {
+      newDiscount = math.min(discountVal, eligibleTotal);
+    }
+
+    discountAmount.value = double.parse(newDiscount.toStringAsFixed(2));
+    couponError.value = '';
   }
 
   double get totalAmount {

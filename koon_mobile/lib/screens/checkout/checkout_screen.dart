@@ -6,7 +6,6 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../app/theme/app_colors.dart';
 import '../../controllers/checkout_controller.dart';
 import '../../controllers/cart_controller.dart';
-import '../../controllers/settings_controller.dart';
 import '../../app/utils/currency_bottom_sheet.dart';
 import 'steps/step1_address.dart';
 import 'steps/step2_shipping.dart';
@@ -33,6 +32,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     _ctrl.cartType = cartCtrl.selectedCartType.value;
     _ctrl.cartItems = List<Map<String, dynamic>>.from(selected);
     _ctrl.subtotal = cartCtrl.totalAmount;
+
+    // Sync coupon and recalculate discount based on current cart
+    if (cartCtrl.appliedCoupon.value != null && cartCtrl.couponCode.value.isNotEmpty) {
+      _ctrl.couponCode.value = cartCtrl.couponCode.value;
+      _ctrl.appliedCoupon.value = cartCtrl.appliedCoupon.value;
+      _ctrl.discountAmount.value = cartCtrl.discountAmount.value;
+      _ctrl.recalculateCoupon();
+    } else if (_ctrl.appliedCoupon.value != null && _ctrl.couponCode.value.isNotEmpty) {
+      _ctrl.recalculateCoupon();
+    }
   }
 
   static const List<String> _stepKeys = [
